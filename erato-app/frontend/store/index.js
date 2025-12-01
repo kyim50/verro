@@ -162,8 +162,7 @@ export const useSwipeStore = create((set, get) => ({
   reset: () => set({ artists: [], currentIndex: 0 }),
 }));
 
-// Board store - COMPLETE IMPLEMENTATION
-// Board store - FIX API ROUTES
+// Board store
 export const useBoardStore = create((set, get) => ({
   boards: [],
   currentBoard: null,
@@ -176,7 +175,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       const params = type ? { type } : {};
       
-      const response = await axios.get(`${API_URL}/boards`, { // Remove /api/
+      const response = await axios.get(`${API_URL}/boards`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       });
@@ -195,7 +194,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      const response = await axios.get(`${API_URL}/boards/${boardId}`, { // Remove /api/
+      const response = await axios.get(`${API_URL}/boards/${boardId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -212,7 +211,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      const response = await axios.post(`${API_URL}/boards`, boardData, { // Remove /api/
+      const response = await axios.post(`${API_URL}/boards`, boardData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -233,7 +232,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      const response = await axios.put(`${API_URL}/boards/${boardId}`, updates, { // Remove /api/
+      const response = await axios.put(`${API_URL}/boards/${boardId}`, updates, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -255,7 +254,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      await axios.delete(`${API_URL}/boards/${boardId}`, { // Remove /api/
+      await axios.delete(`${API_URL}/boards/${boardId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -274,7 +273,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       
       const response = await axios.post(
-        `${API_URL}/boards/${boardId}/artworks`, // Remove /api/
+        `${API_URL}/boards/${boardId}/artworks`,
         { artwork_id: artworkId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -290,7 +289,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       
       await axios.delete(
-        `${API_URL}/boards/${boardId}/artworks/${artworkId}`, // Remove /api/
+        `${API_URL}/boards/${boardId}/artworks/${artworkId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (error) {
@@ -303,7 +302,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       
       const response = await axios.post(
-        `${API_URL}/boards/${boardId}/collaborators`, // Remove /api/
+        `${API_URL}/boards/${boardId}/collaborators`,
         { user_id: userId, role },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -319,7 +318,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       
       await axios.delete(
-        `${API_URL}/boards/${boardId}/collaborators/${collaboratorId}`, // Remove /api/
+        `${API_URL}/boards/${boardId}/collaborators/${collaboratorId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (error) {
@@ -328,4 +327,65 @@ export const useBoardStore = create((set, get) => ({
   },
 
   reset: () => set({ boards: [], currentBoard: null, isLoading: false, error: null }),
+}));
+
+// Profile store
+export const useProfileStore = create((set, get) => ({
+  profile: null,
+  isLoading: false,
+  error: null,
+
+  fetchProfile: async (userId, token = null) => {
+    set({ isLoading: true, error: null });
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      const response = await axios.get(`${API_URL}/users/${userId}`, { headers });
+      
+      set({ profile: response.data, isLoading: false });
+      return response.data;
+    } catch (error) {
+      set({ error: error.response?.data?.error || error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  updateProfile: async (updates, token) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axios.put(`${API_URL}/users/me`, updates, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      set({ profile: response.data, isLoading: false });
+      return response.data;
+    } catch (error) {
+      set({ error: error.response?.data?.error || error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  updateArtistProfile: async (updates, token) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axios.put(`${API_URL}/users/me/artist`, updates, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      set((state) => ({
+        profile: {
+          ...state.profile,
+          artist: response.data
+        },
+        isLoading: false
+      }));
+      
+      return response.data;
+    } catch (error) {
+      set({ error: error.response?.data?.error || error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  reset: () => set({ profile: null, isLoading: false, error: null }),
 }));

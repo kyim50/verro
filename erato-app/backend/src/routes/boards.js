@@ -9,21 +9,10 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { type, parent_id } = req.query;
     
+    // Simple query - just get boards
     let query = supabaseAdmin
       .from('boards')
-      .select(`
-        *,
-        board_artworks(
-          id,
-          artwork_id,
-          artworks(
-            id,
-            title,
-            image_url,
-            thumbnail_url
-          )
-        )
-      `)
+      .select('*')
       .eq('user_id', req.user.id);
 
     if (type) {
@@ -36,20 +25,54 @@ router.get('/', authenticate, async (req, res) => {
       query = query.is('parent_board_id', null);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data: boards, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('Supabase error:', error);
       throw error;
     }
 
-    // Count artworks for each board
-    const boardsWithCount = data.map(board => ({
-      ...board,
-      artworks: [{ count: board.board_artworks?.length || 0 }]
-    }));
+    // Get artwork data separately for each board
+    const boardsWithData = await Promise.all(
+      boards.map(async (board) => {
+        // Count artworks
+        const { count } = await supabaseAdmin
+          .from('board_artworks')
+          .select('*', { count: 'exact', head: true })
+          .eq('board_id', board.id);
 
-    res.json(boardsWithCount);
+        // Get first 4 artworks with full data
+        const { data: boardArtworks } = await supabaseAdmin
+          .from('board_artworks')
+          .select('id, artwork_id, created_at')
+          .eq('board_id', board.id)
+          .order('created_at', { ascending: false })
+          .limit(4);
+
+        // Get artwork details
+        let artworksWithDetails = [];
+        if (boardArtworks && boardArtworks.length > 0) {
+          const artworkIds = boardArtworks.map(ba => ba.artwork_id);
+          const { data: artworks } = await supabaseAdmin
+            .from('artworks')
+            .select('id, title, image_url, thumbnail_url')
+            .in('id', artworkIds);
+
+          artworksWithDetails = boardArtworks.map(ba => ({
+            ...ba,
+            artworks: artworks?.find(a => a.id === ba.artwork_id)
+          }));
+        }
+
+        return {
+          ...board,
+          artworks: [{ count: count || 0 }],
+          board_artworks: artworksWithDetails
+        };
+      })
+    );
+
+    res.json(boardsWithData);
   } catch (error) {
     console.error('Error fetching boards:', error);
     res.status(500).json({ error: error.message });
@@ -59,38 +82,86 @@ router.get('/', authenticate, async (req, res) => {
 // Get single board with details
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data: board, error: boardError } = await supabaseAdmin
       .from('boards')
-      .select(`
-        *,
-        users(id, username, avatar_url),
-        board_artworks(
-          id,
-          artworks(
-            id,
-            title,
-            image_url,
-            thumbnail_url,
-            artists(
-              id,
-              users(id, username, avatar_url)
-            )
-          )
-        )
-      `)
+      .select('*')
       .eq('id', req.params.id)
       .single();
 
-    if (error) throw error;
+    if (boardError) throw boardError;
 
     // Check if user has access
-    const hasAccess = data.user_id === req.user.id || data.is_public;
+    const hasAccess = board.user_id === req.user.id || board.is_public;
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json(data);
+    // Get user info
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('id, username, avatar_url')
+      .eq('id', board.user_id)
+      .single();
+
+    // Get artworks in this board
+    const { data: boardArtworks } = await supabaseAdmin
+      .from('board_artworks')
+      .select('id, artwork_id, created_at')
+      .eq('board_id', board.id)
+      .order('created_at', { ascending: false });
+
+    // Get artwork details
+    let artworksWithDetails = [];
+    if (boardArtworks && boardArtworks.length > 0) {
+      const artworkIds = boardArtworks.map(ba => ba.artwork_id);
+      const { data: artworks } = await supabaseAdmin
+        .from('artworks')
+        .select(`
+          id,
+          title,
+          image_url,
+          thumbnail_url,
+          artist_id
+        `)
+        .in('id', artworkIds);
+
+      // Get artist info for each artwork
+      const artistIds = [...new Set(artworks.map(a => a.artist_id))];
+      const { data: artists } = await supabaseAdmin
+        .from('artists')
+        .select('id, user_id')
+        .in('id', artistIds);
+
+      const userIds = [...new Set(artists.map(a => a.user_id))];
+      const { data: artistUsers } = await supabaseAdmin
+        .from('users')
+        .select('id, username, avatar_url')
+        .in('id', userIds);
+
+      artworksWithDetails = boardArtworks.map(ba => {
+        const artwork = artworks?.find(a => a.id === ba.artwork_id);
+        const artist = artists?.find(a => a.id === artwork?.artist_id);
+        const artistUser = artistUsers?.find(u => u.id === artist?.user_id);
+
+        return {
+          ...ba,
+          artworks: artwork ? {
+            ...artwork,
+            artists: artist ? {
+              ...artist,
+              users: artistUser
+            } : null
+          } : null
+        };
+      });
+    }
+
+    res.json({
+      ...board,
+      users: user,
+      board_artworks: artworksWithDetails
+    });
   } catch (error) {
     console.error('Error fetching board:', error);
     res.status(500).json({ error: error.message });
@@ -105,8 +176,7 @@ router.post('/', authenticate, async (req, res) => {
       description, 
       is_public = false, 
       board_type = 'general',
-      parent_board_id = null,
-      cover_image_url = null
+      parent_board_id = null
     } = req.body;
 
     if (!name) {
@@ -138,8 +208,7 @@ router.post('/', authenticate, async (req, res) => {
         description,
         is_public,
         board_type,
-        parent_board_id,
-        cover_image_url
+        parent_board_id
       })
       .select()
       .single();
@@ -156,7 +225,7 @@ router.post('/', authenticate, async (req, res) => {
 // Update board
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { name, description, is_public, board_type, cover_image_url } = req.body;
+    const { name, description, is_public, board_type } = req.body;
 
     // Verify ownership
     const { data: board, error: fetchError } = await supabaseAdmin
@@ -178,7 +247,6 @@ router.put('/:id', authenticate, async (req, res) => {
     if (description !== undefined) updates.description = description;
     if (is_public !== undefined) updates.is_public = is_public;
     if (board_type !== undefined) updates.board_type = board_type;
-    if (cover_image_url !== undefined) updates.cover_image_url = cover_image_url;
 
     const { data, error } = await supabaseAdmin
       .from('boards')
@@ -258,7 +326,7 @@ router.post('/:id/artworks', authenticate, async (req, res) => {
       .select('id')
       .eq('board_id', req.params.id)
       .eq('artwork_id', artwork_id)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       return res.status(400).json({ error: 'Artwork already in this board' });
