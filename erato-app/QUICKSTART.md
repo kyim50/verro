@@ -14,20 +14,7 @@ cd ../frontend
 npm install
 ```
 
-## Step 2: Setup Supabase (3 min)
-
-1. Go to [supabase.com](https://supabase.com) and create account
-2. Create new project
-3. Go to SQL Editor
-4. Copy/paste contents of `setup/supabase-setup.sql`
-5. Click "Run"
-6. Go to Project Settings → API
-7. Copy:
-   - Project URL
-   - `anon` public key
-   - `service_role` secret key
-
-## Step 3: Configure Environment (2 min)
+## Step 2: Configure Environment (2 min)
 
 **Backend `.env`:**
 ```bash
