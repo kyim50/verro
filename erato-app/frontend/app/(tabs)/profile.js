@@ -152,27 +152,59 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Portfolio */}
+            {/* Portfolio Images */}
+            {profile.artist.portfolio_images && profile.artist.portfolio_images.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Portfolio Highlights</Text>
+                  <TouchableOpacity onPress={() => router.push('/profile/edit-portfolio')}>
+                    <Ionicons name="create-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.portfolioGrid}>
+                  {profile.artist.portfolio_images.map((imageUrl, index) => (
+                    <View key={index} style={styles.portfolioItem}>
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.portfolioImage}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Artworks */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Portfolio</Text>
-                <Text style={styles.artworkCount}>{artworks.length}</Text>
+                <Text style={styles.sectionTitle}>All Artworks</Text>
+                <View style={styles.artworkActions}>
+                  <Text style={styles.artworkCount}>{artworks.length}</Text>
+                  <TouchableOpacity onPress={() => router.push('/artwork/upload')}>
+                    <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={styles.artworkGrid}>
-                {artworks.map((artwork) => (
-                  <TouchableOpacity
-                    key={artwork.id}
-                    style={styles.artworkItem}
-                    onPress={() => router.push(`/artwork/${artwork.id}`)}
-                  >
-                    <Image
-                      source={{ uri: artwork.thumbnail_url || artwork.image_url }}
-                      style={styles.artworkImage}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {artworks.length > 0 ? (
+                <View style={styles.artworkGrid}>
+                  {artworks.map((artwork) => (
+                    <TouchableOpacity
+                      key={artwork.id}
+                      style={styles.artworkItem}
+                      onPress={() => router.push(`/artwork/${artwork.id}`)}
+                    >
+                      <Image
+                        source={{ uri: artwork.thumbnail_url || artwork.image_url }}
+                        style={styles.artworkImage}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No artworks uploaded yet</Text>
+              )}
             </View>
 
             {/* Reviews */}
@@ -180,9 +212,9 @@ export default function ProfileScreen() {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Reviews</Text>
                 <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={16} color={colors.warning} />
+                  <Ionicons name="star" size={16} color={colors.status.warning} />
                   <Text style={styles.ratingText}>
-                    {profile.artist.average_rating.toFixed(1)} ({profile.artist.review_count})
+                    {profile.artist.average_rating ? profile.artist.average_rating.toFixed(1) : 'N/A'} ({profile.artist.review_count || 0})
                   </Text>
                 </View>
               </View>
@@ -308,6 +340,26 @@ const styles = StyleSheet.create({
   artworkCount: {
     ...typography.body,
     color: colors.text.secondary,
+  },
+  artworkActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  portfolioGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  portfolioItem: {
+    width: (width - spacing.md * 4) / 2,
+    aspectRatio: 3 / 4,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  portfolioImage: {
+    width: '100%',
+    height: '100%',
   },
   commissionInfo: {
     backgroundColor: colors.surface,

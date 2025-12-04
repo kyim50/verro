@@ -371,7 +371,7 @@ export const useProfileStore = create((set, get) => ({
       const response = await axios.put(`${API_URL}/users/me/artist`, updates, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       set((state) => ({
         profile: {
           ...state.profile,
@@ -379,7 +379,31 @@ export const useProfileStore = create((set, get) => ({
         },
         isLoading: false
       }));
-      
+
+      return response.data;
+    } catch (error) {
+      set({ error: error.response?.data?.error || error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  completeArtistOnboarding: async (portfolioImages, token) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axios.post(
+        `${API_URL}/users/me/artist/onboarding`,
+        { portfolio_images: portfolioImages },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      set((state) => ({
+        profile: {
+          ...state.profile,
+          artist: response.data.artist
+        },
+        isLoading: false
+      }));
+
       return response.data;
     } catch (error) {
       set({ error: error.response?.data?.error || error.message, isLoading: false });

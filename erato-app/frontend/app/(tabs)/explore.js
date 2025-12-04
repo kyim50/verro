@@ -7,6 +7,8 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,8 +21,9 @@ const SWIPE_THRESHOLD = width * 0.25;
 
 export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
-  const [currentArtwork, setCurrentArtwork] = useState(0);
-  
+  const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
+  const [showPortfolioModal, setShowPortfolioModal] = useState(false);
+
   const position = useRef(new Animated.ValueXY()).current;
   const swipeAnimation = useRef(new Animated.Value(0)).current;
 
@@ -111,8 +114,8 @@ export default function ExploreScreen() {
     );
   }
 
-  const artworks = currentArtist.artworks || [];
-  const currentArtworkData = artworks[currentArtwork] || artworks[0];
+  const portfolioImages = currentArtist.portfolio_images || [];
+  const currentImage = portfolioImages[currentPortfolioImage] || portfolioImages[0];
 
   return (
     <View style={styles.container}>
@@ -151,18 +154,24 @@ export default function ExploreScreen() {
           <Text style={styles.nopeText}>NOPE</Text>
         </Animated.View>
 
-        {/* Artwork Image */}
-        <Image
-          source={{ uri: currentArtworkData?.image_url }}
-          style={styles.cardImage}
-          contentFit="cover"
-        />
+        {/* Portfolio Image */}
+        <TouchableOpacity
+          style={styles.cardImageContainer}
+          onPress={() => setShowPortfolioModal(true)}
+          activeOpacity={0.9}
+        >
+          <Image
+            source={{ uri: currentImage }}
+            style={styles.cardImage}
+            contentFit="cover"
+          />
+        </TouchableOpacity>
 
-        {/* Artwork Counter */}
-        {artworks.length > 1 && (
+        {/* Portfolio Counter */}
+        {portfolioImages.length > 1 && (
           <View style={styles.artworkCounter}>
             <Text style={styles.counterText}>
-              {currentArtwork + 1} / {artworks.length}
+              {currentPortfolioImage + 1} / {portfolioImages.length}
             </Text>
           </View>
         )}
@@ -173,14 +182,18 @@ export default function ExploreScreen() {
           style={styles.gradient}
         >
           {/* Artist Info */}
-          <View style={styles.infoContainer}>
+          <TouchableOpacity
+            style={styles.infoContainer}
+            onPress={() => setShowPortfolioModal(true)}
+            activeOpacity={0.9}
+          >
             <Text style={styles.artistName}>
               {currentArtist.users?.full_name || currentArtist.users?.username}
             </Text>
             <Text style={styles.bio} numberOfLines={2}>
-              {currentArtist.users?.bio || 'Artist on Erato'}
+              {currentArtist.users?.bio || 'Artist on Verro'}
             </Text>
-            
+
             <View style={styles.statsRow}>
               <View style={styles.stat}>
                 <Ionicons name="star" size={16} color={colors.status.warning} />
@@ -199,10 +212,15 @@ export default function ExploreScreen() {
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Commission Range:</Text>
               <Text style={styles.price}>
-                ${currentArtist.min_price} - ${currentArtist.max_price}
+                ${currentArtist.min_price || 0} - ${currentArtist.max_price || 0}
               </Text>
             </View>
-          </View>
+
+            <TouchableOpacity style={styles.viewPortfolioButton}>
+              <Text style={styles.viewPortfolioText}>Tap to view full portfolio</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          </TouchableOpacity>
         </LinearGradient>
       </Animated.View>
 
@@ -244,34 +262,152 @@ export default function ExploreScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Artwork Navigation */}
-      {artworks.length > 1 && (
+      {/* Portfolio Navigation */}
+      {portfolioImages.length > 1 && (
         <View style={styles.artworkNav}>
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => setCurrentArtwork(Math.max(0, currentArtwork - 1))}
-            disabled={currentArtwork === 0}
+            onPress={() => setCurrentPortfolioImage(Math.max(0, currentPortfolioImage - 1))}
+            disabled={currentPortfolioImage === 0}
           >
-            <Ionicons 
-              name="chevron-back" 
-              size={24} 
-              color={currentArtwork === 0 ? colors.text.disabled : colors.text.primary} 
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={currentPortfolioImage === 0 ? colors.text.disabled : colors.text.primary}
             />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => setCurrentArtwork(Math.min(artworks.length - 1, currentArtwork + 1))}
-            disabled={currentArtwork === artworks.length - 1}
+            onPress={() =>
+              setCurrentPortfolioImage(
+                Math.min(portfolioImages.length - 1, currentPortfolioImage + 1)
+              )
+            }
+            disabled={currentPortfolioImage === portfolioImages.length - 1}
           >
-            <Ionicons 
-              name="chevron-forward" 
-              size={24} 
-              color={currentArtwork === artworks.length - 1 ? colors.text.disabled : colors.text.primary} 
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={
+                currentPortfolioImage === portfolioImages.length - 1
+                  ? colors.text.disabled
+                  : colors.text.primary
+              }
             />
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Portfolio Modal */}
+      <PortfolioModal
+        visible={showPortfolioModal}
+        onClose={() => setShowPortfolioModal(false)}
+        artist={currentArtist}
+        portfolioImages={portfolioImages}
+      />
     </View>
+  );
+}
+
+// Portfolio Modal Component
+function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const scrollViewRef = useRef(null);
+
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(0);
+    }
+  }, [visible]);
+
+  const handleScroll = (event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / width);
+    setCurrentIndex(index);
+  };
+
+  if (!portfolioImages || portfolioImages.length === 0) {
+    return null;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalContainer}>
+        {/* Modal Header */}
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close" size={28} color={colors.text.primary} />
+          </TouchableOpacity>
+          <View style={styles.modalHeaderText}>
+            <Text style={styles.modalTitle}>
+              {artist?.users?.full_name || artist?.users?.username}'s Portfolio
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {currentIndex + 1} of {portfolioImages.length}
+            </Text>
+          </View>
+          <View style={styles.closeButton} />
+        </View>
+
+        {/* Portfolio Images Scroll */}
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          style={styles.modalScrollView}
+        >
+          {portfolioImages.map((imageUri, index) => (
+            <View key={index} style={styles.portfolioImageContainer}>
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.portfolioImage}
+                contentFit="contain"
+              />
+            </View>
+          ))}
+        </ScrollView>
+
+        {/* Pagination Dots */}
+        <View style={styles.paginationDots}>
+          {portfolioImages.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.dot,
+                index === currentIndex && styles.activeDot,
+              ]}
+            />
+          ))}
+        </View>
+
+        {/* Artist Info Footer */}
+        <View style={styles.modalFooter}>
+          <View style={styles.artistInfo}>
+            <Image
+              source={{ uri: artist?.users?.avatar_url }}
+              style={styles.artistAvatar}
+              contentFit="cover"
+            />
+            <View style={styles.artistDetails}>
+              <Text style={styles.artistNameModal}>
+                {artist?.users?.full_name || artist?.users?.username}
+              </Text>
+              <Text style={styles.artistBioModal} numberOfLines={1}>
+                {artist?.users?.bio || 'Artist on Verro'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -483,5 +619,114 @@ const styles = StyleSheet.create({
   reloadText: {
     ...typography.button,
     color: colors.text.primary,
+  },
+  cardImageContainer: {
+    width: '100%',
+    height: '100%',
+  },
+  viewPortfolioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  viewPortfolioText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xxl + spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeaderText: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+  },
+  modalSubtitle: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+  modalScrollView: {
+    flex: 1,
+  },
+  portfolioImageContainer: {
+    width: width,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  portfolioImage: {
+    width: width,
+    height: '100%',
+  },
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.text.disabled,
+  },
+  activeDot: {
+    backgroundColor: colors.primary,
+    width: 24,
+  },
+  modalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  artistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  artistAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.surface,
+  },
+  artistDetails: {
+    flex: 1,
+  },
+  artistNameModal: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  artistBioModal: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
   },
 });
