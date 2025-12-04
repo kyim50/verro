@@ -39,7 +39,12 @@ export default function RegisterScreen() {
     const result = await register(formData);
 
     if (result.success) {
-      router.replace('/(tabs)/home');
+      // If user is an artist or both, redirect to onboarding
+      if (formData.userType === 'artist' || formData.userType === 'both') {
+        router.replace('/onboarding/welcome');
+      } else {
+        router.replace('/(tabs)/home');
+      }
     } else {
       setError(result.error || 'Registration failed');
     }

@@ -112,7 +112,8 @@ router.put('/me/artist', authenticate, async (req, res) => {
       max_price,
       turnaround_days,
       specialties,
-      social_links
+      social_links,
+      portfolio_images
     } = req.body;
 
     // Check if artist profile exists
@@ -126,6 +127,16 @@ router.put('/me/artist', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
+    // Validate portfolio_images array if provided
+    if (portfolio_images !== undefined) {
+      if (!Array.isArray(portfolio_images)) {
+        return res.status(400).json({ error: 'portfolio_images must be an array' });
+      }
+      if (portfolio_images.length > 6) {
+        return res.status(400).json({ error: 'Maximum 6 portfolio images allowed' });
+      }
+    }
+
     const updates = {};
     if (commission_status !== undefined) updates.commission_status = commission_status;
     if (min_price !== undefined) updates.min_price = min_price;
@@ -133,6 +144,7 @@ router.put('/me/artist', authenticate, async (req, res) => {
     if (turnaround_days !== undefined) updates.turnaround_days = turnaround_days;
     if (specialties !== undefined) updates.specialties = specialties;
     if (social_links !== undefined) updates.social_links = social_links;
+    if (portfolio_images !== undefined) updates.portfolio_images = portfolio_images;
 
     const { data, error } = await supabaseAdmin
       .from('artists')
@@ -146,6 +158,52 @@ router.put('/me/artist', authenticate, async (req, res) => {
     res.json(data);
   } catch (error) {
     console.error('Error updating artist profile:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete artist onboarding
+router.post('/me/artist/onboarding', authenticate, async (req, res) => {
+  try {
+    const { portfolio_images } = req.body;
+
+    // Validate portfolio_images
+    if (!Array.isArray(portfolio_images) || portfolio_images.length !== 6) {
+      return res.status(400).json({
+        error: 'Exactly 6 portfolio images are required for onboarding'
+      });
+    }
+
+    // Check if artist profile exists
+    const { data: existing } = await supabaseAdmin
+      .from('artists')
+      .select('id')
+      .eq('id', req.user.id)
+      .single();
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Artist profile not found' });
+    }
+
+    // Update artist profile with portfolio images and mark onboarding as complete
+    const { data, error } = await supabaseAdmin
+      .from('artists')
+      .update({
+        portfolio_images,
+        onboarding_completed: true
+      })
+      .eq('id', req.user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      message: 'Onboarding completed successfully',
+      artist: data
+    });
+  } catch (error) {
+    console.error('Error completing onboarding:', error);
     res.status(500).json({ error: error.message });
   }
 });
