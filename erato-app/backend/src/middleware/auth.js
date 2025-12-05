@@ -25,6 +25,15 @@ export const authenticate = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
+    // Update last_seen and is_online status
+    await supabaseAdmin
+      .from('users')
+      .update({
+        last_seen: new Date().toISOString(),
+        is_online: true
+      })
+      .eq('id', user.id);
+
     // Attach user to request
     req.user = user;
     next();

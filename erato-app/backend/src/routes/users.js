@@ -187,7 +187,6 @@ router.post('/me/artist/onboarding', authenticate, async (req, res) => {
         .from('artists')
         .insert({
           id: req.user.id,
-          user_id: req.user.id,
           commission_status: 'open',
         })
         .select()

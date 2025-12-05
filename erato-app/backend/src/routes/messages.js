@@ -53,7 +53,7 @@ router.get('/conversations', authenticate, async (req, res) => {
             content,
             message_type,
             created_at,
-            sender:users!messages_sender_id_fkey(id, username, avatar_url)
+            sender_id
           `)
           .eq('conversation_id', conv.id)
           .order('created_at', { ascending: false })
@@ -98,39 +98,53 @@ router.get('/conversations', authenticate, async (req, res) => {
 // Create or get conversation with participant(s)
 router.post('/conversations', authenticate, async (req, res) => {
   try {
-    const { participant_ids } = req.body;
+    const { participant_id, participant_ids } = req.body;
 
-    if (!participant_ids || !Array.isArray(participant_ids) || participant_ids.length === 0) {
-      return res.status(400).json({ error: 'participant_ids array is required' });
+    // Support both single participant_id and array of participant_ids
+    let participants;
+    if (participant_id) {
+      participants = [participant_id];
+    } else if (participant_ids && Array.isArray(participant_ids)) {
+      participants = participant_ids;
+    } else {
+      return res.status(400).json({ error: 'participant_id or participant_ids is required' });
     }
 
-    // Check if conversation already exists between these users
-    const allParticipants = [req.user.id, ...participant_ids];
+    if (participants.length === 0) {
+      return res.status(400).json({ error: 'At least one participant is required' });
+    }
 
-    // Find existing conversation
-    const { data: existingParticipations } = await supabaseAdmin
+    // Check if trying to message yourself
+    if (participants.includes(req.user.id)) {
+      return res.status(400).json({ error: 'Cannot create conversation with yourself' });
+    }
+
+    const allParticipants = [req.user.id, ...participants].sort();
+
+    // Find existing conversation with exactly these participants
+    // First, get all conversations the current user is in
+    const { data: userConversations } = await supabaseAdmin
       .from('conversation_participants')
       .select('conversation_id')
-      .in('user_id', allParticipants);
+      .eq('user_id', req.user.id);
 
-    if (existingParticipations && existingParticipations.length > 0) {
-      // Group by conversation_id
-      const conversationCounts = {};
-      existingParticipations.forEach(p => {
-        conversationCounts[p.conversation_id] = (conversationCounts[p.conversation_id] || 0) + 1;
-      });
+    if (userConversations && userConversations.length > 0) {
+      const conversationIds = userConversations.map(p => p.conversation_id);
 
-      // Find conversation where all participants are present
-      for (const [convId, count] of Object.entries(conversationCounts)) {
-        if (count === allParticipants.length) {
-          // Verify it's the exact participants
-          const { data: participants } = await supabaseAdmin
-            .from('conversation_participants')
-            .select('user_id')
-            .eq('conversation_id', convId);
+      // For each conversation, get all participants
+      for (const convId of conversationIds) {
+        const { data: convParticipants } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', convId)
+          .order('user_id');
 
-          if (participants.length === allParticipants.length) {
-            // Return existing conversation
+        if (convParticipants) {
+          const participantIds = convParticipants.map(p => p.user_id).sort();
+
+          // Check if this conversation has exactly the same participants
+          if (JSON.stringify(participantIds) === JSON.stringify(allParticipants)) {
+            // Found existing conversation
             const { data: conversation } = await supabaseAdmin
               .from('conversations')
               .select('*')
@@ -172,6 +186,35 @@ router.post('/conversations', authenticate, async (req, res) => {
   }
 });
 
+// Get conversation details
+router.get('/conversations/:id', authenticate, async (req, res) => {
+  try {
+    const { data: participation, error: partError } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('conversation_id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (partError || !participation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const { data: participants, error: partsError } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('user_id, users(id, username, full_name, avatar_url, is_online, last_seen)')
+      .eq('conversation_id', req.params.id);
+
+    if (partsError) throw partsError;
+
+    const participantsList = participants.map(p => p.users);
+
+    res.json({ id: req.params.id, participants: participantsList });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // Get messages in a conversation
 router.get('/conversations/:id/messages', authenticate, async (req, res) => {
   try {
@@ -193,7 +236,7 @@ router.get('/conversations/:id/messages', authenticate, async (req, res) => {
       .from('messages')
       .select(`
         *,
-        sender:users!messages_sender_id_fkey(id, username, full_name, avatar_url)
+        sender_id
       `)
       .eq('conversation_id', req.params.id)
       .order('created_at', { ascending: false })
@@ -207,10 +250,13 @@ router.get('/conversations/:id/messages', authenticate, async (req, res) => {
 
     if (msgError) throw msgError;
 
-    // Update last_read_at
+    // Update last_read_at and reset unread_count
     await supabaseAdmin
       .from('conversation_participants')
-      .update({ last_read_at: new Date().toISOString() })
+      .update({
+        last_read_at: new Date().toISOString(),
+        unread_count: 0
+      })
       .eq('conversation_id', req.params.id)
       .eq('user_id', req.user.id);
 
@@ -253,7 +299,7 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
       })
       .select(`
         *,
-        sender:users!messages_sender_id_fkey(id, username, full_name, avatar_url)
+        sender_id
       `)
       .single();
 
@@ -265,74 +311,26 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
       .update({ updated_at: new Date().toISOString() })
       .eq('id', req.params.id);
 
-    res.status(201).json(message);
-  } catch (error) {
-    console.error('Error sending message:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Create a new conversation (direct message, not commission-related)
-router.post('/conversations', authenticate, async (req, res) => {
-  try {
-    const { participant_id } = req.body;
-
-    if (!participant_id) {
-      return res.status(400).json({ error: 'participant_id is required' });
-    }
-
-    if (participant_id === req.user.id) {
-      return res.status(400).json({ error: 'Cannot create conversation with yourself' });
-    }
-
-    // Check if conversation already exists between these users
-    const { data: existingParticipations } = await supabaseAdmin
+    // Increment unread_count for all other participants
+    const { data: otherParticipants } = await supabaseAdmin
       .from('conversation_participants')
-      .select('conversation_id')
-      .eq('user_id', req.user.id);
+      .select('user_id, unread_count')
+      .eq('conversation_id', req.params.id)
+      .neq('user_id', req.user.id);
 
-    if (existingParticipations && existingParticipations.length > 0) {
-      const conversationIds = existingParticipations.map(p => p.conversation_id);
-
-      const { data: otherUserParticipations } = await supabaseAdmin
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', participant_id)
-        .in('conversation_id', conversationIds);
-
-      if (otherUserParticipations && otherUserParticipations.length > 0) {
-        // Conversation exists
-        const existingConvId = otherUserParticipations[0].conversation_id;
-        const { data: existingConv } = await supabaseAdmin
-          .from('conversations')
-          .select('*')
-          .eq('id', existingConvId)
-          .single();
-
-        return res.json({ conversation: existingConv, existed: true });
+    if (otherParticipants && otherParticipants.length > 0) {
+      for (const participant of otherParticipants) {
+        await supabaseAdmin
+          .from('conversation_participants')
+          .update({ unread_count: (participant.unread_count || 0) + 1 })
+          .eq('conversation_id', req.params.id)
+          .eq('user_id', participant.user_id);
       }
     }
 
-    // Create new conversation
-    const { data: conversation, error: convError } = await supabaseAdmin
-      .from('conversations')
-      .insert({})
-      .select()
-      .single();
-
-    if (convError) throw convError;
-
-    // Add participants
-    const participants = [
-      { conversation_id: conversation.id, user_id: req.user.id },
-      { conversation_id: conversation.id, user_id: participant_id }
-    ];
-
-    await supabaseAdmin.from('conversation_participants').insert(participants);
-
-    res.status(201).json({ conversation, existed: false });
+    res.status(201).json(message);
   } catch (error) {
-    console.error('Error creating conversation:', error);
+    console.error('Error sending message:', error);
     res.status(500).json({ error: error.message });
   }
 });

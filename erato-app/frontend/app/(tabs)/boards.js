@@ -9,24 +9,36 @@ import {
   Alert,
   Modal,
   TextInput,
+  ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useBoardStore } from '../../store';
+import axios from 'axios';
+import Constants from 'expo-constants';
+import { useBoardStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function BoardsScreen() {
   const { boards, isLoading, fetchBoards, createBoard, deleteBoard } = useBoardStore();
+  const { user, token } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardDescription, setNewBoardDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [activeTab, setActiveTab] = useState('boards'); // 'boards', 'commissions', 'activity'
+  const [commissions, setCommissions] = useState([]);
+  const [commissionsLoading, setCommissionsLoading] = useState(false);
 
   useEffect(() => {
     loadBoards();
-  }, []);
+    if (activeTab === 'commissions') {
+      loadCommissions();
+    }
+  }, [activeTab]);
 
   const loadBoards = async () => {
     try {
@@ -36,11 +48,29 @@ export default function BoardsScreen() {
     }
   };
 
+  const loadCommissions = async () => {
+    setCommissionsLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/commissions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCommissions(response.data.commissions || []);
+    } catch (error) {
+      console.error('Error loading commissions:', error);
+    } finally {
+      setCommissionsLoading(false);
+    }
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadBoards();
+    if (activeTab === 'boards') {
+      await loadBoards();
+    } else if (activeTab === 'commissions') {
+      await loadCommissions();
+    }
     setRefreshing(false);
-  }, []);
+  }, [activeTab]);
 
   const handleCreateBoard = async () => {
     if (!newBoardName.trim()) {
@@ -59,7 +89,7 @@ export default function BoardsScreen() {
       setNewBoardName('');
       setNewBoardDescription('');
       setIsPublic(false);
-      
+
       Alert.alert('Success', 'Board created!');
     } catch (error) {
       Alert.alert('Error', error.response?.data?.error || 'Failed to create board');
@@ -85,6 +115,30 @@ export default function BoardsScreen() {
         },
       ]
     );
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return '#FFA500';
+      case 'accepted': return '#4CAF50';
+      case 'declined': return '#F44336';
+      case 'in_progress': return '#2196F3';
+      case 'completed': return '#9C27B0';
+      case 'cancelled': return '#757575';
+      default: return colors.text.secondary;
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'pending': return 'time-outline';
+      case 'accepted': return 'checkmark-circle-outline';
+      case 'declined': return 'close-circle-outline';
+      case 'in_progress': return 'hourglass-outline';
+      case 'completed': return 'trophy-outline';
+      case 'cancelled': return 'ban-outline';
+      default: return 'help-circle-outline';
+    }
   };
 
   const renderBoard = ({ item }) => {
@@ -162,59 +216,215 @@ export default function BoardsScreen() {
     );
   };
 
-  const renderEmpty = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
-      <Text style={styles.emptyTitle}>No Boards Yet</Text>
-      <Text style={styles.emptyText}>
-        Create boards to save and organize artworks you love!
-      </Text>
+  const renderCommission = ({ item }) => {
+    const isClient = item.client_id === user?.id;
+    const otherUser = isClient ? item.artist?.users : item.client;
+    const statusColor = getStatusColor(item.status);
+
+    return (
       <TouchableOpacity
-        style={styles.createButton}
-        onPress={() => setShowCreateModal(true)}
+        style={styles.commissionCard}
+        onPress={() => {
+          // Navigate to commission details or conversation
+          if (item.conversation_id) {
+            router.push(`/messages/${item.conversation_id}`);
+          }
+        }}
+        activeOpacity={0.9}
       >
-        <Text style={styles.createButtonText}>Create Your First Board</Text>
+        <View style={styles.commissionHeader}>
+          <View style={styles.commissionUser}>
+            <Image
+              source={{ uri: otherUser?.avatar_url || 'https://via.placeholder.com/40' }}
+              style={styles.commissionAvatar}
+              contentFit="cover"
+            />
+            <View style={styles.commissionUserInfo}>
+              <Text style={styles.commissionUsername}>{otherUser?.username || 'Unknown'}</Text>
+              <Text style={styles.commissionRole}>{isClient ? 'Artist' : 'Client'}</Text>
+            </View>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+            <Ionicons name={getStatusIcon(item.status)} size={14} color={statusColor} />
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            </Text>
+          </View>
+        </View>
+
+        {item.artwork && (
+          <View style={styles.commissionArtwork}>
+            <Image
+              source={{ uri: item.artwork.thumbnail_url || item.artwork.image_url }}
+              style={styles.commissionArtworkImage}
+              contentFit="cover"
+            />
+            <Text style={styles.commissionArtworkTitle} numberOfLines={1}>
+              {item.artwork.title}
+            </Text>
+          </View>
+        )}
+
+        <Text style={styles.commissionDetails} numberOfLines={2}>
+          {item.details}
+        </Text>
+
+        {item.client_note && isClient && (
+          <View style={styles.noteContainer}>
+            <Text style={styles.noteLabel}>Your note:</Text>
+            <Text style={styles.noteText} numberOfLines={2}>{item.client_note}</Text>
+          </View>
+        )}
+
+        {item.artist_response && !isClient && (
+          <View style={styles.noteContainer}>
+            <Text style={styles.noteLabel}>Your response:</Text>
+            <Text style={styles.noteText} numberOfLines={2}>{item.artist_response}</Text>
+          </View>
+        )}
+
+        <View style={styles.commissionFooter}>
+          <Text style={styles.commissionDate}>
+            {new Date(item.created_at).toLocaleDateString()}
+          </Text>
+          {item.price && (
+            <Text style={styles.commissionPrice}>${item.price}</Text>
+          )}
+        </View>
       </TouchableOpacity>
-    </View>
-  );
+    );
+  };
+
+  const renderEmpty = () => {
+    if (activeTab === 'boards') {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
+          <Text style={styles.emptyTitle}>No Boards Yet</Text>
+          <Text style={styles.emptyText}>
+            Create boards to save and organize artworks you love!
+          </Text>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Text style={styles.createButtonText}>Create Your First Board</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    } else if (activeTab === 'commissions') {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
+          <Text style={styles.emptyTitle}>No Commissions</Text>
+          <Text style={styles.emptyText}>
+            {user?.user_type === 'artist' || user?.user_type === 'both'
+              ? 'You haven\'t received any commission requests yet.'
+              : 'You haven\'t requested any commissions yet.'}
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const renderTabContent = () => {
+    if (activeTab === 'boards') {
+      return (
+        <FlatList
+          data={boards.sort((a, b) => {
+            // Pin "Created" board at top
+            if (a.board_type === 'created') return -1;
+            if (b.board_type === 'created') return 1;
+            // Sort rest by creation date (newest first)
+            return new Date(b.created_at) - new Date(a.created_at);
+          })}
+          renderItem={renderBoard}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.row}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={!isLoading && renderEmpty}
+          showsVerticalScrollIndicator={false}
+        />
+      );
+    } else if (activeTab === 'commissions') {
+      return (
+        <FlatList
+          data={commissions}
+          renderItem={renderCommission}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
+          ListEmptyComponent={!commissionsLoading && renderEmpty}
+          showsVerticalScrollIndicator={false}
+        />
+      );
+    }
+    return null;
+  };
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Boards</Text>
+        <Text style={styles.headerTitle}>Library</Text>
+        {activeTab === 'boards' && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Ionicons name="add" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
         <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowCreateModal(true)}
+          style={[styles.tab, activeTab === 'boards' && styles.tabActive]}
+          onPress={() => setActiveTab('boards')}
         >
-          <Ionicons name="add" size={24} color={colors.text.primary} />
+          <Ionicons
+            name="albums"
+            size={20}
+            color={activeTab === 'boards' ? colors.primary : colors.text.secondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'boards' && styles.tabTextActive]}>
+            Boards
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'commissions' && styles.tabActive]}
+          onPress={() => setActiveTab('commissions')}
+        >
+          <Ionicons
+            name="briefcase"
+            size={20}
+            color={activeTab === 'commissions' ? colors.primary : colors.text.secondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'commissions' && styles.tabTextActive]}>
+            Commissions
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Boards Grid */}
-      <FlatList
-        data={boards.sort((a, b) => {
-          // Pin "Created" board at top
-          if (a.board_type === 'created') return -1;
-          if (b.board_type === 'created') return 1;
-          // Sort rest by creation date (newest first)
-          return new Date(b.created_at) - new Date(a.created_at);
-        })}
-        renderItem={renderBoard}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={!isLoading && renderEmpty}
-        showsVerticalScrollIndicator={false}
-      />
+      {/* Content */}
+      {renderTabContent()}
 
       {/* Create Board Modal */}
       <Modal
@@ -326,6 +536,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+  },
+  tabActive: {
+    backgroundColor: colors.primary + '20',
+  },
+  tabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+  },
+  tabTextActive: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
   listContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: 100,
@@ -415,6 +652,116 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
+  },
+  commissionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadows.small,
+  },
+  commissionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  commissionUser: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  commissionAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  commissionUserInfo: {
+    flex: 1,
+  },
+  commissionUsername: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  commissionRole: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+  },
+  statusText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  commissionArtwork: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+  },
+  commissionArtworkImage: {
+    width: 50,
+    height: 50,
+    borderRadius: borderRadius.sm,
+  },
+  commissionArtworkTitle: {
+    ...typography.body,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  commissionDetails: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    marginBottom: spacing.sm,
+  },
+  noteContainer: {
+    backgroundColor: colors.background,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  noteLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  noteText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 13,
+  },
+  commissionFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  commissionDate: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 12,
+  },
+  commissionPrice: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 15,
   },
   emptyState: {
     flex: 1,

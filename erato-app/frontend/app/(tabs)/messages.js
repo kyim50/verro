@@ -91,29 +91,42 @@ export default function MessagesScreen() {
     return 'Unknown User';
   };
 
+  const isUserOnline = (participant) => {
+    if (!participant || !participant.last_seen) return false;
+    const lastSeen = new Date(participant.last_seen);
+    const now = new Date();
+    const diffMinutes = (now - lastSeen) / 1000 / 60;
+    return diffMinutes < 5;
+  };
+
   const renderConversation = ({ item }) => {
     const hasUnread = item.unread_count > 0;
     const isCommissionRequest = item.commissions?.status === 'pending' &&
                                 item.commissions?.artist_id === user?.id;
+    const isOnline = isUserOnline(item.other_participant);
 
     return (
       <TouchableOpacity
         style={styles.conversationItem}
         onPress={() => router.push(`/messages/${item.id}`)}
+        activeOpacity={0.7}
       >
-        <Image
-          source={{ uri: item.other_participant?.avatar_url }}
-          style={styles.avatar}
-          contentFit="cover"
-        />
+        <View style={styles.avatarContainer}>
+          <Image
+            source={{ uri: item.other_participant?.avatar_url || 'https://via.placeholder.com/56' }}
+            style={styles.avatar}
+            contentFit="cover"
+          />
+          {isOnline && <View style={styles.onlineDot} />}
+        </View>
 
         <View style={styles.conversationContent}>
           <View style={styles.conversationHeader}>
-            <Text style={[styles.name, hasUnread && styles.nameUnread]}>
+            <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
               {getConversationTitle(item)}
             </Text>
             {item.latest_message && (
-              <Text style={styles.time}>
+              <Text style={[styles.time, hasUnread && styles.timeUnread]}>
                 {formatTime(item.latest_message.created_at)}
               </Text>
             )}
@@ -122,7 +135,7 @@ export default function MessagesScreen() {
           <View style={styles.messageRow}>
             <Text
               style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]}
-              numberOfLines={1}
+              numberOfLines={2}
             >
               {getMessagePreview(item)}
             </Text>
@@ -134,11 +147,9 @@ export default function MessagesScreen() {
           </View>
 
           {isCommissionRequest && (
-            <View style={styles.actionRow}>
-              <Text style={styles.requestLabel}>
-                <Ionicons name="mail" size={14} color={colors.primary} />
-                {' '}New Commission Request
-              </Text>
+            <View style={styles.commissionBadge}>
+              <Ionicons name="briefcase" size={12} color={colors.primary} />
+              <Text style={styles.commissionBadgeText}>New Request</Text>
             </View>
           )}
         </View>
@@ -215,34 +226,53 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   listContent: {
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.xs,
   },
   conversationItem: {
     flexDirection: 'row',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: spacing.md,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.surface,
-    marginRight: spacing.md,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.status.success,
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   conversationContent: {
     flex: 1,
     justifyContent: 'center',
+    paddingRight: spacing.sm,
   },
   conversationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs + 2,
   },
   name: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: spacing.sm,
   },
   nameUnread: {
     fontWeight: '700',
@@ -250,16 +280,24 @@ const styles = StyleSheet.create({
   time: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontSize: 14,
+  },
+  timeUnread: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   messageRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   messagePreview: {
     ...typography.body,
     color: colors.text.secondary,
     flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
   },
   messagePreviewUnread: {
     color: colors.text.primary,
@@ -268,26 +306,35 @@ const styles = StyleSheet.create({
   unreadBadge: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
-    minWidth: 20,
-    height: 20,
+    minWidth: 22,
+    height: 22,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xs,
-    marginLeft: spacing.sm,
+    marginTop: 2,
   },
   unreadText: {
     ...typography.small,
-    color: colors.text.primary,
+    color: '#fff',
     fontWeight: '700',
-    fontSize: 11,
+    fontSize: 12,
   },
-  actionRow: {
+  commissionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+    backgroundColor: `${colors.primary}15`,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 2,
+    borderRadius: borderRadius.sm,
   },
-  requestLabel: {
-    ...typography.caption,
+  commissionBadgeText: {
+    ...typography.small,
     color: colors.primary,
     fontWeight: '600',
+    fontSize: 12,
   },
   emptyState: {
     flex: 1,

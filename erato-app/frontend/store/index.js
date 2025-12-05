@@ -79,8 +79,9 @@ export const useAuthStore = create((set) => ({
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      await useAuthStore.getState().setToken(null);
+      // Clear user immediately before token to prevent flash
       set({ user: null, isAuthenticated: false });
+      await useAuthStore.getState().setToken(null);
     }
   },
 

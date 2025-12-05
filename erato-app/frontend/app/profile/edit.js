@@ -18,7 +18,7 @@ import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function EditProfileScreen() {
-  const { profile, fetchProfile, token } = useAuthStore();
+  const { user, token, fetchUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
   // User fields
@@ -34,20 +34,20 @@ export default function EditProfileScreen() {
   const [specialties, setSpecialties] = useState('');
 
   useEffect(() => {
-    if (profile) {
-      setAvatarUrl(profile.avatar_url || '');
-      setFullName(profile.full_name || '');
-      setBio(profile.bio || '');
+    if (user) {
+      setAvatarUrl(user.avatar_url || '');
+      setFullName(user.full_name || '');
+      setBio(user.bio || '');
 
-      if (profile.artist) {
-        setCommissionStatus(profile.artist.commission_status || 'closed');
-        setMinPrice(profile.artist.min_price?.toString() || '');
-        setMaxPrice(profile.artist.max_price?.toString() || '');
-        setTurnaroundDays(profile.artist.turnaround_days?.toString() || '');
-        setSpecialties(profile.artist.specialties?.join(', ') || '');
+      if (user.artists) {
+        setCommissionStatus(user.artists.commission_status || 'closed');
+        setMinPrice(user.artists.min_price?.toString() || '');
+        setMaxPrice(user.artists.max_price?.toString() || '');
+        setTurnaroundDays(user.artists.turnaround_days?.toString() || '');
+        setSpecialties(user.artists.specialties?.join(', ') || '');
       }
     }
-  }, [profile]);
+  }, [user]);
 
   const pickProfileImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -94,7 +94,7 @@ export default function EditProfileScreen() {
       }
 
       // Update artist profile if user is an artist
-      if (profile?.artist) {
+      if (user?.artists) {
         const artistData = {
           commission_status: commissionStatus,
         };
@@ -126,7 +126,7 @@ export default function EditProfileScreen() {
         }
       }
 
-      await fetchProfile(token);
+      await fetchUser();
       Alert.alert('Success!', 'Profile updated successfully', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -215,7 +215,7 @@ export default function EditProfileScreen() {
         </View>
 
         {/* Artist Settings */}
-        {profile?.artist && (
+        {user?.artists && (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Commission Settings</Text>
