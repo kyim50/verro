@@ -7,10 +7,15 @@ const router = express.Router();
 // Request a commission
 router.post('/request', authenticate, async (req, res) => {
   try {
-    const { artist_id, artwork_id, details } = req.body;
+    const { artist_id, artwork_id, details, client_note } = req.body;
 
     if (!artist_id || !details) {
       return res.status(400).json({ error: 'artist_id and details are required' });
+    }
+
+    // Prevent requesting commission to yourself
+    if (artist_id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot request a commission from yourself' });
     }
 
     // Verify artist exists
@@ -32,6 +37,7 @@ router.post('/request', authenticate, async (req, res) => {
         artist_id,
         artwork_id: artwork_id || null,
         details,
+        client_note: client_note || null,
         status: 'pending'
       })
       .select()
@@ -89,11 +95,6 @@ router.get('/', authenticate, async (req, res) => {
       .from('commissions')
       .select(`
         *,
-        client:users!commissions_client_id_fkey(id, username, full_name, avatar_url),
-        artist:artists!commissions_artist_id_fkey(
-          id,
-          users(username, full_name, avatar_url)
-        ),
         artwork:artworks(id, title, thumbnail_url, image_url)
       `)
       .order('created_at', { ascending: false });
@@ -117,7 +118,46 @@ router.get('/', authenticate, async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ commissions });
+    // Manually fetch client and artist data for each commission
+    const enrichedCommissions = await Promise.all(
+      commissions.map(async (commission) => {
+        // Fetch client data
+        const { data: client } = await supabaseAdmin
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .eq('id', commission.client_id)
+          .single();
+
+        // Fetch artist data
+        const { data: artist } = await supabaseAdmin
+          .from('artists')
+          .select('id')
+          .eq('id', commission.artist_id)
+          .single();
+
+        let artistWithUser = null;
+        if (artist) {
+          const { data: artistUser } = await supabaseAdmin
+            .from('users')
+            .select('username, full_name, avatar_url')
+            .eq('id', artist.id)
+            .single();
+
+          artistWithUser = {
+            ...artist,
+            users: artistUser
+          };
+        }
+
+        return {
+          ...commission,
+          client,
+          artist: artistWithUser
+        };
+      })
+    );
+
+    res.json({ commissions: enrichedCommissions });
   } catch (error) {
     console.error('Error fetching commissions:', error);
     res.status(500).json({ error: error.message });
@@ -131,14 +171,6 @@ router.get('/:id', authenticate, async (req, res) => {
       .from('commissions')
       .select(`
         *,
-        client:users!commissions_client_id_fkey(id, username, full_name, avatar_url, bio),
-        artist:artists!commissions_artist_id_fkey(
-          id,
-          min_price,
-          max_price,
-          turnaround_days,
-          users(username, full_name, avatar_url, bio)
-        ),
         artwork:artworks(id, title, thumbnail_url, image_url)
       `)
       .eq('id', req.params.id)
@@ -151,7 +183,39 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json(commission);
+    // Fetch client data
+    const { data: client } = await supabaseAdmin
+      .from('users')
+      .select('id, username, full_name, avatar_url, bio')
+      .eq('id', commission.client_id)
+      .single();
+
+    // Fetch artist data
+    const { data: artist } = await supabaseAdmin
+      .from('artists')
+      .select('id, min_price, max_price, turnaround_days')
+      .eq('id', commission.artist_id)
+      .single();
+
+    let artistWithUser = null;
+    if (artist) {
+      const { data: artistUser } = await supabaseAdmin
+        .from('users')
+        .select('username, full_name, avatar_url, bio')
+        .eq('id', artist.id)
+        .single();
+
+      artistWithUser = {
+        ...artist,
+        users: artistUser
+      };
+    }
+
+    res.json({
+      ...commission,
+      client,
+      artist: artistWithUser
+    });
   } catch (error) {
     console.error('Error fetching commission:', error);
     res.status(500).json({ error: error.message });
@@ -161,9 +225,9 @@ router.get('/:id', authenticate, async (req, res) => {
 // Update commission status (artist only)
 router.patch('/:id/status', authenticate, async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, artist_response } = req.body;
 
-    if (!['accepted', 'rejected', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+    if (!['accepted', 'declined', 'rejected', 'in_progress', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
@@ -191,10 +255,24 @@ router.patch('/:id/status', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Clients can only cancel commissions' });
     }
 
+    // Prepare update data
+    const updates = {
+      status,
+      updated_at: new Date().toISOString()
+    };
+
+    // Add artist_response and responded_at if artist is responding
+    if (isArtist && (status === 'accepted' || status === 'declined')) {
+      if (artist_response) {
+        updates.artist_response = artist_response;
+      }
+      updates.responded_at = new Date().toISOString();
+    }
+
     // Update status
     const { data: updated, error } = await supabaseAdmin
       .from('commissions')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', req.params.id)
       .select()
       .single();

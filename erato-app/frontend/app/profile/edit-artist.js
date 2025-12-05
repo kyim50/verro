@@ -121,8 +121,8 @@ export default function EditArtistProfileScreen() {
               </Text>
             </View>
             <Switch
-              value={commissionsOpen}
-              onValueChange={setCommissionsOpen}
+              value={commissionStatus === 'open'}
+              onValueChange={(value) => setCommissionStatus(value ? 'open' : 'closed')}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.background}
             />

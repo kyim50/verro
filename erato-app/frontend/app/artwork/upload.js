@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -29,6 +29,14 @@ export default function UploadArtworkScreen() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  
+  // Reset states when component mounts
+  useEffect(() => {
+    return () => {
+      setLoading(false);
+      setUploading(false);
+    };
+  }, []);
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {

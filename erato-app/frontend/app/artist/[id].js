@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,6 +9,8 @@ import {
   Dimensions,
   FlatList,
   Alert,
+  Modal,
+  StatusBar,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -32,6 +34,8 @@ export default function ArtistProfileScreen() {
   const [createdBoard, setCreatedBoard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedPortfolioIndex, setSelectedPortfolioIndex] = useState(null);
+  const portfolioFlatListRef = useRef(null);
 
   useEffect(() => {
     fetchArtistProfile();
@@ -295,8 +299,8 @@ export default function ArtistProfileScreen() {
 
         {/* Portfolio Images */}
         {artist.portfolio_images && artist.portfolio_images.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
+          <View style={[styles.section, { paddingHorizontal: 0 }]}>
+            <View style={[styles.sectionHeader, { paddingHorizontal: spacing.lg }]}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="images-outline" size={20} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Portfolio</Text>
@@ -306,18 +310,25 @@ export default function ArtistProfileScreen() {
             <FlatList
               data={artist.portfolio_images}
               renderItem={({ item, index }) => (
-                <View style={[styles.artworkCard, { height: ITEM_WIDTH * 1.3 }]}>
+                <TouchableOpacity
+                  style={styles.portfolioCard}
+                  onPress={() => setSelectedPortfolioIndex(index)}
+                  activeOpacity={0.9}
+                >
                   <Image
                     source={{ uri: item }}
-                    style={styles.artworkImage}
+                    style={styles.portfolioImage}
                     contentFit="cover"
                   />
-                </View>
+                </TouchableOpacity>
               )}
               keyExtractor={(item, index) => index.toString()}
-              numColumns={2}
-              columnWrapperStyle={styles.row}
-              scrollEnabled={false}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.portfolioList}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              snapToInterval={width * 0.85 + spacing.md}
             />
           </View>
         )}
@@ -371,6 +382,61 @@ export default function ArtistProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Portfolio Modal Viewer */}
+      <Modal
+        visible={selectedPortfolioIndex !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedPortfolioIndex(null)}
+      >
+        <View style={styles.modalContainer}>
+          <StatusBar barStyle="light-content" />
+
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setSelectedPortfolioIndex(null)}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.modalCounter}>
+              {selectedPortfolioIndex !== null ? `${selectedPortfolioIndex + 1} / ${artist?.portfolio_images?.length || 0}` : ''}
+            </Text>
+            <View style={styles.modalHeaderSpacer} />
+          </View>
+
+          {/* Image Viewer */}
+          <FlatList
+            ref={portfolioFlatListRef}
+            data={artist?.portfolio_images || []}
+            renderItem={({ item }) => (
+              <View style={styles.modalImageContainer}>
+                <Image
+                  source={{ uri: item }}
+                  style={styles.modalImage}
+                  contentFit="contain"
+                />
+              </View>
+            )}
+            keyExtractor={(item, index) => index.toString()}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={selectedPortfolioIndex || 0}
+            getItemLayout={(data, index) => ({
+              length: width,
+              offset: width * index,
+              index,
+            })}
+            onMomentumScrollEnd={(event) => {
+              const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+              setSelectedPortfolioIndex(newIndex);
+            }}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -588,7 +654,8 @@ const styles = StyleSheet.create({
   },
   row: {
     justifyContent: 'space-between',
-    marginBottom: SPACING,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
   artworkCard: {
     width: ITEM_WIDTH,
@@ -655,5 +722,65 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     marginTop: 2,
+  },
+  portfolioList: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  portfolioCard: {
+    width: width * 0.85,
+    height: width * 1.1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    marginRight: spacing.md,
+  },
+  portfolioImage: {
+    width: '100%',
+    height: '100%',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xxl + spacing.md,
+    paddingBottom: spacing.md,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCounter: {
+    ...typography.body,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  modalHeaderSpacer: {
+    width: 40,
+  },
+  modalImageContainer: {
+    width: width,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
   },
 });
