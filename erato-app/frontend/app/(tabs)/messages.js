@@ -99,7 +99,7 @@ export default function MessagesScreen() {
     return (
       <TouchableOpacity
         style={styles.conversationItem}
-        onPress={() => router.push(`/conversation/${item.id}`)}
+        onPress={() => router.push(`/messages/${item.id}`)}
       >
         <Image
           source={{ uri: item.other_participant?.avatar_url }}

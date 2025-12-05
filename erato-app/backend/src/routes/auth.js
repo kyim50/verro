@@ -79,6 +79,7 @@ router.post(
       if (userType === 'artist' || userType === 'both') {
         await supabaseAdmin.from('artists').insert({
           id: user.id,
+          user_id: user.id,
           commission_status: 'open',
         });
       }

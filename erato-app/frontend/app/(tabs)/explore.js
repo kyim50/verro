@@ -9,11 +9,13 @@ import {
   PanResponder,
   Modal,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useSwipeStore } from '../../store';
+import { router } from 'expo-router';
+import { useSwipeStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -21,8 +23,11 @@ const SWIPE_THRESHOLD = width * 0.25;
 
 export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
+  const { token } = useAuthStore();
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [selectedArtist, setSelectedArtist] = useState(null);
 
   const position = useRef(new Animated.ValueXY()).current;
   const swipeAnimation = useRef(new Animated.Value(0)).current;
@@ -64,6 +69,9 @@ export default function ExploreScreen() {
     }).start(() => {
       if (currentArtist) {
         swipe(currentArtist.id, 'right');
+        // Show action modal
+        setSelectedArtist(currentArtist);
+        setShowActionModal(true);
       }
       position.setValue({ x: 0, y: 0 });
     });
@@ -305,6 +313,14 @@ export default function ExploreScreen() {
         artist={currentArtist}
         portfolioImages={portfolioImages}
       />
+
+      {/* Action Modal */}
+      <ActionModal
+        visible={showActionModal}
+        onClose={() => setShowActionModal(false)}
+        artist={selectedArtist}
+        token={token}
+      />
     </View>
   );
 }
@@ -404,6 +420,141 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
                 {artist?.users?.bio || 'Artist on Verro'}
               </Text>
             </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// Action Modal Component
+function ActionModal({ visible, onClose, artist, token }) {
+  if (!artist) return null;
+
+  const handleRequestCommission = () => {
+    if (!token) {
+      Alert.alert('Login Required', 'Please log in to request a commission');
+      onClose();
+      return;
+    }
+
+    const isOpen = artist.commission_status === 'open';
+    if (!isOpen) {
+      Alert.alert('Commissions Closed', 'This artist is not currently accepting commissions');
+      onClose();
+      return;
+    }
+
+    onClose();
+    router.push(`/commission/create?artistId=${artist.id}`);
+  };
+
+  const handleSendMessage = async () => {
+    if (!token) {
+      Alert.alert('Login Required', 'Please log in to send messages');
+      onClose();
+      return;
+    }
+
+    try {
+      // Create or get existing conversation
+      const response = await axios.post(
+        `${API_URL}/messages/conversations`,
+        { participant_ids: [artist.user_id || artist.id] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      onClose();
+      // Navigate to the conversation
+      router.push(`/messages/${response.data.conversation.id}`);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      Alert.alert('Error', 'Failed to start conversation. Please try again.');
+    }
+  };
+
+  const handleViewProfile = () => {
+    onClose();
+    router.push(`/artist/${artist.id}`);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.actionModalOverlay}>
+        <View style={styles.actionModalContent}>
+          {/* Header */}
+          <View style={styles.actionModalHeader}>
+            <View style={styles.actionModalArtistInfo}>
+              <Image
+                source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/50' }}
+                style={styles.actionModalAvatar}
+                contentFit="cover"
+              />
+              <View>
+                <Text style={styles.actionModalArtistName}>
+                  {artist.users?.full_name || artist.users?.username}
+                </Text>
+                <Text style={styles.actionModalSubtext}>What would you like to do?</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionOptionButton, styles.commissionButton]}
+              onPress={handleRequestCommission}
+              disabled={artist.commission_status !== 'open'}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="brush" size={24} color={colors.text.primary} />
+              </View>
+              <View style={styles.actionTextContainer}>
+                <Text style={styles.actionOptionTitle}>Request Commission</Text>
+                <Text style={styles.actionOptionSubtext}>
+                  {artist.commissions_open
+                    ? `$${artist.min_price || 0} - $${artist.max_price || 0}`
+                    : 'Currently closed'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionOptionButton}
+              onPress={handleSendMessage}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="chatbubble" size={24} color={colors.text.primary} />
+              </View>
+              <View style={styles.actionTextContainer}>
+                <Text style={styles.actionOptionTitle}>Send Message</Text>
+                <Text style={styles.actionOptionSubtext}>Start a conversation</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionOptionButton}
+              onPress={handleViewProfile}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="person" size={24} color={colors.text.primary} />
+              </View>
+              <View style={styles.actionTextContainer}>
+                <Text style={styles.actionOptionTitle}>View Profile</Text>
+                <Text style={styles.actionOptionSubtext}>See boards and artworks</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -728,5 +879,78 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+  },
+  // Action Modal Styles
+  actionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  actionModalContent: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    paddingBottom: spacing.xxl,
+  },
+  actionModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  actionModalArtistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  actionModalAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.background,
+  },
+  actionModalArtistName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  actionModalSubtext: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+  actionButtons: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  actionOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
+    gap: spacing.md,
+  },
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionTextContainer: {
+    flex: 1,
+  },
+  actionOptionTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  actionOptionSubtext: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: 2,
   },
 });

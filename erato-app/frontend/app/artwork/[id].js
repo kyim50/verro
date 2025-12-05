@@ -42,7 +42,9 @@ export default function ArtworkDetailScreen() {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await axios.get(`${API_URL}/artworks/${id}`, { headers });
-      setArtwork(response.data);
+      // The API returns {artwork: {...}} not just the artwork object
+      const artworkData = response.data.artwork || response.data;
+      setArtwork(artworkData);
     } catch (error) {
       console.error('Error fetching artwork:', error);
       Alert.alert('Error', 'Failed to load artwork');
@@ -175,16 +177,16 @@ export default function ArtworkDetailScreen() {
             onPress={() => !isOwnArtwork && router.push(`/artist/${artwork.artist_id}`)}
           >
             <Image
-              source={{ uri: artwork.artist?.users?.avatar_url }}
+              source={{ uri: artwork.artists?.users?.avatar_url || 'https://via.placeholder.com/80' }}
               style={styles.artistAvatar}
               contentFit="cover"
             />
             <View style={styles.artistDetails}>
               <Text style={styles.artistName}>
-                {artwork.artist?.users?.full_name || artwork.artist?.users?.username || 'Unknown Artist'}
+                {artwork.artists?.users?.full_name || artwork.artists?.users?.username || 'Unknown Artist'}
               </Text>
               <Text style={styles.artistBio} numberOfLines={1}>
-                {artwork.artist?.users?.bio || 'Artist on Verro'}
+                {artwork.artists?.users?.bio || 'Artist on Verro'}
               </Text>
             </View>
           </TouchableOpacity>

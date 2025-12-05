@@ -175,14 +175,29 @@ router.post('/me/artist/onboarding', authenticate, async (req, res) => {
     }
 
     // Check if artist profile exists
-    const { data: existing } = await supabaseAdmin
+    let { data: existing } = await supabaseAdmin
       .from('artists')
       .select('id')
       .eq('id', req.user.id)
       .single();
 
+    // If artist profile doesn't exist, create it
     if (!existing) {
-      return res.status(404).json({ error: 'Artist profile not found' });
+      const { data: newArtist, error: createError } = await supabaseAdmin
+        .from('artists')
+        .insert({
+          id: req.user.id,
+          user_id: req.user.id,
+          commission_status: 'open',
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating artist profile:', createError);
+        throw createError;
+      }
+      existing = newArtist;
     }
 
     // Update artist profile with portfolio images and mark onboarding as complete
@@ -241,6 +256,55 @@ router.get('/:id/reviews', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching reviews:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user's boards
+router.get('/:id/boards', optionalAuth, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Build query to get boards
+    let query = supabaseAdmin
+      .from('boards')
+      .select(`
+        id,
+        name,
+        description,
+        board_type,
+        is_public,
+        created_at,
+        board_artworks(
+          artworks(
+            id,
+            title,
+            image_url,
+            thumbnail_url
+          )
+        )
+      `)
+      .eq('user_id', userId);
+
+    // If not viewing own profile, only show public boards
+    const isOwnProfile = req.user && req.user.id === userId;
+    if (!isOwnProfile) {
+      query = query.eq('is_public', true);
+    }
+
+    const { data: boards, error } = await query.order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Add artwork count to each board
+    const boardsWithCount = boards.map(board => ({
+      ...board,
+      artwork_count: board.board_artworks?.length || 0,
+    }));
+
+    res.json(boardsWithCount);
+  } catch (error) {
+    console.error('Error fetching user boards:', error);
     res.status(500).json({ error: error.message });
   }
 });

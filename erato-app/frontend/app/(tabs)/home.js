@@ -17,6 +17,7 @@ import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFeedStore, useBoardStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import SearchModal from '../../components/SearchModal';
 
 const { width } = Dimensions.get('window');
 const SPACING = 4;
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const [selectedArtwork, setSelectedArtwork] = useState(null);
   const [showCreateBoard, setShowCreateBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
+  const [showSearchModal, setShowSearchModal] = useState(false);
 
   useEffect(() => {
     fetchArtworks(true);
@@ -187,10 +189,13 @@ export default function HomeScreen() {
         </View>
         
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setShowSearchModal(true)}
+          >
             <Ionicons name="search" size={22} color={colors.text.primary} />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.iconButton}
             onPress={() => router.push('/(tabs)/profile')}
           >
@@ -300,6 +305,12 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Search Modal */}
+      <SearchModal
+        visible={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+      />
     </View>
   );
 }

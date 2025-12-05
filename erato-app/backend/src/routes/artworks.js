@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { authenticate, optionalAuth, requireArtist } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 
@@ -15,6 +15,7 @@ router.get(
     query('limit').optional().isInt({ min: 1, max: 50 }).toInt(),
     query('tags').optional().isString(),
     query('artistId').optional().isUUID(),
+    query('search').optional().isString(),
   ],
   async (req, res, next) => {
     try {
@@ -28,18 +29,11 @@ router.get(
       const offset = (page - 1) * limit;
       const tags = req.query.tags ? req.query.tags.split(',') : null;
       const artistId = req.query.artistId;
+      const searchQuery = req.query.search;
 
-      let query = supabase
+      let query = supabaseAdmin
         .from('artworks')
-        .select(`
-          *,
-          artists(
-            id,
-            users(username, avatar_url, full_name),
-            rating,
-            commission_status
-          )
-        `, { count: 'exact' })
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -51,12 +45,46 @@ router.get(
         query = query.eq('artist_id', artistId);
       }
 
-      const { data: artworks, error, count } = await query;
+      // Text search on title and tags
+      if (searchQuery) {
+        query = query.or(`title.ilike.%${searchQuery}%,tags.cs.{${searchQuery}}`);
+      }
+
+      const { data: artworks, error, count} = await query;
 
       if (error) throw error;
 
+      // Fetch artist and user data for each artwork
+      const enrichedArtworks = await Promise.all(
+        artworks.map(async (artwork) => {
+          const { data: artist } = await supabaseAdmin
+            .from('artists')
+            .select('id, rating, commission_status, user_id')
+            .eq('id', artwork.artist_id)
+            .single();
+
+          if (artist) {
+            const { data: user } = await supabaseAdmin
+              .from('users')
+              .select('username, avatar_url, full_name')
+              .eq('id', artist.user_id || artist.id)
+              .single();
+
+            return {
+              ...artwork,
+              artists: {
+                ...artist,
+                users: user
+              }
+            };
+          }
+
+          return artwork;
+        })
+      );
+
       res.json({
-        artworks,
+        artworks: enrichedArtworks,
         pagination: {
           page,
           limit,
@@ -73,7 +101,7 @@ router.get(
 // Get single artwork
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
-    const { data: artwork, error } = await supabase
+    const { data: artwork, error } = await supabaseAdmin
       .from('artworks')
       .select(`
         *,
@@ -97,7 +125,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     }
 
     // Increment view count
-    await supabase
+    await supabaseAdmin
       .from('artworks')
       .update({ view_count: artwork.view_count + 1 })
       .eq('id', req.params.id);
@@ -139,7 +167,7 @@ router.post(
         displayOrder,
       } = req.body;
 
-      const { data: artwork, error } = await supabase
+      const { data: artwork, error } = await supabaseAdmin
         .from('artworks')
         .insert({
           artist_id: req.user.id,
@@ -155,6 +183,63 @@ router.post(
         .single();
 
       if (error) throw error;
+
+      // Auto-create "Created" board and add artwork to it
+      try {
+        // Check if user has "Created" board
+        const { data: createdBoard, error: boardCheckError } = await supabaseAdmin
+          .from('boards')
+          .select('id')
+          .eq('user_id', req.user.id)
+          .eq('board_type', 'created')
+          .maybeSingle();
+
+        if (boardCheckError && boardCheckError.code !== 'PGRST116') {
+          console.error('Error checking for Created board:', boardCheckError);
+        }
+
+        let boardId;
+
+        if (!createdBoard) {
+          // Create "Created" board
+          const { data: newBoard, error: createBoardError } = await supabaseAdmin
+            .from('boards')
+            .insert({
+              user_id: req.user.id,
+              name: 'Created',
+              description: 'All your uploaded artworks',
+              board_type: 'created',
+              is_public: true,
+            })
+            .select('id')
+            .single();
+
+          if (createBoardError) {
+            console.error('Error creating Created board:', createBoardError);
+          } else {
+            boardId = newBoard.id;
+          }
+        } else {
+          boardId = createdBoard.id;
+        }
+
+        // Add artwork to Created board
+        if (boardId) {
+          const { error: addArtworkError } = await supabaseAdmin
+            .from('board_artworks')
+            .insert({
+              board_id: boardId,
+              artwork_id: artwork.id,
+            });
+
+          if (addArtworkError) {
+            console.error('Error adding artwork to Created board:', addArtworkError);
+          }
+        }
+      } catch (boardError) {
+        // Log error but don't fail the artwork upload
+        console.error('Error with Created board auto-add:', boardError);
+      }
 
       res.status(201).json({
         message: 'Artwork uploaded successfully',

@@ -90,10 +90,11 @@ export default function BoardsScreen() {
   const renderBoard = ({ item }) => {
     const artworkCount = item.artworks?.[0]?.count || 0;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
+    const isCreatedBoard = item.board_type === 'created';
 
     return (
       <TouchableOpacity
-        style={styles.boardCard}
+        style={[styles.boardCard, isCreatedBoard && styles.createdBoardCard]}
         onPress={() => router.push(`/board/${item.id}`)}
         activeOpacity={0.9}
       >
@@ -119,18 +120,27 @@ export default function BoardsScreen() {
         {/* Board Info */}
         <View style={styles.boardInfo}>
           <View style={styles.boardHeader}>
-            <Text style={styles.boardName} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleDeleteBoard(item);
-              }}
-            >
-              <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.secondary} />
-            </TouchableOpacity>
+            <View style={styles.boardTitleRow}>
+              <Text style={styles.boardName} numberOfLines={1}>
+                {item.name}
+              </Text>
+              {isCreatedBoard && (
+                <View style={styles.createdBadge}>
+                  <Ionicons name="cloud-upload-outline" size={12} color={colors.primary} />
+                </View>
+              )}
+            </View>
+            {!isCreatedBoard && (
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleDeleteBoard(item);
+                }}
+              >
+                <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {item.description && (
@@ -183,7 +193,13 @@ export default function BoardsScreen() {
 
       {/* Boards Grid */}
       <FlatList
-        data={boards}
+        data={boards.sort((a, b) => {
+          // Pin "Created" board at top
+          if (a.board_type === 'created') return -1;
+          if (b.board_type === 'created') return 1;
+          // Sort rest by creation date (newest first)
+          return new Date(b.created_at) - new Date(a.created_at);
+        })}
         renderItem={renderBoard}
         keyExtractor={(item) => item.id}
         numColumns={2}
@@ -325,6 +341,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.small,
   },
+  createdBoardCard: {
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+  },
   coverGrid: {
     width: '100%',
     height: 160,
@@ -357,12 +377,25 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: spacing.xs,
   },
+  boardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xs,
+  },
   boardName: {
     ...typography.h3,
     color: colors.text.primary,
-    flex: 1,
     marginRight: spacing.xs,
     fontSize: 16,
+  },
+  createdBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   menuButton: {
     padding: 4,
