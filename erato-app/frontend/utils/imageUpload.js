@@ -1,59 +1,62 @@
-import { createClient } from '@supabase/supabase-js';
 import * as FileSystem from 'expo-file-system';
-import { decode } from 'base64-arraybuffer';
+import axios from 'axios';
+import Constants from 'expo-constants';
 
-// Initialize Supabase client for storage
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 /**
- * Upload an image to Supabase Storage
+ * Upload an image to Supabase Storage via backend API
  * @param {string} uri - Local file URI from ImagePicker
  * @param {string} bucket - Storage bucket name (e.g., 'artworks', 'profiles', 'portfolios')
- * @param {string} folder - Optional folder within bucket
+ * @param {string} folder - Optional folder within bucket (not used with new API)
+ * @param {string} token - JWT authentication token
  * @returns {Promise<string>} Public URL of uploaded image
  */
-export async function uploadImage(uri, bucket = 'artworks', folder = '') {
+export async function uploadImage(uri, bucket = 'artworks', folder = '', token) {
   try {
-    // Generate unique filename
-    const ext = uri.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-    const filePath = folder ? `${folder}/${fileName}` : fileName;
-
-    // Read file as base64
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Convert to array buffer
-    const arrayBuffer = decode(base64);
-
-    // Determine content type
-    const contentType = getContentType(ext);
-
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, arrayBuffer, {
-        contentType,
-        upsert: false,
-      });
-
-    if (error) {
-      console.error('Supabase upload error:', error);
-      throw error;
+    if (!token) {
+      throw new Error('Authentication token required for upload');
     }
 
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
+    // Get file info
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    if (!fileInfo.exists) {
+      throw new Error('File does not exist');
+    }
 
-    return publicUrlData.publicUrl;
+    // Determine content type
+    const ext = uri.split('.').pop();
+    const contentType = getContentType(ext);
+
+    // Create form data
+    const formData = new FormData();
+    formData.append('file', {
+      uri,
+      type: contentType,
+      name: `upload.${ext}`,
+    });
+
+    // Determine endpoint based on bucket
+    const endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : bucket === 'portfolios' ? 'portfolio' : 'artwork'}`;
+
+    // Upload to backend API
+    const response = await axios.post(endpoint, formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Upload failed');
+    }
+
+    return response.data.url;
   } catch (error) {
     console.error('Error uploading image:', error);
+    if (error.response) {
+      throw new Error(error.response.data.error || 'Failed to upload image');
+    }
     throw new Error('Failed to upload image');
   }
 }
@@ -62,42 +65,67 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '') {
  * Upload multiple images in parallel
  * @param {string[]} uris - Array of local file URIs
  * @param {string} bucket - Storage bucket name
- * @param {string} folder - Optional folder within bucket
+ * @param {string} folder - Optional folder within bucket (not used with new API)
+ * @param {string} token - JWT authentication token
  * @returns {Promise<string[]>} Array of public URLs
  */
-export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '') {
+export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '', token) {
   try {
-    const uploadPromises = uris.map(uri => uploadImage(uri, bucket, folder));
+    if (!token) {
+      throw new Error('Authentication token required for upload');
+    }
+
+    // For portfolio, use the multi-file endpoint
+    if (bucket === 'portfolios') {
+      const formData = new FormData();
+      for (const uri of uris) {
+        const ext = uri.split('.').pop();
+        const contentType = getContentType(ext);
+        formData.append('files', {
+          uri,
+          type: contentType,
+          name: `upload.${ext}`,
+        });
+      }
+
+      const response = await axios.post(`${API_URL}/uploads/portfolio`, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Upload failed');
+      }
+
+      return response.data.urls;
+    }
+
+    // For other buckets, upload individually in parallel
+    const uploadPromises = uris.map(uri => uploadImage(uri, bucket, folder, token));
     return await Promise.all(uploadPromises);
   } catch (error) {
     console.error('Error uploading multiple images:', error);
+    if (error.response) {
+      throw new Error(error.response.data.error || 'Failed to upload images');
+    }
     throw new Error('Failed to upload images');
   }
 }
 
 /**
  * Delete an image from Supabase Storage
+ * Note: This function is deprecated as deletion should be handled server-side
  * @param {string} url - Public URL of the image
  * @param {string} bucket - Storage bucket name
  * @returns {Promise<void>}
  */
 export async function deleteImage(url, bucket = 'artworks') {
   try {
-    // Extract file path from URL
-    const urlParts = url.split(`/storage/v1/object/public/${bucket}/`);
-    if (urlParts.length < 2) {
-      throw new Error('Invalid URL format');
-    }
-    const filePath = urlParts[1];
-
-    const { error } = await supabase.storage
-      .from(bucket)
-      .remove([filePath]);
-
-    if (error) {
-      console.error('Error deleting image:', error);
-      throw error;
-    }
+    // TODO: Implement backend API endpoint for image deletion
+    console.warn('deleteImage function is deprecated - implement backend API endpoint');
+    // For now, do nothing - deletion should be handled by backend when artwork/profile is deleted
   } catch (error) {
     console.error('Error in deleteImage:', error);
     // Don't throw - deletion failures shouldn't block the app

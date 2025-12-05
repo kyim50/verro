@@ -413,3 +413,56 @@ export const useProfileStore = create((set, get) => ({
 
   reset: () => set({ profile: null, isLoading: false, error: null }),
 }));
+
+// Search store
+export const useSearchStore = create((set, get) => ({
+  query: '',
+  artworks: [],
+  artists: [],
+  isLoading: false,
+  error: null,
+  activeTab: 'artworks', // 'artworks' or 'artists'
+
+  setQuery: (query) => set({ query }),
+
+  setActiveTab: (tab) => set({ activeTab: tab }),
+
+  search: async (searchQuery) => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      set({ artworks: [], artists: [], query: searchQuery });
+      return;
+    }
+
+    set({ isLoading: true, error: null, query: searchQuery });
+
+    try {
+      // Search both artworks and artists in parallel
+      const [artworksResponse, artistsResponse] = await Promise.all([
+        axios.get(`${API_URL}/artworks?search=${encodeURIComponent(searchQuery)}&limit=20`),
+        axios.get(`${API_URL}/artists?search=${encodeURIComponent(searchQuery)}&limit=10`)
+      ]);
+
+      set({
+        artworks: artworksResponse.data.artworks || [],
+        artists: artistsResponse.data.artists || [],
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error('Search error:', error);
+      set({
+        error: error.response?.data?.error || 'Search failed',
+        isLoading: false,
+        artworks: [],
+        artists: [],
+      });
+    }
+  },
+
+  clearSearch: () => set({
+    query: '',
+    artworks: [],
+    artists: [],
+    error: null,
+    activeTab: 'artworks',
+  }),
+}));

@@ -230,7 +230,7 @@ router.put('/:id', authenticate, async (req, res) => {
     // Verify ownership
     const { data: board, error: fetchError } = await supabaseAdmin
       .from('boards')
-      .select('user_id')
+      .select('user_id, board_type')
       .eq('id', req.params.id)
       .single();
 
@@ -242,11 +242,21 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to update this board' });
     }
 
+    // Prevent updating "Created" board type and name
+    if (board.board_type === 'created') {
+      // Only allow updating description and visibility for Created board
+      if (name !== undefined || board_type !== undefined) {
+        return res.status(403).json({
+          error: 'Cannot rename or change type of auto-generated "Created" board'
+        });
+      }
+    }
+
     const updates = {};
-    if (name !== undefined) updates.name = name;
+    if (name !== undefined && board.board_type !== 'created') updates.name = name;
     if (description !== undefined) updates.description = description;
     if (is_public !== undefined) updates.is_public = is_public;
-    if (board_type !== undefined) updates.board_type = board_type;
+    if (board_type !== undefined && board.board_type !== 'created') updates.board_type = board_type;
 
     const { data, error } = await supabaseAdmin
       .from('boards')
@@ -270,7 +280,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     // Verify ownership
     const { data: board, error: fetchError } = await supabaseAdmin
       .from('boards')
-      .select('user_id')
+      .select('user_id, board_type')
       .eq('id', req.params.id)
       .single();
 
@@ -280,6 +290,13 @@ router.delete('/:id', authenticate, async (req, res) => {
 
     if (board.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Not authorized to delete this board' });
+    }
+
+    // Prevent deletion of "Created" board
+    if (board.board_type === 'created') {
+      return res.status(403).json({
+        error: 'Cannot delete auto-generated "Created" board'
+      });
     }
 
     const { error } = await supabaseAdmin

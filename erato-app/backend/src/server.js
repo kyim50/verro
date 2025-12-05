@@ -16,6 +16,7 @@ import swipeRoutes from './routes/swipes.js';
 import messageRoutes from './routes/messages.js';
 import commissionRoutes from './routes/commissions.js';
 import userRoutes from './routes/users.js';
+import uploadRoutes from './routes/uploads.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -64,6 +65,7 @@ app.use('/api/swipes', swipeRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/commissions', commissionRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -1,10 +1,17 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography } from '../../constants/theme';
+import { useEffect } from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+import { colors } from '../../constants/theme';
 
-export default function Screen() {
+export default function CreateScreen() {
+  useEffect(() => {
+    // Navigate to upload screen immediately
+    router.push('/artwork/upload');
+  }, []);
+
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Coming Soon</Text>
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }
@@ -15,9 +22,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  text: {
-    ...typography.h2,
-    color: colors.text.primary,
   },
 });

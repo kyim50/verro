@@ -66,8 +66,8 @@ export default function UploadArtworkScreen() {
       // Validate image
       await validateImage(imageUri);
 
-      // Upload to Supabase Storage
-      const imageUrl = await uploadImage(imageUri, 'artworks');
+      // Upload to Supabase Storage via backend API
+      const imageUrl = await uploadImage(imageUri, 'artworks', '', token);
 
       // Parse tags
       const tagArray = tags

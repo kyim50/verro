@@ -55,6 +55,7 @@ export default function ProfileScreen() {
 
   const isArtist = profile?.artist !== null && profile?.artist !== undefined;
   const artworks = profile?.artist?.artworks || [];
+  const artistId = profile?.artist?.id || profile?.id;
 
   return (
     <View style={styles.container}>
@@ -153,7 +154,7 @@ export default function ProfileScreen() {
             </View>
 
             {/* Portfolio Images */}
-            {profile.artist.portfolio_images && profile.artist.portfolio_images.length > 0 && (
+            {isArtist && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Portfolio Highlights</Text>
@@ -162,16 +163,27 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.portfolioGrid}>
-                  {profile.artist.portfolio_images.map((imageUrl, index) => (
-                    <View key={index} style={styles.portfolioItem}>
-                      <Image
-                        source={{ uri: imageUrl }}
-                        style={styles.portfolioImage}
-                      />
-                    </View>
-                  ))}
-                </View>
+                {profile.artist.portfolio_images && profile.artist.portfolio_images.length > 0 ? (
+                  <View style={styles.portfolioGrid}>
+                    {profile.artist.portfolio_images.map((imageUrl, index) => (
+                      <View key={index} style={styles.portfolioItem}>
+                        <Image
+                          source={{ uri: imageUrl }}
+                          style={styles.portfolioImage}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.addPortfolioButton}
+                    onPress={() => router.push('/profile/edit-portfolio')}
+                  >
+                    <Ionicons name="add-circle-outline" size={48} color={colors.primary} />
+                    <Text style={styles.addPortfolioText}>Add Portfolio Images</Text>
+                    <Text style={styles.addPortfolioSubtext}>Showcase your best work to attract clients</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -464,5 +476,27 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
     paddingVertical: spacing.lg,
+  },
+  addPortfolioButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  addPortfolioText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    marginTop: spacing.md,
+  },
+  addPortfolioSubtext: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
 });

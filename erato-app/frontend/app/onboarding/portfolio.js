@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { uploadMultipleImages } from '../../utils/imageUpload';
 
 const { width } = Dimensions.get('window');
 const PORTFOLIO_SIZE = 6;
@@ -69,10 +70,11 @@ export default function PortfolioScreen() {
     setLoading(true);
 
     try {
-      // In a real app, you would upload these images to your cloud storage
-      // For now, we'll just use the URIs as placeholders
-      // TODO: Implement actual image upload to S3/Supabase Storage
-      await completeOnboarding(portfolioImages, token);
+      // Upload portfolio images to Supabase Storage
+      const uploadedUrls = await uploadMultipleImages(filledImages, 'portfolios', '', token);
+
+      // Complete onboarding with uploaded image URLs
+      await completeOnboarding(uploadedUrls, token);
 
       Alert.alert('Success!', 'Your portfolio has been set up successfully!', [
         {
@@ -81,7 +83,8 @@ export default function PortfolioScreen() {
         },
       ]);
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to complete onboarding');
+      console.error('Onboarding error:', error);
+      Alert.alert('Error', error.message || 'Failed to complete onboarding. Please try again.');
     } finally {
       setLoading(false);
     }
