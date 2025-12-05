@@ -1,13 +1,19 @@
-import { useEffect } from 'react';
+import { useCallback } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { colors } from '../../constants/theme';
 
 export default function CreateScreen() {
-  useEffect(() => {
-    // Navigate to upload screen immediately
-    router.push('/artwork/upload');
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      // Navigate to upload screen when tab is focused
+      const timeout = setTimeout(() => {
+        router.push('/artwork/upload');
+      }, 50);
+
+      return () => clearTimeout(timeout);
+    }, [])
+  );
 
   return (
     <View style={styles.container}>

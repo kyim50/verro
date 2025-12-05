@@ -8,8 +8,6 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
-  Modal,
-  TextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -29,9 +27,6 @@ export default function ArtworkDetailScreen() {
   const [artwork, setArtwork] = useState(null);
   const [similarArtworks, setSimilarArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCommissionModal, setShowCommissionModal] = useState(false);
-  const [commissionDetails, setCommissionDetails] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchArtworkDetails();
@@ -63,39 +58,6 @@ export default function ArtworkDetailScreen() {
       setSimilarArtworks(response.data.artworks || []);
     } catch (error) {
       console.error('Error fetching similar artworks:', error);
-    }
-  };
-
-  const handleRequestCommission = async () => {
-    if (!user) {
-      Alert.alert('Login Required', 'Please login to request a commission');
-      return;
-    }
-
-    if (!commissionDetails.trim()) {
-      Alert.alert('Details Required', 'Please provide details about your commission request');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await axios.post(
-        `${API_URL}/commissions/request`,
-        {
-          artist_id: artwork.artist_id,
-          artwork_id: artwork.id,
-          details: commissionDetails,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setShowCommissionModal(false);
-      setCommissionDetails('');
-      Alert.alert('Success!', 'Your commission request has been sent to the artist.');
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to send commission request');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -135,7 +97,7 @@ export default function ArtworkDetailScreen() {
           <Image
             source={{ uri: artwork.image_url }}
             style={styles.mainImage}
-            contentFit="contain"
+            contentFit="cover"
           />
         </View>
 
@@ -174,7 +136,12 @@ export default function ArtworkDetailScreen() {
         <View style={styles.artistSection}>
           <TouchableOpacity
             style={styles.artistInfo}
-            onPress={() => !isOwnArtwork && router.push(`/artist/${artwork.artist_id}`)}
+            onPress={() => {
+              if (!isOwnArtwork && artwork.artist_id) {
+                router.push(`/artist/${artwork.artist_id}`);
+              }
+            }}
+            activeOpacity={isOwnArtwork ? 1 : 0.7}
           >
             <Image
               source={{ uri: artwork.artists?.users?.avatar_url || 'https://via.placeholder.com/80' }}
@@ -188,13 +155,27 @@ export default function ArtworkDetailScreen() {
               <Text style={styles.artistBio} numberOfLines={1}>
                 {artwork.artists?.users?.bio || 'Artist on Verro'}
               </Text>
+              {!isOwnArtwork && (
+                <Text style={styles.viewProfileHint}>Tap to view profile</Text>
+              )}
             </View>
           </TouchableOpacity>
 
           {!isOwnArtwork && (
             <TouchableOpacity
               style={styles.commissionButton}
-              onPress={() => setShowCommissionModal(true)}
+              onPress={() => {
+                if (!user) {
+                  Alert.alert('Login Required', 'Please login to request a commission');
+                  return;
+                }
+                // Check if current user is an artist
+                if (user?.artists) {
+                  Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
+                  return;
+                }
+                router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
+              }}
             >
               <Ionicons name="mail-outline" size={20} color={colors.text.primary} />
               <Text style={styles.commissionButtonText}>Request Commission</Text>
@@ -231,56 +212,6 @@ export default function ArtworkDetailScreen() {
           </View>
         )}
       </ScrollView>
-
-      {/* Commission Request Modal */}
-      <Modal
-        visible={showCommissionModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowCommissionModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Request Commission</Text>
-              <TouchableOpacity onPress={() => setShowCommissionModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubtitle}>
-              Tell {artwork.artist?.users?.full_name || 'the artist'} about your commission idea
-            </Text>
-
-            <TextInput
-              style={styles.detailsInput}
-              placeholder="Describe your commission request..."
-              placeholderTextColor={colors.text.disabled}
-              value={commissionDetails}
-              onChangeText={setCommissionDetails}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-            />
-
-            <Text style={styles.priceHint}>
-              Price Range: ${artwork.artist?.min_price || 0} - ${artwork.artist?.max_price || 0}
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.sendButton, submitting && styles.sendButtonDisabled]}
-              onPress={handleRequestCommission}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={colors.text.primary} />
-              ) : (
-                <Text style={styles.sendButtonText}>Send Request</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -319,6 +250,8 @@ const styles = StyleSheet.create({
     width: width,
     height: height * 0.6,
     backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mainImage: {
     width: '100%',
@@ -399,6 +332,12 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
+  viewProfileHint: {
+    ...typography.small,
+    color: colors.primary,
+    marginTop: spacing.xs - 2,
+    fontWeight: '600',
+  },
   commissionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -443,61 +382,5 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.text.secondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    maxHeight: height * 0.8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
-    ...typography.h2,
-    color: colors.text.primary,
-  },
-  modalSubtitle: {
-    ...typography.body,
-    color: colors.text.secondary,
-    marginBottom: spacing.lg,
-  },
-  detailsInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    color: colors.text.primary,
-    fontSize: 16,
-    minHeight: 120,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  priceHint: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginBottom: spacing.lg,
-  },
-  sendButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendButtonText: {
-    ...typography.button,
-    color: colors.text.primary,
   },
 });

@@ -119,6 +119,40 @@ router.post('/conversations', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Cannot create conversation with yourself' });
     }
 
+    // Check if current user is a client (not an artist)
+    const { data: currentUserIsArtist } = await supabaseAdmin
+      .from('artists')
+      .select('id')
+      .eq('id', req.user.id)
+      .maybeSingle();
+
+    // If current user is NOT an artist (i.e., they are a client)
+    if (!currentUserIsArtist) {
+      // Check if any of the participants are artists
+      const { data: targetArtists } = await supabaseAdmin
+        .from('artists')
+        .select('id')
+        .in('id', participants);
+
+      // If messaging an artist as a client, check for in_progress commission
+      if (targetArtists && targetArtists.length > 0) {
+        // Check if there's an in_progress or completed commission with this artist
+        const { data: activeCommission } = await supabaseAdmin
+          .from('commissions')
+          .select('id')
+          .eq('client_id', req.user.id)
+          .in('artist_id', participants)
+          .in('status', ['in_progress', 'completed'])
+          .maybeSingle();
+
+        if (!activeCommission) {
+          return res.status(403).json({
+            error: 'You must have an accepted commission with this artist before you can message them. Please request a commission first.'
+          });
+        }
+      }
+    }
+
     const allParticipants = [req.user.id, ...participants].sort();
 
     // Find existing conversation with exactly these participants

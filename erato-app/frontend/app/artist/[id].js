@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -87,13 +88,34 @@ export default function ArtistProfileScreen() {
       router.push(`/messages/${response.data.conversation.id}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
-      Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      // Check if it's a permission error
+      if (error.response?.status === 403) {
+        Alert.alert(
+          'Commission Required',
+          error.response?.data?.error || 'You must have an accepted commission with this artist before you can message them.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Request Commission',
+              onPress: () => router.push(`/commission/create?artistId=${id}`)
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', error.response?.data?.error || 'Failed to start conversation. Please try again.');
+      }
     }
   };
 
   const handleCommission = () => {
     if (!token) {
       Alert.alert('Login Required', 'Please log in to request a commission');
+      return;
+    }
+
+    // Check if current user is an artist
+    if (user?.artists) {
+      Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
       return;
     }
 
@@ -228,6 +250,74 @@ export default function ArtistProfileScreen() {
 
           {artist.users?.bio && (
             <Text style={styles.bio}>{artist.users.bio}</Text>
+          )}
+
+          {/* Social Links */}
+          {artist.social_links && Object.keys(artist.social_links).length > 0 && (
+            <View style={styles.socialLinksContainer}>
+              {artist.social_links.instagram && (
+                <TouchableOpacity
+                  style={styles.socialLink}
+                  onPress={async () => {
+                    const url = artist.social_links.instagram.startsWith('http')
+                      ? artist.social_links.instagram
+                      : `https://instagram.com/${artist.social_links.instagram}`;
+                    await Linking.openURL(url);
+                  }}
+                >
+                  <Ionicons name="logo-instagram" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              )}
+              {artist.social_links.twitter && (
+                <TouchableOpacity
+                  style={styles.socialLink}
+                  onPress={async () => {
+                    const url = artist.social_links.twitter.startsWith('http')
+                      ? artist.social_links.twitter
+                      : `https://twitter.com/${artist.social_links.twitter}`;
+                    await Linking.openURL(url);
+                  }}
+                >
+                  <Ionicons name="logo-twitter" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              )}
+              {artist.social_links.tiktok && (
+                <TouchableOpacity
+                  style={styles.socialLink}
+                  onPress={async () => {
+                    const url = artist.social_links.tiktok.startsWith('http')
+                      ? artist.social_links.tiktok
+                      : `https://tiktok.com/@${artist.social_links.tiktok}`;
+                    await Linking.openURL(url);
+                  }}
+                >
+                  <Ionicons name="logo-tiktok" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              )}
+              {artist.social_links.youtube && (
+                <TouchableOpacity
+                  style={styles.socialLink}
+                  onPress={async () => {
+                    const url = artist.social_links.youtube.startsWith('http')
+                      ? artist.social_links.youtube
+                      : `https://youtube.com/@${artist.social_links.youtube}`;
+                    await Linking.openURL(url);
+                  }}
+                >
+                  <Ionicons name="logo-youtube" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              )}
+              {artist.social_links.website && (
+                <TouchableOpacity
+                  style={styles.socialLink}
+                  onPress={async () => {
+                    await Linking.openURL(artist.social_links.website);
+                  }}
+                >
+                  <Ionicons name="globe-outline" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
           )}
 
           {/* Stats */}
@@ -782,5 +872,21 @@ const styles = StyleSheet.create({
   modalImage: {
     width: '100%',
     height: '100%',
+  },
+  socialLinksContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  socialLink: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

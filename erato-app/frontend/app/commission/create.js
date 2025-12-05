@@ -22,7 +22,7 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 
 export default function CreateCommissionScreen() {
   const { artistId } = useLocalSearchParams();
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -31,6 +31,13 @@ export default function CreateCommissionScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
+    // Check if current user is an artist
+    if (user?.artists) {
+      Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
+      router.back();
+      return;
+    }
+
     if (!title.trim()) {
       Alert.alert('Required', 'Please provide a title for your commission');
       return;
@@ -45,13 +52,11 @@ export default function CreateCommissionScreen() {
 
     try {
       await axios.post(
-        `${API_URL}/commissions`,
+        `${API_URL}/commissions/request`,
         {
           artist_id: artistId,
-          title: title.trim(),
-          description: description.trim(),
-          budget: budget ? parseFloat(budget) : null,
-          deadline: deadline || null,
+          details: description.trim(),
+          client_note: title.trim(),
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
