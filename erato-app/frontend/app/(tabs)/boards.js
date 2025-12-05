@@ -332,6 +332,7 @@ export default function BoardsScreen() {
     if (activeTab === 'boards') {
       return (
         <FlatList
+          key="boards-list"
           data={boards.sort((a, b) => {
             // Pin "Created" board at top
             if (a.board_type === 'created') return -1;
@@ -356,9 +357,20 @@ export default function BoardsScreen() {
         />
       );
     } else if (activeTab === 'commissions') {
+      // Check if user is an artist
+      const isArtist = user?.artists !== null && user?.artists !== undefined;
+
+      // Filter commissions based on user type
+      // Artists: only show in_progress and completed commissions
+      // Clients: show all commissions
+      const filteredCommissions = isArtist
+        ? commissions.filter(c => c.status === 'in_progress' || c.status === 'completed')
+        : commissions;
+
       return (
         <FlatList
-          data={commissions}
+          key="commissions-list"
+          data={filteredCommissions}
           renderItem={renderCommission}
           keyExtractor={(item) => item.id}
           refreshControl={

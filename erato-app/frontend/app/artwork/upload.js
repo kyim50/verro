@@ -142,8 +142,15 @@ export default function UploadArtworkScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
-          disabled={loading}
+          onPress={() => {
+            setLoading(false);
+            setUploading(false);
+            // Use replace and navigate to dismiss upload and go to home tab
+            if (router.canGoBack()) {
+              router.dismissAll();
+            }
+            router.replace('/(tabs)/home');
+          }}
         >
           <Ionicons name="close" size={24} color={colors.text.primary} />
         </TouchableOpacity>

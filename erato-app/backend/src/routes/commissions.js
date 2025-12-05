@@ -18,6 +18,17 @@ router.post('/request', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'You cannot request a commission from yourself' });
     }
 
+    // Check if requester is also an artist (artists cannot request commissions from other artists)
+    const { data: requesterArtist, error: requesterArtistError } = await supabaseAdmin
+      .from('artists')
+      .select('id')
+      .eq('id', req.user.id)
+      .maybeSingle();
+
+    if (requesterArtist) {
+      return res.status(403).json({ error: 'Artists cannot request commissions from other artists. Only clients can request commissions.' });
+    }
+
     // Verify artist exists
     const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
@@ -255,9 +266,50 @@ router.patch('/:id/status', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Clients can only cancel commissions' });
     }
 
+    // Handle declined commissions - delete commission and conversation
+    if (status === 'declined') {
+      // Get conversation for this commission
+      const { data: conversation } = await supabaseAdmin
+        .from('conversations')
+        .select('id')
+        .eq('commission_id', req.params.id)
+        .single();
+
+      // Delete all messages in the conversation
+      if (conversation) {
+        await supabaseAdmin
+          .from('messages')
+          .delete()
+          .eq('conversation_id', conversation.id);
+
+        // Delete conversation participants
+        await supabaseAdmin
+          .from('conversation_participants')
+          .delete()
+          .eq('conversation_id', conversation.id);
+
+        // Delete conversation
+        await supabaseAdmin
+          .from('conversations')
+          .delete()
+          .eq('id', conversation.id);
+      }
+
+      // Delete the commission
+      await supabaseAdmin
+        .from('commissions')
+        .delete()
+        .eq('id', req.params.id);
+
+      return res.json({ message: 'Commission declined and deleted' });
+    }
+
+    // Change "accepted" to "in_progress" to prevent multiple accepts
+    const finalStatus = status === 'accepted' ? 'in_progress' : status;
+
     // Prepare update data
     const updates = {
-      status,
+      status: finalStatus,
       updated_at: new Date().toISOString()
     };
 
@@ -291,8 +343,8 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         conversation_id: conversation.id,
         sender_id: req.user.id,
         message_type: 'commission_update',
-        content: `Commission status updated to: ${status}`,
-        metadata: { status, commission_id: req.params.id }
+        content: `Commission status updated to: ${finalStatus}`,
+        metadata: { status: finalStatus, commission_id: req.params.id }
       });
     }
 

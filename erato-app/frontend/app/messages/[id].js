@@ -30,6 +30,7 @@ export default function ConversationScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState(null);
+  const [commission, setCommission] = useState(null);
   const flatListRef = useRef(null);
 
   useEffect(() => {
@@ -46,6 +47,14 @@ export default function ConversationScreen() {
       });
       const otherParticipant = response.data.participants?.find(p => p.id !== user?.id);
       setOtherUser(otherParticipant);
+      // Get commission details if this conversation has one
+      if (response.data.commission_id) {
+        const commissionResponse = await axios.get(
+          `${API_URL}/commissions/${response.data.commission_id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setCommission(commissionResponse.data);
+      }
     } catch (error) {
       console.error('Error fetching conversation details:', error);
     }
@@ -95,8 +104,9 @@ export default function ConversationScreen() {
         { status, artist_response: response },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Refresh messages to show updated status
+      // Refresh messages and commission details to update UI
       fetchMessages();
+      fetchConversationDetails();
     } catch (error) {
       console.error('Error responding to commission:', error);
     }
@@ -133,31 +143,62 @@ export default function ConversationScreen() {
 
   const renderCommissionRequest = (item) => {
     const metadata = item.metadata || {};
-    const isArtist = otherUser?.id !== item.sender_id;
+    // The sender is the client, so if current user is NOT the sender, they are the artist
+    const isArtist = user?.id !== item.sender_id;
+    // Only show buttons if commission status is 'pending'
+    const showButtons = isArtist && commission && commission.status === 'pending';
 
     return (
       <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
         <View style={styles.commissionHeader}>
-          <Ionicons name="briefcase" size={20} color={colors.primary} />
+          <Ionicons name="briefcase" size={22} color={colors.primary} />
           <Text style={styles.commissionTitle}>Commission Request</Text>
         </View>
 
-        <Text style={styles.commissionDetails}>{item.content}</Text>
+        {metadata.title && (
+          <Text style={styles.commissionRequestTitle}>{metadata.title}</Text>
+        )}
 
-        {isArtist && (
+        <View style={styles.commissionDetailsSection}>
+          <Text style={styles.commissionDetailsLabel}>Description</Text>
+          <Text style={styles.commissionDetails}>{item.content}</Text>
+        </View>
+
+        <View style={styles.commissionMetadata}>
+          {metadata.budget && (
+            <View style={styles.metadataItem}>
+              <Ionicons name="cash-outline" size={18} color={colors.primary} />
+              <View style={styles.metadataTextContainer}>
+                <Text style={styles.metadataLabel}>Budget</Text>
+                <Text style={styles.metadataValue}>${metadata.budget}</Text>
+              </View>
+            </View>
+          )}
+          {metadata.deadline && (
+            <View style={styles.metadataItem}>
+              <Ionicons name="time-outline" size={18} color={colors.primary} />
+              <View style={styles.metadataTextContainer}>
+                <Text style={styles.metadataLabel}>Deadline</Text>
+                <Text style={styles.metadataValue}>{metadata.deadline}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {showButtons && (
           <View style={styles.commissionActions}>
             <TouchableOpacity
               style={[styles.commissionButton, styles.declineButton]}
               onPress={() => handleCommissionResponse(metadata.commission_id, 'declined', '')}
             >
-              <Ionicons name="close-circle" size={18} color="#F44336" />
+              <Ionicons name="close-circle" size={22} color="#F44336" />
               <Text style={styles.declineButtonText}>Decline</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.commissionButton, styles.acceptButton]}
               onPress={() => handleCommissionResponse(metadata.commission_id, 'accepted', '')}
             >
-              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Ionicons name="checkmark-circle" size={22} color="#fff" />
               <Text style={styles.acceptButtonText}>Accept</Text>
             </TouchableOpacity>
           </View>
@@ -275,14 +316,7 @@ export default function ConversationScreen() {
           )}
         </TouchableOpacity>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="call-outline" size={22} color={colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="videocam-outline" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
+        <View style={styles.headerActions} />
       </View>
 
       <FlatList
@@ -319,7 +353,7 @@ export default function ConversationScreen() {
             />
           </View>
 
-          {newMessage.trim() ? (
+          {newMessage.trim() && (
             <TouchableOpacity
               style={styles.sendButton}
               onPress={sendMessage}
@@ -330,10 +364,6 @@ export default function ConversationScreen() {
               ) : (
                 <Ionicons name="arrow-up" size={22} color="#fff" />
               )}
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.inputActionButton}>
-              <Ionicons name="mic" size={26} color={colors.primary} />
             </TouchableOpacity>
           )}
         </View>
@@ -500,26 +530,77 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 15,
   },
+  commissionRequestTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  commissionDetailsSection: {
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+  },
+  commissionDetailsLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   commissionDetails: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  commissionMetadata: {
+    gap: spacing.md,
     marginBottom: spacing.md,
-    lineHeight: 20,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+  },
+  metadataItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  metadataTextContainer: {
+    flex: 1,
+  },
+  metadataLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  metadataValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
   },
   commissionActions: {
-    flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
   commissionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    paddingVertical: spacing.md + 4,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
   },
   acceptButton: {
     backgroundColor: '#4CAF50',
@@ -527,17 +608,19 @@ const styles = StyleSheet.create({
   acceptButtonText: {
     ...typography.bodyBold,
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '700',
   },
   declineButton: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#F44336',
   },
   declineButtonText: {
     ...typography.bodyBold,
     color: '#F44336',
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '700',
   },
   commissionTime: {
     ...typography.caption,

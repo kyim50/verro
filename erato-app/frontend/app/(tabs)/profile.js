@@ -234,6 +234,105 @@ export default function ProfileScreen() {
           </>
         )}
 
+        {/* Client Stats Section (only for non-artists) */}
+        {!isArtist && (
+          <View style={styles.section}>
+            <View style={styles.statsGrid}>
+              <TouchableOpacity
+                style={styles.statCard}
+                onPress={() => router.push('/(tabs)/boards')}
+              >
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="heart" size={24} color={colors.primary} />
+                </View>
+                <Text style={styles.statValue}>{profile?.boards?.length || 0}</Text>
+                <Text style={styles.statLabel}>Boards</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.statCard}
+                onPress={() => router.push('/(tabs)/boards?tab=commissions')}
+              >
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="briefcase" size={24} color={colors.primary} />
+                </View>
+                <Text style={styles.statValue}>
+                  {/* This would need to be fetched from the backend */}
+                  0
+                </Text>
+                <Text style={styles.statLabel}>Commissions</Text>
+              </TouchableOpacity>
+
+              <View style={styles.statCard}>
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="time" size={24} color={colors.primary} />
+                </View>
+                <Text style={styles.statValue}>
+                  {profile?.created_at
+                    ? new Date(profile.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        year: 'numeric'
+                      })
+                    : 'N/A'}
+                </Text>
+                <Text style={styles.statLabel}>Member Since</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Quick Actions (for clients) */}
+        {!isArtist && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.quickActionsList}>
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/(tabs)/explore')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="compass" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Discover Artists</Text>
+                  <Text style={styles.quickActionSubtitle}>
+                    Find artists that match your style
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/(tabs)/boards?tab=commissions')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>My Commissions</Text>
+                  <Text style={styles.quickActionSubtitle}>View your commission requests</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/(tabs)/messages')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Messages</Text>
+                  <Text style={styles.quickActionSubtitle}>Chat with artists</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Boards */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -498,5 +597,70 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
     textAlign: 'center',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
+    backgroundColor: `${colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  statValue: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 20,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  quickActionsList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  quickActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    gap: spacing.md,
+  },
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: `${colors.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickActionText: {
+    flex: 1,
+  },
+  quickActionTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  quickActionSubtitle: {
+    ...typography.caption,
+    color: colors.text.secondary,
   },
 });

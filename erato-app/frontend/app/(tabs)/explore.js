@@ -129,9 +129,7 @@ export default function ExploreScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color={colors.text.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>
           {currentArtist.users?.username || 'Artist'}
         </Text>
@@ -579,11 +577,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
   },
-  backButton: {
+  headerSpacer: {
     width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   headerTitle: {
     ...typography.h3,
