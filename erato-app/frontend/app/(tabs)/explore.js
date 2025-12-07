@@ -11,6 +11,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,8 +27,7 @@ export default function ExploreScreen() {
   const { token } = useAuthStore();
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
-  const [showActionModal, setShowActionModal] = useState(false);
-  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const position = useRef(new Animated.ValueXY()).current;
   const swipeAnimation = useRef(new Animated.Value(0)).current;
@@ -37,6 +37,30 @@ export default function ExploreScreen() {
       fetchArtists();
     }
   }, []);
+
+  useEffect(() => {
+    // Show instructions on first visit
+    const checkFirstVisit = async () => {
+      try {
+        const hasSeenInstructions = await AsyncStorage.getItem('hasSeenExploreInstructions');
+        if (!hasSeenInstructions) {
+          setTimeout(() => setShowInstructions(true), 500);
+        }
+      } catch (error) {
+        console.error('Error checking first visit:', error);
+      }
+    };
+    checkFirstVisit();
+  }, []);
+
+  const handleCloseInstructions = async () => {
+    setShowInstructions(false);
+    try {
+      await AsyncStorage.setItem('hasSeenExploreInstructions', 'true');
+    } catch (error) {
+      console.error('Error saving instructions flag:', error);
+    }
+  };
 
   const currentArtist = artists[currentIndex];
 
@@ -69,9 +93,7 @@ export default function ExploreScreen() {
     }).start(() => {
       if (currentArtist) {
         swipe(currentArtist.id, 'right');
-        // Show action modal
-        setSelectedArtist(currentArtist);
-        setShowActionModal(true);
+        // Artist is now saved to "Liked" - user can view in Library > Liked tab
       }
       position.setValue({ x: 0, y: 0 });
     });
@@ -133,8 +155,8 @@ export default function ExploreScreen() {
         <Text style={styles.headerTitle}>
           {currentArtist.users?.username || 'Artist'}
         </Text>
-        <TouchableOpacity style={styles.moreButton}>
-          <Ionicons name="ellipsis-horizontal" size={28} color={colors.text.primary} />
+        <TouchableOpacity style={styles.moreButton} onPress={() => setShowInstructions(true)}>
+          <Ionicons name="help-circle-outline" size={28} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
 
@@ -312,12 +334,10 @@ export default function ExploreScreen() {
         portfolioImages={portfolioImages}
       />
 
-      {/* Action Modal */}
-      <ActionModal
-        visible={showActionModal}
-        onClose={() => setShowActionModal(false)}
-        artist={selectedArtist}
-        token={token}
+      {/* Instructions Modal */}
+      <InstructionsModal
+        visible={showInstructions}
+        onClose={handleCloseInstructions}
       />
     </View>
   );
@@ -425,135 +445,75 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
   );
 }
 
-// Action Modal Component
-function ActionModal({ visible, onClose, artist, token }) {
-  if (!artist) return null;
-
-  const handleRequestCommission = () => {
-    if (!token) {
-      Alert.alert('Login Required', 'Please log in to request a commission');
-      onClose();
-      return;
-    }
-
-    const isOpen = artist.commission_status === 'open';
-    if (!isOpen) {
-      Alert.alert('Commissions Closed', 'This artist is not currently accepting commissions');
-      onClose();
-      return;
-    }
-
-    onClose();
-    router.push(`/commission/create?artistId=${artist.id}`);
-  };
-
-  const handleSendMessage = async () => {
-    if (!token) {
-      Alert.alert('Login Required', 'Please log in to send messages');
-      onClose();
-      return;
-    }
-
-    try {
-      // Create or get existing conversation
-      const response = await axios.post(
-        `${API_URL}/messages/conversations`,
-        { participant_ids: [artist.user_id || artist.id] },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      onClose();
-      // Navigate to the conversation
-      router.push(`/messages/${response.data.conversation.id}`);
-    } catch (error) {
-      console.error('Error creating conversation:', error);
-      Alert.alert('Error', 'Failed to start conversation. Please try again.');
-    }
-  };
-
-  const handleViewProfile = () => {
-    onClose();
-    router.push(`/artist/${artist.id}`);
-  };
-
+// Instructions Modal Component
+function InstructionsModal({ visible, onClose }) {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.actionModalOverlay}>
-        <View style={styles.actionModalContent}>
-          {/* Header */}
-          <View style={styles.actionModalHeader}>
-            <View style={styles.actionModalArtistInfo}>
-              <Image
-                source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/50' }}
-                style={styles.actionModalAvatar}
-                contentFit="cover"
-              />
-              <View>
-                <Text style={styles.actionModalArtistName}>
-                  {artist.users?.full_name || artist.users?.username}
-                </Text>
-                <Text style={styles.actionModalSubtext}>What would you like to do?</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={onClose}>
+      <View style={styles.instructionsOverlay}>
+        <View style={styles.instructionsContent}>
+          <View style={styles.instructionsHeader}>
+            <Text style={styles.instructionsTitle}>How to Use Explore</Text>
+            <TouchableOpacity onPress={onClose} style={styles.instructionsCloseButton}>
               <Ionicons name="close" size={24} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionOptionButton, styles.commissionButton]}
-              onPress={handleRequestCommission}
-              disabled={artist.commission_status !== 'open'}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="brush" size={24} color={colors.text.primary} />
+          <View style={styles.instructionsList}>
+            <View style={styles.instructionItem}>
+              <View style={[styles.instructionIcon, { backgroundColor: `${colors.error}15` }]}>
+                <Ionicons name="arrow-back" size={24} color={colors.error} />
               </View>
-              <View style={styles.actionTextContainer}>
-                <Text style={styles.actionOptionTitle}>Request Commission</Text>
-                <Text style={styles.actionOptionSubtext}>
-                  {artist.commissions_open
-                    ? `$${artist.min_price || 0} - $${artist.max_price || 0}`
-                    : 'Currently closed'}
+              <View style={styles.instructionText}>
+                <Text style={styles.instructionTitle}>Swipe Left</Text>
+                <Text style={styles.instructionDescription}>Pass on this artist</Text>
+              </View>
+            </View>
+
+            <View style={styles.instructionItem}>
+              <View style={[styles.instructionIcon, { backgroundColor: `${colors.primary}15` }]}>
+                <Ionicons name="heart" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.instructionText}>
+                <Text style={styles.instructionTitle}>Swipe Right or Tap Heart</Text>
+                <Text style={styles.instructionDescription}>
+                  Save artist to your Liked list in Library
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-            </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              style={styles.actionOptionButton}
-              onPress={handleSendMessage}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="chatbubble" size={24} color={colors.text.primary} />
+            <View style={styles.instructionItem}>
+              <View style={[styles.instructionIcon, { backgroundColor: `${colors.text.secondary}15` }]}>
+                <Ionicons name="person" size={24} color={colors.text.secondary} />
               </View>
-              <View style={styles.actionTextContainer}>
-                <Text style={styles.actionOptionTitle}>Send Message</Text>
-                <Text style={styles.actionOptionSubtext}>Start a conversation</Text>
+              <View style={styles.instructionText}>
+                <Text style={styles.instructionTitle}>Tap Profile</Text>
+                <Text style={styles.instructionDescription}>
+                  View full artist profile, portfolio, and request commissions
+                </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-            </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              style={styles.actionOptionButton}
-              onPress={handleViewProfile}
-            >
-              <View style={styles.actionIconContainer}>
-                <Ionicons name="person" size={24} color={colors.text.primary} />
+            <View style={styles.instructionItem}>
+              <View style={[styles.instructionIcon, { backgroundColor: `${colors.primary}15` }]}>
+                <Ionicons name="albums" size={24} color={colors.primary} />
               </View>
-              <View style={styles.actionTextContainer}>
-                <Text style={styles.actionOptionTitle}>View Profile</Text>
-                <Text style={styles.actionOptionSubtext}>See boards and artworks</Text>
+              <View style={styles.instructionText}>
+                <Text style={styles.instructionTitle}>View Liked Artists</Text>
+                <Text style={styles.instructionDescription}>
+                  Go to Library {">"} Liked tab to see all artists you've liked
+                </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-            </TouchableOpacity>
+            </View>
           </View>
+
+          <TouchableOpacity style={styles.instructionsButton} onPress={onClose}>
+            <Text style={styles.instructionsButtonText}>Got it!</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -875,19 +835,22 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
-  // Action Modal Styles
-  actionModalOverlay: {
+  // Instructions Modal Styles
+  instructionsOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
   },
-  actionModalContent: {
+  instructionsContent: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    paddingBottom: spacing.xxl,
+    borderRadius: borderRadius.xl,
+    width: '100%',
+    maxWidth: 400,
+    ...shadows.lg,
   },
-  actionModalHeader: {
+  instructionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -895,57 +858,57 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  actionModalArtistInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  actionModalAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.background,
-  },
-  actionModalArtistName: {
-    ...typography.bodyBold,
+  instructionsTitle: {
+    ...typography.h2,
     color: colors.text.primary,
   },
-  actionModalSubtext: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  actionButtons: {
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  actionOptionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
+  instructionsCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.background,
-    borderRadius: borderRadius.lg,
-    gap: spacing.md,
-  },
-  actionIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionTextContainer: {
+  instructionsList: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  instructionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  instructionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  instructionText: {
     flex: 1,
   },
-  actionOptionTitle: {
+  instructionTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
-  actionOptionSubtext: {
-    ...typography.caption,
+  instructionDescription: {
+    ...typography.small,
     color: colors.text.secondary,
-    marginTop: 2,
+    lineHeight: 18,
+  },
+  instructionsButton: {
+    backgroundColor: colors.primary,
+    margin: spacing.lg,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  instructionsButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '600',
   },
 });

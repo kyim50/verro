@@ -81,6 +81,11 @@ export const useAuthStore = create((set) => ({
     } finally {
       // Clear user immediately before token to prevent flash
       set({ user: null, isAuthenticated: false });
+      // Clear profile store to prevent flash of previous account data
+      useProfileStore.getState().reset();
+      useBoardStore.getState().reset();
+      useFeedStore.getState().reset();
+      useSwipeStore.getState().reset();
       await useAuthStore.getState().setToken(null);
     }
   },

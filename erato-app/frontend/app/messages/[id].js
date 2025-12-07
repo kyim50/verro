@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
+  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -31,6 +32,8 @@ export default function ConversationScreen() {
   const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState(null);
   const [commission, setCommission] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedCommissionDetails, setSelectedCommissionDetails] = useState(null);
   const flatListRef = useRef(null);
 
   useEffect(() => {
@@ -45,15 +48,23 @@ export default function ConversationScreen() {
       const response = await axios.get(`${API_URL}/messages/conversations/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      console.log('Conversation data:', response.data);
+
       const otherParticipant = response.data.participants?.find(p => p.id !== user?.id);
       setOtherUser(otherParticipant);
+
       // Get commission details if this conversation has one
       if (response.data.commission_id) {
+        console.log('Found commission_id in conversation:', response.data.commission_id);
         const commissionResponse = await axios.get(
           `${API_URL}/commissions/${response.data.commission_id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        console.log('Commission data:', commissionResponse.data);
         setCommission(commissionResponse.data);
+      } else {
+        console.log('No commission_id in conversation data');
       }
     } catch (error) {
       console.error('Error fetching conversation details:', error);
@@ -65,7 +76,30 @@ export default function ConversationScreen() {
       const response = await axios.get(`${API_URL}/messages/conversations/${id}/messages`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setMessages(response.data.messages || []);
+      const msgs = response.data.messages || [];
+
+      // Check for commission request in messages
+      const commissionRequestMsg = msgs.find(m => m.message_type === 'commission_request');
+      if (commissionRequestMsg) {
+        console.log('Found commission request message:', commissionRequestMsg);
+        console.log('Commission ID from metadata:', commissionRequestMsg.metadata?.commission_id);
+
+        // If we have a commission_id in metadata but no commission loaded, fetch it
+        if (commissionRequestMsg.metadata?.commission_id && !commission) {
+          try {
+            const commissionResponse = await axios.get(
+              `${API_URL}/commissions/${commissionRequestMsg.metadata.commission_id}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            console.log('Loaded commission from message metadata:', commissionResponse.data);
+            setCommission(commissionResponse.data);
+          } catch (err) {
+            console.error('Error loading commission from message:', err);
+          }
+        }
+      }
+
+      setMessages(msgs);
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -145,60 +179,80 @@ export default function ConversationScreen() {
     const metadata = item.metadata || {};
     // The sender is the client, so if current user is NOT the sender, they are the artist
     const isArtist = user?.id !== item.sender_id;
-    // Only show buttons if commission status is 'pending'
-    const showButtons = isArtist && commission && commission.status === 'pending';
+    const isPending = commission && commission.status === 'pending';
+
+    // Debug logging
+    console.log('Commission Request Debug:', {
+      currentUserId: user?.id,
+      senderId: item.sender_id,
+      isArtist,
+      commission,
+      commissionStatus: commission?.status,
+      isPending,
+      showButtons: isArtist && isPending
+    });
 
     return (
       <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
-        <View style={styles.commissionHeader}>
-          <Ionicons name="briefcase" size={22} color={colors.primary} />
-          <Text style={styles.commissionTitle}>Commission Request</Text>
-        </View>
-
-        {metadata.title && (
-          <Text style={styles.commissionRequestTitle}>{metadata.title}</Text>
-        )}
-
-        <View style={styles.commissionDetailsSection}>
-          <Text style={styles.commissionDetailsLabel}>Description</Text>
-          <Text style={styles.commissionDetails}>{item.content}</Text>
-        </View>
-
-        <View style={styles.commissionMetadata}>
-          {metadata.budget && (
-            <View style={styles.metadataItem}>
-              <Ionicons name="cash-outline" size={18} color={colors.primary} />
-              <View style={styles.metadataTextContainer}>
-                <Text style={styles.metadataLabel}>Budget</Text>
-                <Text style={styles.metadataValue}>${metadata.budget}</Text>
-              </View>
+        <TouchableOpacity
+          style={styles.commissionCardContent}
+          onPress={() => {
+            setSelectedCommissionDetails({
+              title: metadata.title,
+              description: item.content,
+              budget: metadata.budget,
+              deadline: metadata.deadline,
+            });
+            setShowDetailsModal(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.commissionHeader}>
+            <View style={styles.commissionHeaderLeft}>
+              <Ionicons name="briefcase" size={20} color={colors.primary} />
+              <Text style={styles.commissionTitle}>Commission Request</Text>
             </View>
-          )}
-          {metadata.deadline && (
-            <View style={styles.metadataItem}>
-              <Ionicons name="time-outline" size={18} color={colors.primary} />
-              <View style={styles.metadataTextContainer}>
-                <Text style={styles.metadataLabel}>Deadline</Text>
-                <Text style={styles.metadataValue}>{metadata.deadline}</Text>
-              </View>
-            </View>
-          )}
-        </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
+          </View>
 
-        {showButtons && (
+          {metadata.title && (
+            <Text style={styles.commissionRequestTitle} numberOfLines={2}>
+              {metadata.title}
+            </Text>
+          )}
+
+          <View style={styles.commissionQuickInfo}>
+            {metadata.budget && (
+              <View style={styles.quickInfoChip}>
+                <Ionicons name="cash-outline" size={14} color={colors.primary} />
+                <Text style={styles.quickInfoText}>${metadata.budget}</Text>
+              </View>
+            )}
+            {metadata.deadline && (
+              <View style={styles.quickInfoChip}>
+                <Ionicons name="time-outline" size={14} color={colors.primary} />
+                <Text style={styles.quickInfoText}>{metadata.deadline}</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.tapToViewText}>Tap to view details</Text>
+        </TouchableOpacity>
+
+        {isArtist && isPending && (
           <View style={styles.commissionActions}>
             <TouchableOpacity
               style={[styles.commissionButton, styles.declineButton]}
               onPress={() => handleCommissionResponse(metadata.commission_id, 'declined', '')}
             >
-              <Ionicons name="close-circle" size={22} color="#F44336" />
+              <Ionicons name="close-circle" size={20} color="#F44336" />
               <Text style={styles.declineButtonText}>Decline</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.commissionButton, styles.acceptButton]}
               onPress={() => handleCommissionResponse(metadata.commission_id, 'accepted', '')}
             >
-              <Ionicons name="checkmark-circle" size={22} color="#fff" />
+              <Ionicons name="checkmark-circle" size={20} color="#fff" />
               <Text style={styles.acceptButtonText}>Accept</Text>
             </TouchableOpacity>
           </View>
@@ -279,11 +333,75 @@ export default function ConversationScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
-    >
+    <>
+      {/* Commission Details Modal */}
+      <Modal
+        visible={showDetailsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDetailsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Commission Details</Text>
+              <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
+                <Ionicons name="close" size={28} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedCommissionDetails && (
+              <View style={styles.modalBody}>
+                {selectedCommissionDetails.title && (
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionLabel}>Title</Text>
+                    <Text style={styles.modalSectionValue}>
+                      {selectedCommissionDetails.title}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionLabel}>Description</Text>
+                  <Text style={styles.modalSectionValue}>
+                    {selectedCommissionDetails.description}
+                  </Text>
+                </View>
+
+                {selectedCommissionDetails.budget && (
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                      <Text style={styles.modalSectionLabel}>Budget</Text>
+                    </View>
+                    <Text style={styles.modalSectionValue}>
+                      ${selectedCommissionDetails.budget}
+                    </Text>
+                  </View>
+                )}
+
+                {selectedCommissionDetails.deadline && (
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <Ionicons name="time-outline" size={20} color={colors.primary} />
+                      <Text style={styles.modalSectionLabel}>Deadline</Text>
+                    </View>
+                    <Text style={styles.modalSectionValue}>
+                      {selectedCommissionDetails.deadline}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={90}
+      >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color={colors.primary} />
@@ -369,6 +487,7 @@ export default function ConversationScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -508,99 +627,90 @@ const styles = StyleSheet.create({
   commissionCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
     marginVertical: spacing.sm,
     marginHorizontal: spacing.xs,
     borderWidth: 1,
     borderColor: colors.primary + '30',
-    maxWidth: '85%',
+    maxWidth: '90%',
     alignSelf: 'flex-start',
+    overflow: 'hidden',
   },
   commissionCardReceived: {
     backgroundColor: colors.primary + '10',
   },
+  commissionCardContent: {
+    padding: spacing.md,
+  },
   commissionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'space-between',
     marginBottom: spacing.sm,
+  },
+  commissionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   commissionTitle: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 15,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   commissionRequestTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  commissionDetailsSection: {
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
-  },
-  commissionDetailsLabel: {
-    ...typography.small,
-    color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  commissionDetails: {
-    ...typography.body,
-    color: colors.text.primary,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  commissionMetadata: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
-  },
-  metadataItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  metadataTextContainer: {
-    flex: 1,
-  },
-  metadataLabel: {
-    ...typography.small,
-    color: colors.text.secondary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  metadataValue: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 15,
-  },
-  commissionActions: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
+  commissionQuickInfo: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  quickInfoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickInfoText: {
+    ...typography.small,
+    color: colors.text.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tapToViewText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  commissionActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '40',
+  },
   commissionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md + 4,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
+    gap: 6,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
   },
   acceptButton: {
     backgroundColor: '#4CAF50',
@@ -608,7 +718,7 @@ const styles = StyleSheet.create({
   acceptButtonText: {
     ...typography.bodyBold,
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   declineButton: {
@@ -619,13 +729,67 @@ const styles = StyleSheet.create({
   declineButtonText: {
     ...typography.bodyBold,
     color: '#F44336',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   commissionTime: {
     ...typography.caption,
     color: colors.text.disabled,
     fontSize: 11,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalBody: {
+    padding: spacing.lg,
+  },
+  modalSection: {
+    marginBottom: spacing.lg,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  modalSectionLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalSectionValue: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 16,
+    lineHeight: 24,
   },
   systemMessageContainer: {
     alignItems: 'center',

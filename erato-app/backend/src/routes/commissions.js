@@ -7,7 +7,7 @@ const router = express.Router();
 // Request a commission
 router.post('/request', authenticate, async (req, res) => {
   try {
-    const { artist_id, artwork_id, details, client_note } = req.body;
+    const { artist_id, artwork_id, details, client_note, budget, deadline } = req.body;
 
     if (!artist_id || !details) {
       return res.status(400).json({ error: 'artist_id and details are required' });
@@ -49,6 +49,8 @@ router.post('/request', authenticate, async (req, res) => {
         artwork_id: artwork_id || null,
         details,
         client_note: client_note || null,
+        budget: budget || null,
+        deadline_text: deadline || null,
         status: 'pending'
       })
       .select()
@@ -83,7 +85,10 @@ router.post('/request', authenticate, async (req, res) => {
       content: details,
       metadata: {
         commission_id: commission.id,
-        artwork_id: artwork_id || null
+        artwork_id: artwork_id || null,
+        title: client_note || null,
+        budget: budget || null,
+        deadline: deadline || null
       }
     });
 

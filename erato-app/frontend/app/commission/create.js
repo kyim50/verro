@@ -57,6 +57,8 @@ export default function CreateCommissionScreen() {
           artist_id: artistId,
           details: description.trim(),
           client_note: title.trim(),
+          budget: budget.trim() ? parseFloat(budget.trim()) : null,
+          deadline: deadline.trim() || null,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );

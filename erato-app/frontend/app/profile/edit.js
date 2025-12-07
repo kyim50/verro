@@ -45,9 +45,16 @@ export default function EditProfileScreen() {
         setMaxPrice(user.artists.max_price?.toString() || '');
         setTurnaroundDays(user.artists.turnaround_days?.toString() || '');
         setSpecialties(user.artists.specialties?.join(', ') || '');
+      } else {
+        // Clear artist fields if user is not an artist
+        setCommissionStatus('closed');
+        setMinPrice('');
+        setMaxPrice('');
+        setTurnaroundDays('');
+        setSpecialties('');
       }
     }
-  }, [user]);
+  }, [user?.id]); // Use user.id to trigger on user change
 
   const pickProfileImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -335,12 +342,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xl + spacing.sm,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    fontSize: 18,
+    fontWeight: '700',
   },
   avatarContainer: {
     alignItems: 'center',
@@ -368,48 +377,60 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   inputGroup: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    fontSize: 15,
   },
   sublabel: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontSize: 13,
+    marginTop: 2,
   },
   input: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
     color: colors.text.primary,
-    ...typography.body,
+    fontSize: 15,
+    lineHeight: 20,
     borderWidth: 1,
     borderColor: colors.border,
   },
   textArea: {
     minHeight: 100,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm + 2,
+    paddingBottom: spacing.sm + 2,
   },
   row: {
     flexDirection: 'row',
     gap: spacing.md,
+    marginBottom: spacing.md,
   },
   halfWidth: {
     flex: 1,
+    minWidth: 0,
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    padding: spacing.md,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
+    minHeight: 60,
   },
   switchLabel: {
     flex: 1,
+    marginRight: spacing.md,
+    justifyContent: 'center',
   },
 });

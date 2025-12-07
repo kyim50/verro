@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -29,14 +29,19 @@ export default function BoardsScreen() {
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardDescription, setNewBoardDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
-  const [activeTab, setActiveTab] = useState('boards'); // 'boards', 'commissions', 'activity'
+  const [activeTab, setActiveTab] = useState('boards'); // 'boards', 'commissions', 'liked'
   const [commissions, setCommissions] = useState([]);
   const [commissionsLoading, setCommissionsLoading] = useState(false);
+  const [likedArtists, setLikedArtists] = useState([]);
+  const [likedLoading, setLikedLoading] = useState(false);
+  const [likedSortOrder, setLikedSortOrder] = useState('newest'); // 'newest' or 'oldest'
 
   useEffect(() => {
     loadBoards();
     if (activeTab === 'commissions') {
       loadCommissions();
+    } else if (activeTab === 'liked') {
+      loadLikedArtists();
     }
   }, [activeTab]);
 
@@ -54,11 +59,40 @@ export default function BoardsScreen() {
       const response = await axios.get(`${API_URL}/commissions`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCommissions(response.data.commissions || []);
+      const allCommissions = response.data.commissions || [];
+      console.log('Loaded commissions:', allCommissions.length, 'Total');
+      console.log('Commission statuses:', allCommissions.map(c => c.status));
+      setCommissions(allCommissions);
     } catch (error) {
       console.error('Error loading commissions:', error);
     } finally {
       setCommissionsLoading(false);
+    }
+  };
+
+  const loadLikedArtists = async () => {
+    setLikedLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/swipes/liked`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setLikedArtists(response.data.likedArtists || []);
+    } catch (error) {
+      console.error('Error loading liked artists:', error);
+    } finally {
+      setLikedLoading(false);
+    }
+  };
+
+  const handleUnlikeArtist = async (artistId) => {
+    try {
+      await axios.delete(`${API_URL}/swipes/liked/${artistId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setLikedArtists(prev => prev.filter(item => item.artist_id !== artistId));
+    } catch (error) {
+      console.error('Error unliking artist:', error);
+      Alert.alert('Error', 'Failed to remove artist from liked list');
     }
   };
 
@@ -68,6 +102,8 @@ export default function BoardsScreen() {
       await loadBoards();
     } else if (activeTab === 'commissions') {
       await loadCommissions();
+    } else if (activeTab === 'liked') {
+      await loadLikedArtists();
     }
     setRefreshing(false);
   }, [activeTab]);
@@ -216,6 +252,53 @@ export default function BoardsScreen() {
     );
   };
 
+  const renderLikedArtist = ({ item }) => {
+    const artist = item.artists;
+    const artistUser = artist?.users;
+
+    return (
+      <TouchableOpacity
+        style={styles.artistCard}
+        onPress={() => router.push(`/artist/${item.artist_id}`)}
+        activeOpacity={0.9}
+      >
+        <View style={styles.artistCardContent}>
+          <Image
+            source={{ uri: artistUser?.avatar_url || DEFAULT_AVATAR }}
+            style={styles.artistCardAvatar}
+            contentFit="cover"
+          />
+          <View style={styles.artistCardInfo}>
+            <Text style={styles.artistCardName}>
+              {artistUser?.full_name || artistUser?.username || 'Unknown Artist'}
+            </Text>
+            <Text style={styles.artistCardBio} numberOfLines={2}>
+              {artistUser?.bio || 'Artist on Verro'}
+            </Text>
+            {artist && (
+              <View style={styles.artistCardMeta}>
+                {artist.min_price && artist.max_price && (
+                  <Text style={styles.artistCardPrice}>
+                    ${artist.min_price} - ${artist.max_price}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.unlikeButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleUnlikeArtist(item.artist_id);
+            }}
+          >
+            <Ionicons name="heart" size={24} color={colors.error} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderCommission = ({ item }) => {
     const isClient = item.client_id === user?.id;
     const otherUser = isClient ? item.artist?.users : item.client;
@@ -235,7 +318,7 @@ export default function BoardsScreen() {
         <View style={styles.commissionHeader}>
           <View style={styles.commissionUser}>
             <Image
-              source={{ uri: otherUser?.avatar_url || 'https://via.placeholder.com/40' }}
+              source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
               style={styles.commissionAvatar}
               contentFit="cover"
             />
@@ -358,14 +441,18 @@ export default function BoardsScreen() {
       );
     } else if (activeTab === 'commissions') {
       // Check if user is an artist
-      const isArtist = user?.artists !== null && user?.artists !== undefined;
+      const isArtist = !!user?.artists;
+      console.log('Is artist?', isArtist, 'User has artists:', user?.artists);
 
       // Filter commissions based on user type
-      // Artists: only show in_progress and completed commissions
+      // Artists: only show in_progress and completed commissions (pending requests are in messages)
       // Clients: show all commissions
       const filteredCommissions = isArtist
         ? commissions.filter(c => c.status === 'in_progress' || c.status === 'completed')
         : commissions;
+
+      console.log('Filtered commissions:', filteredCommissions.length, 'out of', commissions.length);
+      console.log('Filtered statuses:', filteredCommissions.map(c => c.status));
 
       return (
         <FlatList
@@ -382,6 +469,32 @@ export default function BoardsScreen() {
           }
           contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
           ListEmptyComponent={!commissionsLoading && renderEmpty}
+          showsVerticalScrollIndicator={false}
+        />
+      );
+    } else if (activeTab === 'liked') {
+      // Sort liked artists by timestamp
+      const sortedLikedArtists = [...likedArtists].sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return likedSortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+      });
+
+      return (
+        <FlatList
+          key="liked-artists-list"
+          data={sortedLikedArtists}
+          renderItem={renderLikedArtist}
+          keyExtractor={(item) => item.artist_id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
+          ListEmptyComponent={!likedLoading && renderEmpty}
           showsVerticalScrollIndicator={false}
         />
       );
@@ -402,6 +515,21 @@ export default function BoardsScreen() {
             <Ionicons name="add" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         )}
+        {activeTab === 'liked' && (
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={() => setLikedSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+          >
+            <Ionicons
+              name={likedSortOrder === 'newest' ? 'arrow-down' : 'arrow-up'}
+              size={20}
+              color={colors.text.primary}
+            />
+            <Text style={styles.sortButtonText}>
+              {likedSortOrder === 'newest' ? 'Newest' : 'Oldest'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Tabs */}
@@ -417,6 +545,20 @@ export default function BoardsScreen() {
           />
           <Text style={[styles.tabText, activeTab === 'boards' && styles.tabTextActive]}>
             Boards
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
+          onPress={() => setActiveTab('liked')}
+        >
+          <Ionicons
+            name="heart"
+            size={20}
+            color={activeTab === 'liked' ? colors.primary : colors.text.secondary}
+          />
+          <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
+            Liked
           </Text>
         </TouchableOpacity>
 
@@ -547,6 +689,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortButtonText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -921,5 +1080,54 @@ const styles = StyleSheet.create({
   saveButtonText: {
     ...typography.button,
     color: colors.text.primary,
+  },
+  artistCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  artistCardContent: {
+    flexDirection: 'row',
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  artistCardAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.full,
+    marginRight: spacing.md,
+  },
+  artistCardInfo: {
+    flex: 1,
+  },
+  artistCardName: {
+    ...typography.h3,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  artistCardBio: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    marginBottom: spacing.xs,
+  },
+  artistCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  artistCardPrice: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  unlikeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
   },
 });

@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, DEFAULT_AVATAR } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -23,6 +23,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState('all'); // 'all', 'requests', 'messages'
 
   useEffect(() => {
     if (user && token) {
@@ -113,7 +114,7 @@ export default function MessagesScreen() {
       >
         <View style={styles.avatarContainer}>
           <Image
-            source={{ uri: item.other_participant?.avatar_url || 'https://via.placeholder.com/56' }}
+            source={{ uri: item.other_participant?.avatar_url || DEFAULT_AVATAR }}
             style={styles.avatar}
             contentFit="cover"
           />
@@ -165,6 +166,20 @@ export default function MessagesScreen() {
     );
   }
 
+  // Filter conversations based on selected filter
+  const filteredConversations = conversations.filter(conv => {
+    if (filter === 'all') return true;
+    if (filter === 'requests') {
+      // Show only commission request conversations
+      return conv.commissions !== null;
+    }
+    if (filter === 'messages') {
+      // Show only regular messages (non-commission conversations)
+      return conv.commissions === null;
+    }
+    return true;
+  });
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -175,17 +190,59 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      {conversations.length === 0 ? (
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterTabText, filter === 'all' && styles.filterTabTextActive]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'requests' && styles.filterTabActive]}
+          onPress={() => setFilter('requests')}
+        >
+          <Ionicons
+            name="briefcase"
+            size={16}
+            color={filter === 'requests' ? colors.primary : colors.text.secondary}
+          />
+          <Text style={[styles.filterTabText, filter === 'requests' && styles.filterTabTextActive]}>
+            Requests
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filter === 'messages' && styles.filterTabActive]}
+          onPress={() => setFilter('messages')}
+        >
+          <Ionicons
+            name="chatbubble"
+            size={16}
+            color={filter === 'messages' ? colors.primary : colors.text.secondary}
+          />
+          <Text style={[styles.filterTabText, filter === 'messages' && styles.filterTabTextActive]}>
+            Messages
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {filteredConversations.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="chatbubbles-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>No messages yet</Text>
+          <Text style={styles.emptyTitle}>
+            {filter === 'requests' ? 'No commission requests' : filter === 'messages' ? 'No messages' : 'No messages yet'}
+          </Text>
           <Text style={styles.emptySubtitle}>
-            Start a conversation by requesting a commission from an artist
+            {filter === 'requests'
+              ? 'Commission requests will appear here'
+              : 'Start a conversation by requesting a commission from an artist'}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={filteredConversations}
           renderItem={renderConversation}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -352,5 +409,34 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+  },
+  filterTabActive: {
+    backgroundColor: `${colors.primary}15`,
+  },
+  filterTabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+  },
+  filterTabTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

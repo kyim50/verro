@@ -66,4 +66,49 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Get user's liked artists (right swipes only)
+router.get('/liked', authenticate, async (req, res) => {
+  try {
+    const { data: likedArtists, error } = await supabaseAdmin
+      .from('swipes')
+      .select(`
+        *,
+        artists(
+          *,
+          users(id, username, avatar_url, full_name, bio)
+        )
+      `)
+      .eq('user_id', req.user.id)
+      .eq('direction', 'right')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ likedArtists });
+  } catch (error) {
+    console.error('Error fetching liked artists:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unlike an artist (remove from liked)
+router.delete('/liked/:artistId', authenticate, async (req, res) => {
+  try {
+    const { artistId } = req.params;
+
+    const { error } = await supabaseAdmin
+      .from('swipes')
+      .delete()
+      .eq('user_id', req.user.id)
+      .eq('artist_id', artistId);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error unliking artist:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

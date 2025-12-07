@@ -126,3 +126,6 @@ export const layout = {
   headerHeight: 60,
   screenPadding: spacing.md,
 };
+
+// Default avatar for users without profile pictures - simple gray circle with person icon
+export const DEFAULT_AVATAR = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="50" fill="%233a3a3a"/%3E%3Cpath d="M50 45c8.284 0 15-6.716 15-15s-6.716-15-15-15-15 6.716-15 15 6.716 15 15 15zm0 7.5c-12.426 0-37.5 6.234-37.5 18.75V82.5h75V71.25c0-12.516-25.074-18.75-37.5-18.75z" fill="%23ffffff"/%3E%3C/svg%3E';

@@ -7,9 +7,17 @@ import { useAuthStore } from '../store';
 
 export default function RootLayout() {
   const loadToken = useAuthStore((state) => state.loadToken);
+  const fetchUser = useAuthStore((state) => state.fetchUser);
 
   useEffect(() => {
-    loadToken();
+    const initializeApp = async () => {
+      const token = await loadToken();
+      // Fetch user data with artists relationship if token exists
+      if (token) {
+        await fetchUser();
+      }
+    };
+    initializeApp();
   }, []);
 
   return (

@@ -12,11 +12,12 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store';
+import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function EditPortfolioScreen() {
-  const { profile, fetchProfile, token, user } = useAuthStore();
+  const { token, user } = useAuthStore();
+  const { profile, fetchProfile } = useProfileStore();
   const [portfolioImages, setPortfolioImages] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -25,7 +26,7 @@ export default function EditPortfolioScreen() {
     // Fetch fresh profile data when component mounts
     const loadProfile = async () => {
       if (user && token) {
-        await fetchProfile(token);
+        await fetchProfile(user.id, token);
       }
       setInitialLoading(false);
     };
@@ -101,7 +102,7 @@ export default function EditPortfolioScreen() {
         throw new Error('Failed to update portfolio');
       }
 
-      await fetchProfile(token);
+      await fetchProfile(user.id, token);
       Alert.alert('Success!', 'Portfolio updated successfully', [
         { text: 'OK', onPress: () => router.back() }
       ]);

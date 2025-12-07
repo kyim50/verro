@@ -19,13 +19,15 @@ const ARTWORK_SIZE = (width - spacing.md * 4) / 3;
 
 export default function ProfileScreen() {
   const { user, token, logout } = useAuthStore();
-  const { profile, fetchProfile, isLoading } = useProfileStore();
+  const { profile, fetchProfile, isLoading, reset } = useProfileStore();
 
   useEffect(() => {
     if (user) {
+      // Clear old profile data first, then load new profile
+      reset();
       loadProfile();
     }
-  }, [user]);
+  }, [user?.id]); // Use user.id to ensure it triggers on user change
 
   const loadProfile = async () => {
     try {
