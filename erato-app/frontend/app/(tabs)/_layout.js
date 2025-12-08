@@ -60,6 +60,9 @@ function MessagesTabIcon({ color }) {
 }
 
 export default function TabsLayout() {
+  const { user } = useAuthStore();
+  const isArtist = user?.user_type === 'artist';
+
   return (
     <Tabs
       screenOptions={{
@@ -83,10 +86,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={22} color={color} />
+          title: isArtist ? 'Feed' : 'Explore',
+          tabBarIcon: ({ color }) => (
+            <Ionicons name={isArtist ? 'trending-up' : 'search'} size={22} color={color} />
           ),
+        }}
+        listeners={{
+          focus: () => {},
         }}
       />
       <Tabs.Screen
@@ -94,8 +100,10 @@ export default function TabsLayout() {
         options={{
           title: '',
           tabBarIcon: ({ focused }) => (
-            <View style={styles.createButton}>
-              <Ionicons name="add" size={30} color={colors.text.primary} />
+            <View style={[styles.createWrapper, focused && styles.createWrapperFocused]}>
+              <View style={[styles.createButton, focused && styles.createButtonFocused]}>
+                <Ionicons name="add" size={30} color={colors.text.primary} />
+              </View>
             </View>
           ),
           tabBarLabel: () => null,
@@ -153,7 +161,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
-    marginBottom: Platform.OS === 'ios' ? 15 : 10,
+  },
+  createWrapper: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: `${colors.surface}F2`,
+    borderWidth: 1,
+    borderColor: `${colors.border}B3`,
+    marginBottom: Platform.OS === 'ios' ? 12 : 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  createWrapperFocused: {
+    borderColor: `${colors.primary}CC`,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.18,
+    elevation: 8,
   },
   badge: {
     position: 'absolute',

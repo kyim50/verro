@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,21 +10,28 @@ import {
   Modal,
   ScrollView,
   Alert,
+  FlatList,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import axios from 'axios';
+import Constants from 'expo-constants';
 import { useSwipeStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.20; // Reduced from 0.25 to make swiping easier
+const SWIPE_THRESHOLD = width * 0.20;
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
+  const isArtist = user?.user_type === 'artist';
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -63,6 +70,49 @@ export default function ExploreScreen() {
   };
 
   const currentArtist = artists[currentIndex];
+  const [trendingArtworks, setTrendingArtworks] = useState([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // For artists, show trending artworks feed instead of swipeable artists
+  useEffect(() => {
+    if (isArtist) {
+      fetchTrendingArtworks();
+    }
+  }, [isArtist]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isArtist) {
+        fetchTrendingArtworks();
+      }
+    }, [isArtist])
+  );
+
+  const fetchTrendingArtworks = async () => {
+    setTrendingLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/artworks`, {
+        params: { page: 1, limit: 30 },
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setTrendingArtworks(response.data.artworks || []);
+    } catch (error) {
+      console.error('Error fetching trending artworks:', error);
+    } finally {
+      setTrendingLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (isArtist) {
+      await fetchTrendingArtworks();
+    } else {
+      await fetchArtists();
+    }
+    setRefreshing(false);
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -140,6 +190,116 @@ export default function ExploreScreen() {
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
+
+  // For artists, show trending artworks feed
+  if (isArtist) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.trendingHeader}>
+          <Text style={styles.trendingTitle}>Trending Artworks</Text>
+          <Text style={styles.trendingSubtitle}>Discover what's popular</Text>
+        </View>
+        {trendingLoading && trendingArtworks.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading trending artworks...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={trendingArtworks}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.trendingCard}
+                onPress={() => router.push(`/artwork/${item.id}`)}
+                activeOpacity={0.95}
+              >
+                <View style={styles.trendingImageContainer}>
+                  <Image
+                    source={{ uri: item.image_url || item.thumbnail_url }}
+                    style={styles.trendingImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={200}
+                  />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
+                    style={styles.trendingOverlay}
+                  >
+                    <View style={styles.trendingStats}>
+                      {item.like_count > 0 && (
+                        <View style={styles.trendingStat}>
+                          <Ionicons name="heart" size={13} color="#FF6B6B" />
+                          <Text style={styles.trendingStatText}>
+                            {item.like_count || 0}
+                          </Text>
+                        </View>
+                      )}
+                      {item.view_count > 0 && (
+                        <View style={styles.trendingStat}>
+                          <Ionicons name="eye" size={13} color="#fff" />
+                          <Text style={styles.trendingStatText}>
+                            {item.view_count || 0}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </LinearGradient>
+                </View>
+                <View style={styles.trendingInfo}>
+                  <Text style={styles.trendingTitleText} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  {item.artists?.users && (
+                    <TouchableOpacity
+                      style={styles.trendingArtistRow}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        router.push(`/artist/${item.artist_id}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      {item.artists.users.avatar_url ? (
+                        <Image
+                          source={{ uri: item.artists.users.avatar_url }}
+                          style={styles.trendingArtistAvatar}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                        />
+                      ) : (
+                        <View style={[styles.trendingArtistAvatar, { backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
+                          <Ionicons name="person" size={10} color={colors.text.secondary} />
+                        </View>
+                      )}
+                      <Text style={styles.trendingArtist} numberOfLines={1}>
+                        @{item.artists.users.username || item.artists.users.full_name || 'artist'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => String(item.id)}
+            numColumns={2}
+            contentContainerStyle={styles.trendingList}
+            columnWrapperStyle={styles.trendingRow}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
+                <Text style={styles.emptyText}>No trending artworks yet</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+    );
+  }
 
   if (!currentArtist) {
     return (
@@ -727,6 +887,17 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: spacing.lg,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
   reloadButton: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
@@ -921,5 +1092,123 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+  },
+  // Trending styles for artists
+  trendingHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl + spacing.md,
+    paddingBottom: spacing.lg,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  trendingTitle: {
+    ...typography.h1,
+    color: colors.text.primary,
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: spacing.xs,
+    letterSpacing: -0.5,
+  },
+  trendingSubtitle: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  trendingList: {
+    padding: spacing.sm,
+    paddingBottom: spacing.xxl,
+  },
+  trendingRow: {
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  trendingCard: {
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+  },
+  trendingImageContainer: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 0.85,
+    backgroundColor: colors.background,
+  },
+  trendingImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.surfaceLight,
+  },
+  trendingOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.md,
+    paddingTop: spacing.lg,
+    justifyContent: 'flex-end',
+  },
+  trendingStats: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  trendingStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    backdropFilter: 'blur(10px)',
+  },
+  trendingStatText: {
+    ...typography.caption,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  trendingInfo: {
+    padding: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  trendingTitleText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    marginBottom: spacing.xs + 2,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  trendingArtistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  trendingArtistAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  trendingArtist: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    flex: 1,
+    fontWeight: '500',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl * 2,
   },
 });

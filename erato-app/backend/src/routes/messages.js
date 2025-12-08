@@ -387,4 +387,50 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
   }
 });
 
+// Delete a message
+router.delete('/conversations/:id/messages/:messageId', authenticate, async (req, res) => {
+  try {
+    // Verify user is part of conversation
+    const { data: participation, error: partError } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('conversation_id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (partError || !participation) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Verify message belongs to this conversation and to current user
+    const { data: message, error: msgFetchError } = await supabaseAdmin
+      .from('messages')
+      .select('id, sender_id, conversation_id')
+      .eq('id', req.params.messageId)
+      .eq('conversation_id', req.params.id)
+      .single();
+
+    if (msgFetchError || !message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    if (message.sender_id !== req.user.id) {
+      return res.status(403).json({ error: 'Cannot delete another user\'s message' });
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from('messages')
+      .delete()
+      .eq('id', req.params.messageId)
+      .eq('conversation_id', req.params.id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

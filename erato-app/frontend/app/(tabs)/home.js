@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,15 +11,21 @@ import {
   Modal,
   Alert,
   TextInput,
+  FlatList,
+  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Link, router } from 'expo-router';
+import { Link, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFeedStore, useBoardStore } from '../../store';
+import { LinearGradient } from 'expo-linear-gradient';
+import axios from 'axios';
+import Constants from 'expo-constants';
+import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const SPACING = 4;
 const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING) / NUM_COLUMNS;
@@ -27,6 +33,9 @@ const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING) / NUM_COLUMNS;
 export default function HomeScreen() {
   const { artworks, fetchArtworks, reset, hasMore, isLoading } = useFeedStore();
   const { boards, fetchBoards, saveArtworkToBoard, createBoard } = useBoardStore();
+  const { token, user: currentUser } = useAuthStore();
+  const { profile: userProfile } = useProfileStore();
+  const isArtist = currentUser?.user_type === 'artist';
   const [refreshing, setRefreshing] = useState(false);
   const [columns, setColumns] = useState([[], []]);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -34,11 +43,139 @@ export default function HomeScreen() {
   const [showCreateBoard, setShowCreateBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
+  const [likedArtworks, setLikedArtworks] = useState(new Set());
+  const [forYouArtworks, setForYouArtworks] = useState([]);
+  const [forYouPage, setForYouPage] = useState(1);
+  const [forYouLoading, setForYouLoading] = useState(false);
+  const [forYouHasMore, setForYouHasMore] = useState(true);
+  const [likedArtworksLoaded, setLikedArtworksLoaded] = useState(false);
+  const scrollViewRef = useRef(null);
+  const loadingRef = useRef(false);
+  const lastFocusTimeRef = useRef(0);
+  const lastTapRef = useRef({});
+  const heartAnimationRef = useRef({});
+  const heartScaleAnims = useRef({});
+  const heartOpacityAnims = useRef({});
+  const [heartAnimations, setHeartAnimations] = useState({});
+
+  // Load liked artworks
+  const loadLikedArtworks = useCallback(async () => {
+    if (likedArtworksLoaded || !token || loadingRef.current) return;
+    
+    try {
+      const likedBoard = boards.find(b => b.name === 'Liked');
+      if (likedBoard) {
+        loadingRef.current = true;
+        const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const artworkIds = response.data.board_artworks?.map(ba => ba.artwork_id) || [];
+        setLikedArtworks(new Set(artworkIds.map(String)));
+        setLikedArtworksLoaded(true);
+      } else {
+        setLikedArtworksLoaded(true);
+      }
+    } catch (error) {
+      if (error.response?.status !== 429) {
+        console.error('Error loading liked artworks:', error);
+      }
+      setLikedArtworksLoaded(true);
+    } finally {
+      loadingRef.current = false;
+    }
+  }, [boards, token, likedArtworksLoaded]);
+
+  // Load For You artworks
+  const loadForYouArtworks = useCallback(async (reset = false) => {
+    if (loadingRef.current || forYouLoading || (!reset && !forYouHasMore)) return;
+    
+    loadingRef.current = true;
+    setForYouLoading(true);
+    const page = reset ? 1 : forYouPage;
+
+    try {
+      const response = await axios.get(`${API_URL}/artworks`, {
+        params: { page, limit: 20 },
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      const newArtworks = response.data.artworks || [];
+      const hasMore = response.data.pagination?.page < response.data.pagination?.totalPages;
+
+      setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
+      setForYouPage(page + 1);
+      setForYouHasMore(hasMore);
+    } catch (error) {
+      if (error.response?.status !== 429) {
+        console.error('Error loading for you artworks:', error);
+      }
+    } finally {
+      setForYouLoading(false);
+      loadingRef.current = false;
+    }
+  }, [forYouLoading, forYouHasMore, forYouPage, token]);
+
+  // Auto-refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      if (now - lastFocusTimeRef.current < 2000) {
+        return;
+      }
+      lastFocusTimeRef.current = now;
+
+      const refreshData = async () => {
+        if (loadingRef.current) return;
+        
+        try {
+          if (activeTab === 'explore') {
+            if (artworks.length === 0) {
+              await fetchArtworks(true);
+            }
+          } else {
+            if (forYouArtworks.length === 0) {
+              await loadForYouArtworks(true);
+            }
+          }
+          if (boards.length === 0) {
+            await fetchBoards();
+          }
+        } catch (error) {
+          if (error.response?.status !== 429) {
+            console.error('Error refreshing data:', error);
+          }
+        }
+      };
+      refreshData();
+    }, [activeTab, loadForYouArtworks, artworks.length, forYouArtworks.length, boards.length])
+  );
 
   useEffect(() => {
     fetchArtworks(true);
     fetchBoards();
   }, []);
+
+  // Load liked artworks when boards are loaded
+  useEffect(() => {
+    if (token && boards.length > 0 && !likedArtworksLoaded) {
+      loadLikedArtworks();
+    }
+  }, [boards, token, likedArtworksLoaded, loadLikedArtworks]);
+
+  // Handle tab change
+  useEffect(() => {
+    if (activeTab === 'foryou' && forYouArtworks.length === 0 && !loadingRef.current) {
+      loadForYouArtworks(true);
+    }
+  }, [activeTab, forYouArtworks.length, loadForYouArtworks]);
+
+  // Load current user profile for header avatar
+  useEffect(() => {
+    if (currentUser?.id && token && !userProfile) {
+      useProfileStore.getState().fetchProfile(currentUser.id, token);
+    }
+  }, [currentUser?.id, token, userProfile]);
 
   // Organize artworks into balanced columns (Pinterest masonry style)
   useEffect(() => {
@@ -131,40 +268,340 @@ export default function HomeScreen() {
     }
   };
 
-  const renderArtwork = (item) => (
-    <View key={item.id} style={styles.card}>
-      <Link href={`/artwork/${item.id}`} asChild>
-        <TouchableOpacity activeOpacity={0.9}>
-          <Image
-            source={{ uri: item.thumbnail_url || item.image_url }}
-            style={[styles.image, { height: item.imageHeight }]}
-            contentFit="cover"
-            transition={200}
-          />
-        </TouchableOpacity>
-      </Link>
+  // Handle like artwork (optimistic update)
+  const handleLikeArtwork = async (artwork) => {
+    if (!token) {
+      Alert.alert('Login Required', 'Please login to like artworks');
+      return;
+    }
+
+    const artworkId = String(artwork.id);
+    const isLiked = likedArtworksLoaded ? likedArtworks.has(artworkId) : false;
+    const previousLikedState = isLiked;
+
+    if (!likedArtworksLoaded) {
+      setLikedArtworksLoaded(true);
+    }
+
+    // Optimistic update
+    setLikedArtworks(prev => {
+      const newSet = new Set(prev);
+      if (isLiked) {
+        newSet.delete(artworkId);
+      } else {
+        newSet.add(artworkId);
+      }
+      return newSet;
+    });
+
+    try {
+      let likedBoard = boards.find(b => b.name === 'Liked');
+
+      if (!likedBoard) {
+        likedBoard = await createBoard({ name: 'Liked', is_public: false });
+        await fetchBoards();
+        const updatedBoards = useBoardStore.getState().boards;
+        likedBoard = updatedBoards.find(b => b.name === 'Liked');
+      }
+
+      if (isLiked) {
+        await axios.delete(`${API_URL}/boards/${likedBoard.id}/artworks/${artwork.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        await saveArtworkToBoard(likedBoard.id, artwork.id);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      // Rollback optimistic update
+      setLikedArtworks(prev => {
+        const newSet = new Set(prev);
+        if (previousLikedState) {
+          newSet.add(artworkId);
+        } else {
+          newSet.delete(artworkId);
+        }
+        return newSet;
+      });
+    }
+  };
+
+  const renderArtwork = (item, showLikeButton = false) => {
+    const isLiked = likedArtworksLoaded ? likedArtworks.has(String(item.id)) : false;
+    
+    return (
+      <View key={item.id} style={styles.card}>
+        <View style={styles.imageContainer}>
+          <Link href={`/artwork/${item.id}`} asChild>
+            <TouchableOpacity activeOpacity={0.9}>
+              <Image
+                source={{ uri: item.thumbnail_url || item.image_url }}
+                style={[styles.image, { height: item.imageHeight }]}
+                contentFit="cover"
+                transition={200}
+              />
+            </TouchableOpacity>
+          </Link>
+          {showLikeButton && token && (
+            <TouchableOpacity
+              style={styles.likeButtonOverlay}
+              onPress={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLikeArtwork(item);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={24}
+                color={isLiked ? "#FF6B6B" : "rgba(255, 255, 255, 0.9)"}
+                style={styles.likeIcon}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <View style={styles.textContainer}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={(e) => handleOpenSaveMenu(item, e)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.primary} />
+            </TouchableOpacity>
+          </View>
+          {item.artists?.users && (
+            <Text style={styles.artistName} numberOfLines={1}>
+              {item.artists.users.username}
+            </Text>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  // TikTok-style full screen artwork renderer
+  const renderTikTokArtwork = (item, index) => {
+    const isLiked = likedArtworksLoaded ? likedArtworks.has(String(item.id)) : false;
+    const artworkId = String(item.id);
+    const showHeartAnimation = heartAnimations[artworkId] || false;
+    
+    // Initialize animations for this artwork if not exists
+    if (!heartScaleAnims.current[artworkId]) {
+      heartScaleAnims.current[artworkId] = new Animated.Value(0);
+      heartOpacityAnims.current[artworkId] = new Animated.Value(0);
+    }
+    
+    const handleDoubleTap = () => {
+      const now = Date.now();
+      const DOUBLE_PRESS_DELAY = 300;
       
-      <View style={styles.textContainer}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={2}>
-            {item.title}
-          </Text>
+      if (lastTapRef.current[artworkId] && (now - lastTapRef.current[artworkId]) < DOUBLE_PRESS_DELAY) {
+        if (!isLiked && token) {
+          handleLikeArtwork(item);
+          
+          heartScaleAnims.current[artworkId].setValue(0);
+          heartOpacityAnims.current[artworkId].setValue(1);
+          
+          Animated.parallel([
+            Animated.spring(heartScaleAnims.current[artworkId], {
+              toValue: 1,
+              tension: 50,
+              friction: 7,
+              useNativeDriver: true,
+            }),
+            Animated.sequence([
+              Animated.delay(400),
+              Animated.timing(heartOpacityAnims.current[artworkId], {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+              }),
+            ]),
+          ]).start(() => {
+            heartScaleAnims.current[artworkId].setValue(0);
+            heartOpacityAnims.current[artworkId].setValue(0);
+          });
+          
+          setHeartAnimations(prev => ({ ...prev, [artworkId]: true }));
+          if (heartAnimationRef.current[artworkId]) {
+            clearTimeout(heartAnimationRef.current[artworkId]);
+          }
+          heartAnimationRef.current[artworkId] = setTimeout(() => {
+            setHeartAnimations(prev => {
+              const newState = { ...prev };
+              delete newState[artworkId];
+              return newState;
+            });
+            delete heartAnimationRef.current[artworkId];
+          }, 1000);
+        }
+        delete lastTapRef.current[artworkId];
+      } else {
+        lastTapRef.current[artworkId] = now;
+      }
+    };
+    
+    const primaryArtist =
+      (Array.isArray(item.artists) ? item.artists[0] : item.artists) ||
+      (Array.isArray(item.artist) ? item.artist[0] : item.artist) ||
+      (Array.isArray(item.artist_user) ? item.artist_user[0] : item.artist_user);
+
+    const artistUser =
+      primaryArtist?.users ||
+      primaryArtist?.user ||
+      primaryArtist ||
+      item.user ||
+      item.owner_user ||
+      item.creator ||
+      item.created_by ||
+      item.owner ||
+      item.uploader ||
+      (item.artist_username && {
+        username: item.artist_username,
+        full_name: item.artist_full_name,
+        avatar_url: item.artist_avatar,
+      }) ||
+      (typeof item.artist === 'string' && { username: item.artist });
+
+    const artistUsername =
+      item.artist_username ||
+      artistUser?.username ||
+      artistUser?.full_name ||
+      artistUser?.name ||
+      item.artist_name ||
+      item.artist_username ||
+      item.username ||
+      item.user_name ||
+      item.created_by_username ||
+      item.uploader_username ||
+      (artistUser ? 'artist' : null) ||
+      'artist';
+
+    const artistAvatar =
+      item.artist_avatar ||
+      artistUser?.avatar_url ||
+      artistUser?.avatar ||
+      item.uploader_avatar ||
+      item.created_by_avatar ||
+      item.avatar_url;
+    
+    return (
+      <View style={styles.tikTokCard}>
+        <TouchableOpacity
+          style={styles.tikTokImageContainer}
+          activeOpacity={1}
+          onPress={handleDoubleTap}
+        >
+          <Image
+            source={{ uri: item.image_url || item.thumbnail_url }}
+            style={styles.tikTokImage}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+            priority="high"
+          />
+          {showHeartAnimation && (
+            <Animated.View 
+              style={[
+                styles.heartAnimation,
+                {
+                  transform: [{ scale: heartScaleAnims.current[artworkId] }],
+                  opacity: heartOpacityAnims.current[artworkId],
+                }
+              ]}
+            >
+              <Ionicons name="heart" size={100} color="#FF6B6B" />
+            </Animated.View>
+          )}
+          
+          {item.view_count > 0 && (
+            <View style={styles.viewCountBadge}>
+              <Ionicons name="eye" size={14} color="#fff" />
+              <Text style={styles.viewCountText}>{item.view_count}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        <LinearGradient
+          colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.95)']}
+          style={styles.tikTokInfoGradient}
+        >
+          <View style={styles.tikTokInfo}>
+            <TouchableOpacity
+              onPress={() => router.push(`/artist/${item.artist_id}`)}
+              style={styles.tikTokArtistInfo}
+              activeOpacity={0.8}
+            >
+              {artistAvatar ? (
+                <Image
+                  source={{ uri: artistAvatar }}
+                  style={styles.tikTokAvatar}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View style={styles.tikTokAvatarPlaceholder}>
+                  <Ionicons name="person" size={24} color={colors.text.secondary} />
+                </View>
+              )}
+              <View style={styles.tikTokArtistText}>
+                <Text style={styles.tikTokArtistName}>
+                  @{artistUsername}
+                </Text>
+                <Text style={styles.tikTokTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.tikTokActions}>
+          {token && (
+            <TouchableOpacity
+              style={styles.tikTokActionButton}
+              onPress={() => handleLikeArtwork(item)}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={32}
+                color={isLiked ? "#FF6B6B" : "#fff"}
+              />
+              <Text style={styles.tikTokActionLabel}>
+                {isLiked ? 'Liked' : 'Like'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity
-            style={styles.menuButton}
-            onPress={(e) => handleOpenSaveMenu(item, e)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.tikTokActionButton}
+            onPress={() => router.push(`/artwork/${item.id}`)}
           >
-            <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.primary} />
+            <Ionicons name="information-circle-outline" size={32} color="#fff" />
+            <Text style={styles.tikTokActionLabel}>Details</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tikTokActionButton}
+            onPress={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleOpenSaveMenu(item, e);
+            }}
+          >
+            <Ionicons name="bookmark-outline" size={32} color="#fff" />
+            <Text style={styles.tikTokActionLabel}>Save</Text>
           </TouchableOpacity>
         </View>
-        {item.artists?.users && (
-          <Text style={styles.artistName} numberOfLines={1}>
-            {item.artists.users.username}
-          </Text>
-        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderEmpty = () => {
     if (isLoading) {
@@ -183,12 +620,14 @@ export default function HomeScreen() {
         <Text style={styles.emptyText}>
           Be the first to share your art or explore other artists!
         </Text>
-        <TouchableOpacity 
-          style={styles.exploreButton}
-          onPress={() => router.push('/(tabs)/explore')}
-        >
-          <Text style={styles.exploreButtonText}>Explore Artists</Text>
-        </TouchableOpacity>
+        {!isArtist && (
+          <TouchableOpacity 
+            style={styles.exploreButton}
+            onPress={() => router.push('/(tabs)/explore')}
+          >
+            <Text style={styles.exploreButtonText}>Explore Artists</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -198,12 +637,18 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.tabContainer}>
-          <View style={[styles.tab, styles.tabActive]}>
-            <Text style={[styles.tabText, styles.tabTextActive]}>Explore</Text>
-          </View>
-          <View style={styles.tab}>
-            <Text style={styles.tabText}>For you</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'explore' && styles.tabActive]}
+            onPress={() => setActiveTab('explore')}
+          >
+            <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]}>Explore</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'foryou' && styles.tabActive]}
+            onPress={() => setActiveTab('foryou')}
+          >
+            <Text style={[styles.tabText, activeTab === 'foryou' && styles.tabTextActive]}>For you</Text>
+          </TouchableOpacity>
         </View>
         
         <View style={styles.headerRight}>
@@ -214,41 +659,115 @@ export default function HomeScreen() {
             <Ionicons name="search" size={22} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.iconButton}
+            style={styles.profileButton}
             onPress={() => router.push('/(tabs)/profile')}
           >
-            <Ionicons name="person-circle" size={26} color={colors.text.primary} />
+            {userProfile?.avatar_url ? (
+              <Image
+                source={{ uri: userProfile.avatar_url }}
+                style={styles.profileAvatar}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <Ionicons name="person-circle" size={26} color={colors.text.primary} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Masonry Grid Content */}
-      {artworks.length === 0 ? (
-        renderEmpty()
-      ) : (
-        <ScrollView
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.masonryContainer}>
-            {/* Left Column */}
-            <View style={styles.column}>
-              {columns[0].map(renderArtwork)}
-            </View>
+      {/* Content based on active tab */}
+      {activeTab === 'explore' ? (
+        // Explore tab - existing masonry layout
+        artworks.length === 0 ? (
+          renderEmpty()
+        ) : (
+          <ScrollView
+            ref={scrollViewRef}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.masonryContainer}>
+              {/* Left Column */}
+              <View style={styles.column}>
+                {columns[0].map(item => renderArtwork(item, true))}
+              </View>
 
-            {/* Right Column */}
-            <View style={styles.column}>
-              {columns[1].map(renderArtwork)}
+              {/* Right Column */}
+              <View style={styles.column}>
+                {columns[1].map(item => renderArtwork(item, true))}
+              </View>
             </View>
+          </ScrollView>
+        )
+      ) : (
+        // For You tab - TikTok-style full screen vertical feed
+        forYouArtworks.length === 0 && forYouLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading artworks...</Text>
           </View>
-        </ScrollView>
+        ) : forYouArtworks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
+            <Text style={styles.emptyTitle}>No Artworks Yet</Text>
+            <Text style={styles.emptyText}>
+              Check back later for personalized recommendations!
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={scrollViewRef}
+            data={forYouArtworks}
+            renderItem={({ item, index }) => renderTikTokArtwork(item, index)}
+            keyExtractor={(item) => String(item.id)}
+            pagingEnabled
+            snapToInterval={height - 180}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            showsVerticalScrollIndicator={false}
+            getItemLayout={(data, index) => ({
+              length: height - 180,
+              offset: (height - 180) * index,
+              index,
+            })}
+            onEndReached={() => {
+              if (!forYouLoading && forYouHasMore) {
+                loadForYouArtworks();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            removeClippedSubviews={false}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            initialNumToRender={1}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={async () => {
+                  setRefreshing(true);
+                  await loadForYouArtworks(true);
+                  setRefreshing(false);
+                }}
+                tintColor={colors.primary}
+              />
+            }
+            ListFooterComponent={
+              forYouLoading ? (
+                <View style={styles.loadMoreContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : null
+            }
+          />
+        )
       )}
 
       {/* Save to Board Modal */}
@@ -404,10 +923,191 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.background,
   },
+  imageContainer: {
+    position: 'relative',
+  },
   image: {
     width: '100%',
     backgroundColor: colors.surfaceLight,
     borderRadius: 20,
+  },
+  likeButtonOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  likeIcon: {
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  loadMoreContainer: {
+    width: '100%',
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  profileButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  profileAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  // TikTok-style styles
+  tikTokCard: {
+    width: width,
+    height: height - 180,
+    position: 'relative',
+    backgroundColor: '#000',
+    justifyContent: 'space-between',
+  },
+  tikTokImageContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    zIndex: 1,
+  },
+  heartAnimation: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 100,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    transform: [{ translateX: -50 }, { translateY: -50 }],
+  },
+  tikTokImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
+  },
+  tikTokInfoGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+  },
+  tikTokInfo: {
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl + spacing.lg,
+    minHeight: 120,
+    justifyContent: 'flex-start',
+  },
+  tikTokArtistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    width: '100%',
+    marginBottom: spacing.xs,
+  },
+  tikTokAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  tikTokAvatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface + '90',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tikTokArtistText: {
+    flex: 1,
+  },
+  tikTokArtistName: {
+    ...typography.bodyBold,
+    color: '#fff',
+    fontSize: 17,
+    marginBottom: 4,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    letterSpacing: 0.3,
+  },
+  tikTokTitle: {
+    ...typography.h3,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '500',
+    opacity: 0.9,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    lineHeight: 20,
+  },
+  tikTokActions: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: 40,
+    alignItems: 'center',
+    gap: spacing.xl,
+    zIndex: 3,
+  },
+  tikTokActionButton: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  tikTokActionLabel: {
+    ...typography.caption,
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    letterSpacing: 0.2,
+  },
+  viewCountBadge: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    zIndex: 5,
+  },
+  viewCountText: {
+    ...typography.caption,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   textContainer: {
     paddingHorizontal: 8,

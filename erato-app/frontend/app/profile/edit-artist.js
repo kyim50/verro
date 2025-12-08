@@ -112,101 +112,52 @@ export default function EditArtistProfileScreen() {
         {/* Commission Status */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Commission Status</Text>
-
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.switchLabel}>Commissions Open</Text>
-              <Text style={styles.switchDescription}>
-                Allow clients to request commissions
-              </Text>
-            </View>
-            <Switch
-              value={commissionStatus === 'open'}
-              onValueChange={(value) => setCommissionStatus(value ? 'open' : 'closed')}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.background}
-            />
-          </View>
+          <Text style={styles.helperText}>Let clients know if you’re open</Text>
 
           <View style={styles.statusButtons}>
-            <TouchableOpacity
-              style={[
-                styles.statusButton,
-                commissionStatus === 'open' && styles.statusButtonActive,
-              ]}
-              onPress={() => setCommissionStatus('open')}
-            >
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color={commissionStatus === 'open' ? colors.primary : colors.text.secondary}
-              />
-              <Text
-                style={[
-                  styles.statusButtonText,
-                  commissionStatus === 'open' && styles.statusButtonTextActive,
-                ]}
-              >
-                Open
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.statusButton,
-                commissionStatus === 'limited' && styles.statusButtonActive,
-              ]}
-              onPress={() => setCommissionStatus('limited')}
-            >
-              <Ionicons
-                name="time"
-                size={20}
-                color={commissionStatus === 'limited' ? colors.primary : colors.text.secondary}
-              />
-              <Text
-                style={[
-                  styles.statusButtonText,
-                  commissionStatus === 'limited' && styles.statusButtonTextActive,
-                ]}
-              >
-                Limited
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.statusButton,
-                commissionStatus === 'closed' && styles.statusButtonActive,
-              ]}
-              onPress={() => setCommissionStatus('closed')}
-            >
-              <Ionicons
-                name="close-circle"
-                size={20}
-                color={commissionStatus === 'closed' ? colors.primary : colors.text.secondary}
-              />
-              <Text
-                style={[
-                  styles.statusButtonText,
-                  commissionStatus === 'closed' && styles.statusButtonTextActive,
-                ]}
-              >
-                Closed
-              </Text>
-            </TouchableOpacity>
+            {[
+              { key: 'open', label: 'Open', icon: 'checkmark-circle' },
+              { key: 'limited', label: 'Limited', icon: 'time' },
+              { key: 'closed', label: 'Closed', icon: 'close-circle' },
+            ].map((opt) => {
+              const active = commissionStatus === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.statusButton, active && styles.statusButtonActive]}
+                  onPress={() => setCommissionStatus(opt.key)}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={18}
+                    color={active ? colors.primary : colors.text.secondary}
+                  />
+                  <Text
+                    style={[
+                      styles.statusButtonText,
+                      active && styles.statusButtonTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         {/* Pricing */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pricing</Text>
+          <Text style={styles.helperText}>Typical range clients should expect</Text>
 
           <View style={styles.priceRow}>
             <View style={styles.priceInput}>
-              <Text style={styles.inputLabel}>Minimum Price ($)</Text>
+              <Text style={styles.inputLabel}>Min ($)</Text>
               <TextInput
                 style={styles.input}
-                placeholder="0"
+                placeholder="50"
                 placeholderTextColor={colors.text.disabled}
                 value={minPrice}
                 onChangeText={setMinPrice}
@@ -215,10 +166,10 @@ export default function EditArtistProfileScreen() {
             </View>
 
             <View style={styles.priceInput}>
-              <Text style={styles.inputLabel}>Maximum Price ($)</Text>
+              <Text style={styles.inputLabel}>Max ($)</Text>
               <TextInput
                 style={styles.input}
-                placeholder="0"
+                placeholder="500"
                 placeholderTextColor={colors.text.disabled}
                 value={maxPrice}
                 onChangeText={setMaxPrice}
@@ -230,8 +181,8 @@ export default function EditArtistProfileScreen() {
 
         {/* Turnaround */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Turnaround Time</Text>
-          <Text style={styles.inputLabel}>Average completion time (days)</Text>
+          <Text style={styles.sectionTitle}>Turnaround</Text>
+          <Text style={styles.helperText}>Average completion time (days)</Text>
           <TextInput
             style={styles.input}
             placeholder="7"
@@ -245,7 +196,7 @@ export default function EditArtistProfileScreen() {
         {/* Specialties */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Specialties</Text>
-          <Text style={styles.inputLabel}>Separate with commas (e.g., Portraits, Landscapes, Abstract)</Text>
+          <Text style={styles.helperText}>Comma-separated (e.g. Portraits, Landscapes)</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Portraits, Landscapes, Abstract"
@@ -304,14 +255,19 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
+    paddingTop: spacing.lg,
+    gap: spacing.xl,
   },
   section: {
-    marginTop: spacing.xl,
+    gap: spacing.sm,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    marginBottom: spacing.md,
+  },
+  helperText: {
+    ...typography.caption,
+    color: colors.text.secondary,
   },
   switchRow: {
     flexDirection: 'row',
@@ -320,7 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   switchLabel: {
     ...typography.bodyBold,
@@ -334,6 +290,7 @@ const styles = StyleSheet.create({
   statusButtons: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   statusButton: {
     flex: 1,
@@ -341,27 +298,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    padding: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statusButtonActive: {
     borderColor: colors.primary,
-    backgroundColor: `${colors.primary}10`,
+    backgroundColor: `${colors.primary}12`,
   },
   statusButtonText: {
-    ...typography.body,
+    ...typography.bodyBold,
     color: colors.text.secondary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   statusButtonTextActive: {
     color: colors.primary,
   },
   priceRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   priceInput: {
     flex: 1,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,24 +8,49 @@ import {
   Image,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import axios from 'axios';
+import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = (width - spacing.md * 4) / 3;
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function ProfileScreen() {
   const { user, token, logout } = useAuthStore();
   const { profile, fetchProfile, isLoading, reset } = useProfileStore();
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Auto-refresh when screen comes into focus (but keep existing data)
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        // Only refresh if we don't have profile data or user changed
+        if (!profile || profile.id !== user.id) {
+          loadProfile();
+        }
+      }
+    }, [user?.id, profile])
+  );
 
   useEffect(() => {
-    // Always reset profile data when component mounts or user changes
-    reset();
+    // Only reset if user actually changed (not on every mount)
+    const currentUserId = profile?.id;
+    if (currentUserId && currentUserId !== user?.id) {
+      reset();
+    }
 
     if (user?.id) {
+      // If we already have profile data for this user, don't reset
+      if (profile && profile.id === user.id) {
+        setIsInitialLoad(false);
+        return;
+      }
       loadProfile();
     }
   }, [user?.id]); // Use user.id to ensure it triggers on user change
@@ -34,8 +59,10 @@ export default function ProfileScreen() {
     try {
       if (!user?.id) return;
       await fetchProfile(user.id, token);
+      setIsInitialLoad(false);
     } catch (error) {
       console.error('Error loading profile:', error);
+      setIsInitialLoad(false);
     }
   };
 
@@ -60,7 +87,77 @@ export default function ProfileScreen() {
   const isArtist = profile?.artist !== null && profile?.artist !== undefined;
   const artworks = profile?.artist?.artworks || [];
   const artistId = profile?.artist?.id || profile?.id;
+  const isOwnProfile = user?.id === profile?.id;
 
+  const handleDeleteArtwork = async (artworkId) => {
+    if (!token || !isOwnProfile) return;
+    Alert.alert(
+      'Delete Artwork',
+      'Hold to confirm deleting this artwork. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await axios.delete(`${API_URL}/artworks/${artworkId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              await fetchProfile(user.id, token);
+            } catch (error) {
+              console.error('Error deleting artwork:', error);
+              const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeletePortfolioImage = async (index) => {
+    if (!token || !isOwnProfile) return;
+    const currentImages = profile?.artist?.portfolio_images || [];
+    const updated = currentImages.filter((_, idx) => idx !== index);
+
+    Alert.alert(
+      'Remove Portfolio Image',
+      'Remove this portfolio image?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await axios.put(
+                `${API_URL}/users/me/artist`,
+                { portfolio_images: updated },
+                { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+              );
+              await fetchProfile(user.id, token);
+            } catch (error) {
+              console.error('Error removing portfolio image:', error);
+              const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Show loading only on initial load with no cached data
+  if (isInitialLoad && isLoading && !profile) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  // If we have profile data, show it even if loading (optimistic display)
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -115,36 +212,68 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.commissionInfo}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Status</Text>
-                  <View style={[
-                    styles.statusBadge,
-                    profile.artist.commission_status === 'open' && styles.statusOpen
-                  ]}>
-                    <Text style={styles.statusText}>
-                      {profile.artist.commission_status === 'open' ? 'Open' : 'Closed'}
-                    </Text>
+              <View style={styles.commissionCard}>
+                <View style={styles.commissionRow}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons
+                      name={
+                        profile.artist.commission_status === 'open'
+                          ? 'checkmark-circle'
+                          : profile.artist.commission_status === 'limited'
+                          ? 'time'
+                          : 'close-circle'
+                      }
+                      size={18}
+                      color={
+                        profile.artist.commission_status === 'open'
+                          ? colors.success
+                          : profile.artist.commission_status === 'limited'
+                          ? colors.warning
+                          : colors.text.secondary
+                      }
+                    />
+                    <Text style={styles.infoLabel}>Status</Text>
                   </View>
+                  <Text
+                    style={[
+                      styles.statusText,
+                      profile.artist.commission_status === 'open' && styles.statusOpenText,
+                      profile.artist.commission_status === 'limited' && styles.statusLimitedText,
+                      profile.artist.commission_status === 'closed' && styles.statusClosedText,
+                    ]}
+                  >
+                    {profile.artist.commission_status === 'open'
+                      ? 'Open'
+                      : profile.artist.commission_status === 'limited'
+                      ? 'Limited'
+                      : 'Closed'}
+                  </Text>
                 </View>
 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Pricing</Text>
+                <View style={styles.commissionRow}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="pricetag" size={18} color={colors.text.secondary} />
+                    <Text style={styles.infoLabel}>Pricing</Text>
+                  </View>
                   <Text style={styles.infoValue}>
                     ${profile.artist.min_price} - ${profile.artist.max_price}
                   </Text>
                 </View>
 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Turnaround</Text>
-                  <Text style={styles.infoValue}>
-                    {profile.artist.turnaround_days} days
-                  </Text>
+                <View style={styles.commissionRow}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="time-outline" size={18} color={colors.text.secondary} />
+                    <Text style={styles.infoLabel}>Turnaround</Text>
+                  </View>
+                  <Text style={styles.infoValue}>{profile.artist.turnaround_days} days</Text>
                 </View>
 
                 {profile.artist.specialties && profile.artist.specialties.length > 0 && (
                   <View style={styles.specialtiesContainer}>
-                    <Text style={styles.infoLabel}>Specialties</Text>
+                    <View style={styles.rowLeft}>
+                      <Ionicons name="brush" size={18} color={colors.text.secondary} />
+                      <Text style={styles.infoLabel}>Specialties</Text>
+                    </View>
                     <View style={styles.tagContainer}>
                       {profile.artist.specialties.map((specialty, index) => (
                         <View key={index} style={styles.tag}>
@@ -170,12 +299,21 @@ export default function ProfileScreen() {
                 {profile.artist.portfolio_images && profile.artist.portfolio_images.length > 0 ? (
                   <View style={styles.portfolioGrid}>
                     {profile.artist.portfolio_images.map((imageUrl, index) => (
-                      <View key={index} style={styles.portfolioItem}>
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.portfolioItem}
+                        activeOpacity={0.85}
+                        onLongPress={() => {
+                          if (isOwnProfile) {
+                            handleDeletePortfolioImage(index);
+                          }
+                        }}
+                      >
                         <Image
                           source={{ uri: imageUrl }}
                           style={styles.portfolioImage}
                         />
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 ) : (
@@ -209,7 +347,13 @@ export default function ProfileScreen() {
                     <TouchableOpacity
                       key={artwork.id}
                       style={styles.artworkItem}
+                      activeOpacity={0.9}
                       onPress={() => router.push(`/artwork/${artwork.id}`)}
+                      onLongPress={() => {
+                        if (isOwnProfile) {
+                          handleDeleteArtwork(artwork.id);
+                        }
+                      }}
                     >
                       <Image
                         source={{ uri: artwork.thumbnail_url || artwork.image_url }}
@@ -376,6 +520,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -476,43 +624,62 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  commissionInfo: {
+  commissionCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
   },
-  infoRow: {
+  commissionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
+  },
+  statusText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+  },
+  commissionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: spacing.xs,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   infoLabel: {
     ...typography.bodyBold,
     color: colors.text.secondary,
   },
   infoValue: {
-    ...typography.body,
+    ...typography.bodyBold,
     color: colors.text.primary,
   },
-  statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceLight,
-  },
-  statusOpen: {
-    backgroundColor: colors.success + '20',
-  },
-  statusText: {
-    ...typography.caption,
+  statusOpenText: {
     color: colors.success,
-    fontWeight: '600',
+  },
+  statusLimitedText: {
+    color: colors.warning,
+  },
+  statusClosedText: {
+    color: colors.text.secondary,
   },
   specialtiesContainer: {
-    paddingTop: spacing.sm,
+    gap: spacing.xs,
   },
   tagContainer: {
     flexDirection: 'row',

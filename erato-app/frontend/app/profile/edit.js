@@ -26,12 +26,10 @@ export default function EditProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
 
-  // Artist fields
-  const [commissionStatus, setCommissionStatus] = useState('closed');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [turnaroundDays, setTurnaroundDays] = useState('');
-  const [specialties, setSpecialties] = useState('');
+  // Social media fields (for artists only)
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [twitterUrl, setTwitterUrl] = useState('');
+  const [tiktokUrl, setTiktokUrl] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -39,22 +37,18 @@ export default function EditProfileScreen() {
       setFullName(user.full_name || '');
       setBio(user.bio || '');
 
+      // Load social media links if user is an artist
       if (user.artists) {
-        setCommissionStatus(user.artists.commission_status || 'closed');
-        setMinPrice(user.artists.min_price?.toString() || '');
-        setMaxPrice(user.artists.max_price?.toString() || '');
-        setTurnaroundDays(user.artists.turnaround_days?.toString() || '');
-        setSpecialties(user.artists.specialties?.join(', ') || '');
+        setInstagramUrl(user.artists.instagram_url || '');
+        setTwitterUrl(user.artists.twitter_url || '');
+        setTiktokUrl(user.artists.tiktok_url || '');
       } else {
-        // Clear artist fields if user is not an artist
-        setCommissionStatus('closed');
-        setMinPrice('');
-        setMaxPrice('');
-        setTurnaroundDays('');
-        setSpecialties('');
+        setInstagramUrl('');
+        setTwitterUrl('');
+        setTiktokUrl('');
       }
     }
-  }, [user?.id]); // Use user.id to trigger on user change
+  }, [user?.id]);
 
   const pickProfileImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -108,36 +102,29 @@ export default function EditProfileScreen() {
         throw new Error('Failed to update profile');
       }
 
-      // Update artist profile if user is an artist
+      // Update artist social media links if user is an artist
       if (user?.artists) {
-        const artistData = {
-          commission_status: commissionStatus,
-        };
+        const artistData = {};
+        if (instagramUrl) artistData.instagram_url = instagramUrl.trim();
+        if (twitterUrl) artistData.twitter_url = twitterUrl.trim();
+        if (tiktokUrl) artistData.tiktok_url = tiktokUrl.trim();
 
-        if (minPrice) artistData.min_price = parseFloat(minPrice);
-        if (maxPrice) artistData.max_price = parseFloat(maxPrice);
-        if (turnaroundDays) artistData.turnaround_days = parseInt(turnaroundDays);
-        if (specialties) {
-          artistData.specialties = specialties
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
-        }
+        if (Object.keys(artistData).length > 0) {
+          const artistResponse = await fetch(
+            `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/users/me/artist`,
+            {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(artistData),
+            }
+          );
 
-        const artistResponse = await fetch(
-          `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/users/me/artist`,
-          {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(artistData),
+          if (!artistResponse.ok) {
+            throw new Error('Failed to update artist profile');
           }
-        );
-
-        if (!artistResponse.ok) {
-          throw new Error('Failed to update artist profile');
         }
       }
 
@@ -155,8 +142,6 @@ export default function EditProfileScreen() {
       setLoading(false);
     }
   };
-
-  const isCommissionsOpen = commissionStatus === 'open';
 
   return (
     <View style={styles.container}>
@@ -234,81 +219,56 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
-        {/* Artist Settings */}
+        {/* Social Media Links (for artists only) */}
         {user?.artists && (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Commission Settings</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Social Media</Text>
+            <Text style={styles.sublabel}>
+              Link your social media accounts to get verified
+            </Text>
 
-              <View style={styles.switchRow}>
-                <View style={styles.switchLabel}>
-                  <Text style={styles.label}>Accepting Commissions</Text>
-                  <Text style={styles.sublabel}>
-                    {isCommissionsOpen ? 'Open for work' : 'Not accepting commissions'}
-                  </Text>
-                </View>
-                <Switch
-                  value={isCommissionsOpen}
-                  onValueChange={(value) => setCommissionStatus(value ? 'open' : 'closed')}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor={colors.text.primary}
+            <View style={styles.inputGroup}>
+              <View style={styles.socialInputContainer}>
+                <Ionicons name="logo-instagram" size={20} color={colors.text.primary} style={styles.socialIcon} />
+                <TextInput
+                  style={styles.socialInput}
+                  value={instagramUrl}
+                  onChangeText={setInstagramUrl}
+                  placeholder="Instagram username or URL"
+                  placeholderTextColor={colors.text.disabled}
+                  autoCapitalize="none"
                 />
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Pricing & Details</Text>
-
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.label}>Min Price ($)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={minPrice}
-                    onChangeText={setMinPrice}
-                    placeholder="50"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.label}>Max Price ($)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={maxPrice}
-                    onChangeText={setMaxPrice}
-                    placeholder="500"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Turnaround Time (days)</Text>
+            <View style={styles.inputGroup}>
+              <View style={styles.socialInputContainer}>
+                <Ionicons name="logo-twitter" size={20} color={colors.text.primary} style={styles.socialIcon} />
                 <TextInput
-                  style={styles.input}
-                  value={turnaroundDays}
-                  onChangeText={setTurnaroundDays}
-                  placeholder="7"
+                  style={styles.socialInput}
+                  value={twitterUrl}
+                  onChangeText={setTwitterUrl}
+                  placeholder="Twitter username or URL"
                   placeholderTextColor={colors.text.disabled}
-                  keyboardType="number-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Specialties</Text>
-                <TextInput
-                  style={styles.input}
-                  value={specialties}
-                  onChangeText={setSpecialties}
-                  placeholder="Portrait, Landscape, Digital Art (comma separated)"
-                  placeholderTextColor={colors.text.disabled}
+                  autoCapitalize="none"
                 />
               </View>
             </View>
-          </>
+
+            <View style={styles.inputGroup}>
+              <View style={styles.socialInputContainer}>
+                <Ionicons name="musical-notes" size={20} color={colors.text.primary} style={styles.socialIcon} />
+                <TextInput
+                  style={styles.socialInput}
+                  value={tiktokUrl}
+                  onChangeText={setTiktokUrl}
+                  placeholder="TikTok username or URL"
+                  placeholderTextColor={colors.text.disabled}
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -445,5 +405,24 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.md,
     justifyContent: 'center',
+  },
+  socialInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+  },
+  socialIcon: {
+    marginRight: spacing.sm,
+  },
+  socialInput: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    color: colors.text.primary,
+    fontSize: 15,
+    lineHeight: 20,
   },
 });

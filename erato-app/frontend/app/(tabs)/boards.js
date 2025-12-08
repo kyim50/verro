@@ -207,6 +207,27 @@ export default function BoardsScreen() {
     }
   };
 
+  const formatStatus = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'Pending';
+      case 'accepted':
+        return 'Accepted';
+      case 'declined':
+        return 'Declined';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status
+          ? status.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+          : 'Status';
+    }
+  };
+
   const renderBoard = ({ item }) => {
     const artworkCount = item.artworks?.[0]?.count || 0;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
@@ -359,7 +380,7 @@ export default function BoardsScreen() {
               <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
-                  {item.status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                  {formatStatus(item.status)}
                 </Text>
               </View>
             </View>
@@ -727,7 +748,7 @@ export default function BoardsScreen() {
                       <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedCommission.status) + '20' }]}>
                         <Ionicons name={getStatusIcon(selectedCommission.status)} size={16} color={getStatusColor(selectedCommission.status)} />
                         <Text style={[styles.detailStatusText, { color: getStatusColor(selectedCommission.status) }]}>
-                          {selectedCommission.status.replace('_', ' ').charAt(0).toUpperCase() + selectedCommission.status.replace('_', ' ').slice(1)}
+                          {formatStatus(selectedCommission.status)}
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} style={{ marginLeft: 8 }} />

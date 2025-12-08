@@ -7,6 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -48,6 +49,32 @@ export default function MessagesScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchConversations();
+  };
+
+  const handleDeleteConversation = (conversationId) => {
+    Alert.alert(
+      'Delete Conversation',
+      'Hold to confirm deleting this conversation. This will remove all messages.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await axios.delete(`${API_URL}/messages/conversations/${conversationId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              await fetchConversations();
+            } catch (error) {
+              console.error('Error deleting conversation:', error);
+              const msg = error.response?.data?.error || 'Failed to delete conversation';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formatTime = (dateString) => {
@@ -107,11 +134,12 @@ export default function MessagesScreen() {
     const isOnline = isUserOnline(item.other_participant);
 
     return (
-      <TouchableOpacity
-        style={styles.conversationCard}
-        onPress={() => router.push(`/messages/${item.id}`)}
-        activeOpacity={0.7}
-      >
+            <TouchableOpacity
+              style={styles.conversationCard}
+              onPress={() => router.push(`/messages/${item.id}`)}
+              onLongPress={() => handleDeleteConversation(item.id)}
+              activeOpacity={0.7}
+            >
         <View style={styles.cardContent}>
           <View style={styles.avatarContainer}>
             <Image

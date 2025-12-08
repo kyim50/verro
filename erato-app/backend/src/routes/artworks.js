@@ -57,29 +57,34 @@ router.get(
       // Fetch artist and user data for each artwork
       const enrichedArtworks = await Promise.all(
         artworks.map(async (artwork) => {
+          // Try to fetch artist record
           const { data: artist } = await supabaseAdmin
             .from('artists')
             .select('id, rating, commission_status, user_id')
             .eq('id', artwork.artist_id)
-            .single();
+            .maybeSingle();
 
-          if (artist) {
-            const { data: user } = await supabaseAdmin
-              .from('users')
-              .select('username, avatar_url, full_name')
-              .eq('id', artist.user_id || artist.id)
-              .single();
+          // Fetch the linked user (fallback: use artist_id as user id)
+          const userId = artist?.user_id || artwork.artist_id;
+          const { data: user } = await supabaseAdmin
+            .from('users')
+            .select('id, username, avatar_url, full_name')
+            .eq('id', userId)
+            .maybeSingle();
 
-            return {
-              ...artwork,
-              artists: {
-                ...artist,
-                users: user
-              }
-            };
-          }
-
-          return artwork;
+          return {
+            ...artwork,
+            artist_username: user?.username ?? artwork.artist_username,
+            artist_avatar: user?.avatar_url ?? artwork.artist_avatar,
+            artist_full_name: user?.full_name ?? artwork.artist_full_name,
+            artist_user_id: user?.id ?? artist?.user_id ?? artwork.artist_id,
+            artists: artist
+              ? {
+                  ...artist,
+                  users: user,
+                }
+              : undefined,
+          };
         })
       );
 

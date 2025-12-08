@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -21,6 +22,7 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 import { useCallback } from 'react';
+import { uploadImage } from '../../utils/imageUpload';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -137,6 +139,47 @@ export default function ConversationScreen() {
     }
   };
 
+  const handleImagePick = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photos');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setSending(true);
+      try {
+        const imageUrl = await uploadImage(result.assets[0].uri, 'messages', '', token);
+        if (!imageUrl) {
+          throw new Error('Upload failed');
+        }
+
+        await axios.post(
+          `${API_URL}/messages/conversations/${id}/messages`,
+          {
+            content: ' ',
+            image_url: imageUrl,
+            message_type: 'image',
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        await fetchMessages();
+      } catch (error) {
+        console.error('Error sending image:', error);
+        Alert.alert('Error', 'Failed to send image. Please try again.');
+      } finally {
+        setSending(false);
+      }
+    }
+  };
+
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
@@ -205,25 +248,20 @@ export default function ConversationScreen() {
     return false;
   };
 
-  const renderCommissionRequest = (item) => {
+  const renderCommissionRequest = (item, index) => {
     const metadata = item.metadata || {};
     // The sender is the client, so if current user is NOT the sender, they are the artist
     const isArtist = user?.id !== item.sender_id;
     const isPending = commission && commission.status === 'pending';
 
-    // Debug logging
-    console.log('Commission Request Debug:', {
-      currentUserId: user?.id,
-      senderId: item.sender_id,
-      isArtist,
-      commission,
-      commissionStatus: commission?.status,
-      isPending,
-      showButtons: isArtist && isPending
-    });
-
     return (
-      <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
+      <>
+        {shouldShowDayHeader(item, index) && (
+          <View style={styles.dayHeaderContainer}>
+            <Text style={styles.dayHeaderText}>{formatDayHeader(item.created_at)}</Text>
+          </View>
+        )}
+        <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
         <TouchableOpacity
           style={styles.commissionCardContent}
           onPress={() => {
@@ -290,11 +328,84 @@ export default function ConversationScreen() {
 
         <Text style={styles.commissionTime}>{formatTime(item.created_at)}</Text>
       </View>
+      </>
     );
   };
 
-  const renderCommissionUpdate = (item) => {
+  const formatDayHeader = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return date.toLocaleDateString([], { weekday: 'long' });
+    } else {
+      return date.toLocaleDateString([], { 
+        month: 'long', 
+        day: 'numeric', 
+        year: now.getFullYear() !== date.getFullYear() ? 'numeric' : undefined 
+      });
+    }
+  };
+
+  const shouldShowDayHeader = (item, index) => {
+    if (index === 0) return true;
+    const prevMessage = messages[index - 1];
+    if (!prevMessage) return true;
+
+    const currentDate = new Date(item.created_at);
+    const prevDate = new Date(prevMessage.created_at);
+
+    return currentDate.toDateString() !== prevDate.toDateString();
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Primary (original) route
+              await axios.delete(
+                `${API_URL}/messages/conversations/${id}/messages/${messageId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              await fetchMessages();
+            } catch (error) {
+              // Fallback route
+              try {
+                await axios.delete(
+                  `${API_URL}/conversations/${id}/messages/${messageId}`,
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
+                await fetchMessages();
+              } catch (err) {
+                console.error('Error deleting message:', err?.response?.data || err.message || err);
+                const msg = err.response?.data?.error || 'Failed to delete message';
+                Alert.alert('Error', msg);
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderCommissionUpdate = (item, index) => {
     const metadata = item.metadata || {};
+    const prevMessage = index > 0 ? messages[index - 1] : null;
+    const showTime = !prevMessage ||
+      prevMessage.sender_id !== item.sender_id ||
+      (new Date(item.created_at) - new Date(prevMessage.created_at)) > 60000;
 
     // Determine icon and color based on update type
     let iconName = 'information-circle';
@@ -315,19 +426,29 @@ export default function ConversationScreen() {
     }
 
     return (
-      <View style={styles.systemMessageContainer}>
-        <View style={[styles.systemMessageBubble, { borderColor: iconColor + '30' }]}>
-          <Ionicons name={iconName} size={18} color={iconColor} />
-          <Text style={styles.systemMessageText}>{item.content}</Text>
+      <>
+        {shouldShowDayHeader(item, index) && (
+          <View style={styles.dayHeaderContainer}>
+            <Text style={styles.dayHeaderText}>{formatDayHeader(item.created_at)}</Text>
+          </View>
+        )}
+        <View style={styles.systemMessageContainer}>
+          <View style={[styles.systemMessageBubble, { borderColor: iconColor + '30' }]}>
+            <Ionicons name={iconName} size={18} color={iconColor} />
+            <Text style={styles.systemMessageText}>{item.content}</Text>
+          </View>
+          {showTime && (
+            <Text style={styles.systemMessageTime}>{formatTime(item.created_at)}</Text>
+          )}
         </View>
-      </View>
+      </>
     );
   };
 
   const renderMessage = ({ item, index }) => {
     // Handle special message types
     if (item.message_type === 'commission_request') {
-      return renderCommissionRequest(item);
+      return renderCommissionRequest(item, index);
     }
 
     if (item.message_type === 'commission_update') {
@@ -336,39 +457,67 @@ export default function ConversationScreen() {
 
     const isOwn = item.sender_id === user?.id;
     const prevMessage = index > 0 ? messages[index - 1] : null;
-    const showAvatar = !isOwn && (!prevMessage || prevMessage.sender_id !== item.sender_id);
+    const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
     const showTime = !prevMessage ||
       prevMessage.sender_id !== item.sender_id ||
-      (new Date(item.created_at) - new Date(prevMessage.created_at)) > 60000; // 1 minute
+      (new Date(item.created_at) - new Date(prevMessage.created_at)) > 1000 * 60 * 5;
+    const isLastInGroup = !nextMessage ||
+      nextMessage.sender_id !== item.sender_id ||
+      (new Date(nextMessage.created_at) - new Date(item.created_at)) > 1000 * 60 * 5;
+
+    const isRead = item.is_read && isOwn;
 
     return (
-      <View style={[styles.messageRow, isOwn && styles.messageRowOwn]}>
-        {!isOwn && (
-          <View style={styles.avatarContainer}>
-            {showAvatar ? (
-              <Image
-                source={{ uri: otherUser?.avatar_url || 'https://via.placeholder.com/28' }}
-                style={styles.avatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.avatarSpacer} />
-            )}
+      <>
+        {shouldShowDayHeader(item, index) && (
+          <View style={styles.dayHeaderContainer}>
+            <Text style={styles.dayHeaderText}>{formatDayHeader(item.created_at)}</Text>
           </View>
         )}
-
-        <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
-          <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
-            {item.content}
-          </Text>
-        </View>
-
-        {showTime && (
-          <Text style={[styles.time, isOwn && styles.timeOwn]}>
-            {formatTime(item.created_at)}
-          </Text>
-        )}
-      </View>
+        <TouchableOpacity
+          style={[styles.messageRow, isOwn && styles.messageRowOwn]}
+          onLongPress={() => {
+            if (isOwn) {
+              handleDeleteMessage(item.id);
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.messageContentContainer, isOwn && styles.messageContentContainerOwn]}>
+            {item.image_url ? (
+              <View style={styles.imageMessageContainer}>
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={styles.imageMessage}
+                  contentFit="cover"
+                  cachePolicy="none"
+                />
+              </View>
+            ) : (
+              <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+                <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
+                  {item.content}
+                </Text>
+              </View>
+            )}
+            
+            {(showTime || (isOwn && isLastInGroup)) && (
+              <View style={styles.messageFooter}>
+                {showTime && isLastInGroup && (
+                  <Text style={[styles.time, isOwn && styles.timeOwn]}>
+                    {formatTime(item.created_at)}
+                  </Text>
+                )}
+                {isOwn && isLastInGroup && (
+                  <Text style={[styles.statusText, isRead && styles.statusTextRead]}>
+                    {isRead ? 'Read' : 'Delivered'}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </>
     );
   };
 
@@ -524,7 +673,7 @@ export default function ConversationScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -599,8 +748,11 @@ export default function ConversationScreen() {
 
       <View style={styles.inputContainer}>
         <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.inputActionButton}>
-            <Ionicons name="add-circle" size={28} color={colors.primary} />
+          <TouchableOpacity 
+            style={styles.inputActionButton}
+            onPress={handleImagePick}
+          >
+            <Ionicons name="add-circle" size={32} color={colors.primary} />
           </TouchableOpacity>
 
           <View style={styles.inputWrapper}>
@@ -651,6 +803,10 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.sm,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    borderBottomLeftRadius: borderRadius.lg,
+    borderBottomRightRadius: borderRadius.lg,
   },
   backButton: {
     marginRight: spacing.xs,
@@ -705,16 +861,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messagesList: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+  },
+  dayHeaderContainer: {
+    alignItems: 'center',
+    marginVertical: spacing.md,
+  },
+  dayHeaderText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 2,
+    marginBottom: spacing.xs,
     alignItems: 'flex-end',
   },
   messageRowOwn: {
     justifyContent: 'flex-end',
+  },
+  messageContentContainer: {
+    flex: 1,
+    maxWidth: '90%',
+  },
+  messageContentContainerOwn: {
+    alignItems: 'flex-end',
   },
   avatarContainer: {
     width: 28,
@@ -732,19 +906,25 @@ const styles = StyleSheet.create({
     height: 28,
   },
   bubble: {
-    maxWidth: '75%',
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 20,
-    marginBottom: 2,
+    maxWidth: '100%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 1,
+    borderRadius: 16,
+    marginBottom: spacing.xs / 2,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 1.5,
+    elevation: 1,
   },
   bubbleOwn: {
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 6,
+    borderBottomRightRadius: 10,
   },
   bubbleOther: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: 6,
+    backgroundColor: colors.surfaceLight,
+    borderBottomLeftRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -759,14 +939,50 @@ const styles = StyleSheet.create({
   },
   time: {
     ...typography.caption,
-    color: colors.text.disabled,
+    color: colors.text.secondary,
     fontSize: 11,
-    marginLeft: spacing.xs,
-    marginBottom: 4,
   },
   timeOwn: {
-    marginRight: spacing.xs,
-    marginLeft: 0,
+    color: colors.text.secondary,
+  },
+  statusText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    marginLeft: spacing.sm,
+  },
+  statusTextRead: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  imageMessageContainer: {
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginBottom: 2,
+    maxWidth: 260,
+    backgroundColor: colors.surfaceLight,
+  },
+  imageMessage: {
+    width: 260,
+    height: 220,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceLight,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 4,
+  },
+  statusContainer: {
+    marginLeft: spacing.xs / 2,
+  },
+  systemMessageTime: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   commissionCard: {
     backgroundColor: colors.surface,
@@ -1019,42 +1235,42 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   inputActionButton: {
-    width: 32,
-    height: 32,
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 40,
-    maxHeight: 100,
+    minHeight: 44,
+    maxHeight: 110,
     justifyContent: 'center',
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   input: {
     ...typography.body,
     color: colors.text.primary,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     fontSize: 15,
     lineHeight: 20,
     textAlignVertical: 'center',
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
 });

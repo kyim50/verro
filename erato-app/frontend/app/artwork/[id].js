@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { useAuthStore, useBoardStore } from '../../store';
+import { useAuthStore, useBoardStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -24,6 +24,7 @@ export default function ArtworkDetailScreen() {
   const { id } = useLocalSearchParams();
   const { user, token } = useAuthStore();
   const { saveArtworkToBoard, boards, fetchBoards, createBoard } = useBoardStore();
+  const feedStore = useFeedStore();
 
   const [artwork, setArtwork] = useState(null);
   const [similarArtworks, setSimilarArtworks] = useState([]);
@@ -144,6 +145,57 @@ export default function ArtworkDetailScreen() {
     }
   };
 
+  const handleDeleteArtwork = () => {
+    if (!token || !artwork || artwork.artist_id !== user?.id) return;
+    Alert.alert(
+      'Delete Artwork',
+      'Are you sure you want to delete this artwork? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await axios.delete(`${API_URL}/artworks/${artwork.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+
+              // Optimistically remove from local feed
+              try {
+                feedStore.removeArtwork?.(artwork.id);
+              } catch (e) {
+                console.warn('Local feed removal failed:', e?.message || e);
+              }
+
+              // Force refetch feed to drop the deleted item everywhere
+              try {
+                feedStore.reset?.();
+                await feedStore.fetchArtworks?.(true);
+              } catch (e) {
+                console.warn('Feed refresh after delete failed:', e?.message || e);
+              }
+
+              // Refresh boards (e.g., Created board) to remove it there too
+              try {
+                await fetchBoards();
+              } catch (e) {
+                console.warn('Boards refresh after delete failed:', e?.message || e);
+              }
+
+              Alert.alert('Deleted', 'Artwork removed');
+              router.back();
+            } catch (error) {
+              console.error('Error deleting artwork:', error?.response?.data || error.message || error);
+              const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -169,9 +221,16 @@ export default function ArtworkDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="share-outline" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {isOwnArtwork && (
+            <TouchableOpacity style={styles.headerButton} onPress={handleDeleteArtwork}>
+              <Ionicons name="trash-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="share-outline" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -225,7 +284,27 @@ export default function ArtworkDetailScreen() {
               <Text style={styles.statText}>{artwork.like_count || 0} likes</Text>
             </View>
           </View>
+
+          {/* Owner actions */}
+          {isOwnArtwork && (
+            <View style={styles.ownerActions}>
+              <TouchableOpacity style={styles.ownerActionButton} onPress={handleDeleteArtwork}>
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+                <Text style={styles.ownerActionText}>Delete artwork</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+
+        {/* Owner actions */}
+        {isOwnArtwork && (
+          <View style={styles.ownerActions}>
+            <TouchableOpacity style={styles.ownerActionButton} onPress={handleDeleteArtwork}>
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
+              <Text style={styles.ownerActionText}>Delete artwork</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Artist Info */}
         <View style={styles.artistSection}>
@@ -331,7 +410,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
   },
   headerButton: {
     width: 40,
@@ -340,6 +420,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  ownerActions: {
+    marginTop: spacing.sm,
+  },
+  ownerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  ownerActionText: {
+    ...typography.bodyBold,
+    color: colors.error,
   },
   scrollContent: {
     flexGrow: 1,
@@ -357,7 +455,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   infoSection: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   titleRow: {
     flexDirection: 'row',
@@ -377,14 +477,14 @@ const styles = StyleSheet.create({
   description: {
     ...typography.body,
     color: colors.text.secondary,
-    lineHeight: 24,
-    marginBottom: spacing.md,
+    lineHeight: 22,
+    marginBottom: spacing.sm,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   tag: {
     paddingHorizontal: spacing.md,
@@ -398,10 +498,15 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    gap: spacing.lg,
-    paddingTop: spacing.md,
+    gap: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    borderBottomWidth: 0,
+    alignItems: 'center',
+    marginTop: -spacing.sm,
+    marginBottom: spacing.xs,
   },
   stat: {
     flexDirection: 'row',
@@ -413,9 +518,10 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   artistSection: {
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 0,
+    paddingBottom: spacing.md,
+    marginTop: -spacing.md,
   },
   artistInfo: {
     flexDirection: 'row',

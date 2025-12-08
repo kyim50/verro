@@ -106,6 +106,7 @@ export const useFeedStore = create((set, get) => ({
   page: 1,
   hasMore: true,
   isLoading: false,
+  removedIds: [],
 
   fetchArtworks: async (reset = false) => {
     if (get().isLoading || (!reset && !get().hasMore)) return;
@@ -118,11 +119,16 @@ export const useFeedStore = create((set, get) => ({
         params: { page, limit: 20 },
       });
 
-      const newArtworks = response.data.artworks;
+      const removedIds = get().removedIds || [];
+      const newArtworks = (response.data.artworks || []).filter(
+        (a) => !removedIds.includes(String(a.id))
+      );
       const hasMore = response.data.pagination.page < response.data.pagination.totalPages;
 
       set({
-        artworks: reset ? newArtworks : [...get().artworks, ...newArtworks],
+        artworks: reset
+          ? newArtworks
+          : [...get().artworks.filter((a) => !removedIds.includes(String(a.id))), ...newArtworks],
         page: page + 1,
         hasMore,
         isLoading: false,
@@ -133,7 +139,17 @@ export const useFeedStore = create((set, get) => ({
     }
   },
 
-  reset: () => set({ artworks: [], page: 1, hasMore: true }),
+  removeArtwork: (artworkId) =>
+    set((state) => {
+      const id = String(artworkId);
+      const removed = state.removedIds.includes(id) ? state.removedIds : [...state.removedIds, id];
+      return {
+        removedIds: removed,
+        artworks: state.artworks.filter((a) => String(a.id) !== id),
+      };
+    }),
+
+  reset: () => set({ artworks: [], page: 1, hasMore: true, isLoading: false }),
 }));
 
 // Swipe store for Tinder-style feature
