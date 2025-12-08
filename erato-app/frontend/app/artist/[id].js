@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -39,7 +39,11 @@ export default function ArtistProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedPortfolioIndex, setSelectedPortfolioIndex] = useState(null);
+  const [isModalClosing, setIsModalClosing] = useState(false);
   const portfolioFlatListRef = useRef(null);
+  const isClosingModal = useRef(false);
+  const lastClosedIndex = useRef(null);
+  const lastCloseTime = useRef(0);
 
   useEffect(() => {
     fetchArtistProfile();
@@ -117,6 +121,29 @@ export default function ArtistProfileScreen() {
         Alert.alert('Error', error.response?.data?.error || 'Failed to start conversation. Please try again.');
       }
     }
+  };
+
+  const handleCloseModal = () => {
+    if (selectedPortfolioIndex === null || isClosingModal.current) {
+      return;
+    }
+    
+    // Immediately prevent any portfolio interactions - set both ref and state
+    isClosingModal.current = true;
+    setIsModalClosing(true);
+    const indexToClose = selectedPortfolioIndex;
+    lastClosedIndex.current = indexToClose;
+    lastCloseTime.current = Date.now();
+    
+    // Close the modal immediately
+    setSelectedPortfolioIndex(null);
+    
+    // Keep blocking for much longer to ensure no touches from closing propagate through
+    // The fade animation is ~300ms, but we need extra time for React to process the state change
+    setTimeout(() => {
+      isClosingModal.current = false;
+      setIsModalClosing(false);
+    }, 1000);
   };
 
   const handleCommission = () => {
@@ -393,13 +420,17 @@ export default function ArtistProfileScreen() {
           {/* Action Buttons */}
           {!isOwnProfile && (
             <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.messageButton]}
-                onPress={handleMessage}
-              >
-                <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
-                <Text style={styles.messageButtonText}>Message</Text>
-              </TouchableOpacity>
+              {/* Show Message button for artists (they can message each other) */}
+              {(user?.user_type === 'artist' || user?.artists) && (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.messageButton]}
+                  onPress={handleMessage}
+                >
+                  <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
+                  <Text style={styles.messageButtonText}>Message</Text>
+                </TouchableOpacity>
+              )}
+              {/* Show Request Commission button only for clients */}
               {user?.user_type !== 'artist' && !user?.artists && (
                 <TouchableOpacity
                   style={[
@@ -422,7 +453,14 @@ export default function ArtistProfileScreen() {
 
         {/* Portfolio Images */}
         {artist.portfolio_images && artist.portfolio_images.length > 0 && (
-          <View style={[styles.section, { paddingHorizontal: 0 }]}>
+          <View 
+            style={[styles.section, { paddingHorizontal: 0, position: 'relative' }]}
+            pointerEvents={isModalClosing ? 'none' : 'auto'}
+          >
+            {/* Touch blocker when modal is closing */}
+            {isModalClosing && (
+              <View style={styles.touchBlocker} />
+            )}
             <View style={[styles.sectionHeader, { paddingHorizontal: spacing.lg }]}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="images-outline" size={20} color={colors.primary} />
@@ -432,19 +470,52 @@ export default function ArtistProfileScreen() {
 
             <FlatList
               data={artist.portfolio_images}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  style={styles.portfolioCard}
-                  onPress={() => setSelectedPortfolioIndex(index)}
-                  activeOpacity={0.9}
-                >
-                  <Image
-                    source={{ uri: item }}
-                    style={styles.portfolioImage}
-                    contentFit="cover"
-                  />
-                </TouchableOpacity>
-              )}
+              scrollEnabled={selectedPortfolioIndex === null && !isModalClosing}
+              renderItem={({ item, index }) => {
+                const handlePortfolioPress = (e) => {
+                  // Stop any event propagation immediately
+                  if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                  
+                  // Prevent opening if modal is visible
+                  if (selectedPortfolioIndex !== null) {
+                    return;
+                  }
+                  
+                  // Block if we're in closing state - CRITICAL CHECK (check both ref and state)
+                  if (isClosingModal.current || isModalClosing) {
+                    return;
+                  }
+                  
+                  // Extended cooldown to prevent reopening of the same image that was just closed
+                  const timeSinceClose = Date.now() - lastCloseTime.current;
+                  if (lastClosedIndex.current === index && timeSinceClose < 1000) {
+                    return;
+                  }
+                  
+                  // Final check before opening - must pass ALL checks
+                  if (!isClosingModal.current && !isModalClosing && selectedPortfolioIndex === null) {
+                    setSelectedPortfolioIndex(index);
+                  }
+                };
+
+                return (
+                  <TouchableOpacity
+                    style={styles.portfolioCard}
+                    onPress={handlePortfolioPress}
+                    activeOpacity={0.9}
+                    disabled={selectedPortfolioIndex !== null || isModalClosing}
+                  >
+                    <Image
+                      source={{ uri: item }}
+                      style={styles.portfolioImage}
+                      contentFit="cover"
+                    />
+                  </TouchableOpacity>
+                );
+              }}
               keyExtractor={(item, index) => index.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -452,6 +523,7 @@ export default function ArtistProfileScreen() {
               snapToAlignment="start"
               decelerationRate="fast"
               snapToInterval={width * 0.85 + spacing.md}
+              pointerEvents={isModalClosing ? 'none' : 'auto'}
             />
           </View>
         )}
@@ -533,7 +605,7 @@ export default function ArtistProfileScreen() {
         visible={selectedPortfolioIndex !== null}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setSelectedPortfolioIndex(null)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalContainer}>
           <StatusBar barStyle="light-content" />
@@ -542,7 +614,7 @@ export default function ArtistProfileScreen() {
           <View style={styles.modalHeader}>
             <TouchableOpacity
               style={styles.modalCloseButton}
-              onPress={() => setSelectedPortfolioIndex(null)}
+              onPress={handleCloseModal}
             >
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
@@ -576,8 +648,15 @@ export default function ArtistProfileScreen() {
               index,
             })}
             onMomentumScrollEnd={(event) => {
+              // Don't update index if modal is closing or already closed
+              if (isClosingModal.current || isModalClosing || selectedPortfolioIndex === null) {
+                return;
+              }
               const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
-              setSelectedPortfolioIndex(newIndex);
+              // Only update if we have a valid index and modal is still visible
+              if (newIndex >= 0 && newIndex < (artist?.portfolio_images?.length || 0) && selectedPortfolioIndex !== null) {
+                setSelectedPortfolioIndex(newIndex);
+              }
             }}
           />
         </View>
@@ -659,14 +738,14 @@ const styles = StyleSheet.create({
   artistHeader: {
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   avatar: {
     width: IS_SMALL_SCREEN ? 100 : 120,
     height: IS_SMALL_SCREEN ? 100 : 120,
     borderRadius: IS_SMALL_SCREEN ? 50 : 60,
-    marginBottom: spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   artistName: {
     ...typography.h1,
@@ -698,18 +777,19 @@ const styles = StyleSheet.create({
   bio: {
     ...typography.body,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     textAlign: 'center',
-    marginBottom: spacing.lg,
-    lineHeight: 22,
+    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    lineHeight: IS_SMALL_SCREEN ? 20 : 22,
   },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    padding: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    gap: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   statItem: {
     flex: 1,
@@ -737,7 +817,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     gap: spacing.xs,
-    marginBottom: spacing.lg,
+    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   statusOpen: {
     backgroundColor: `${colors.success}20`,
@@ -757,13 +837,13 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     width: '100%',
-    gap: spacing.sm,
+    marginTop: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     borderRadius: borderRadius.lg,
     gap: spacing.sm,
   },
@@ -907,6 +987,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  touchBlocker: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    backgroundColor: 'transparent',
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#000',
@@ -954,8 +1043,8 @@ const styles = StyleSheet.create({
   socialLinksContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   socialLink: {
     width: 44,

@@ -25,10 +25,10 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token) 
     }
 
     // Determine content type
-    const ext = uri.split('.').pop();
+    const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
     const contentType = getContentType(ext);
 
-    // Create form data
+    // Create form data with proper React Native format
     const formData = new FormData();
     formData.append('file', {
       uri,
@@ -40,24 +40,32 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token) 
     const endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : bucket === 'portfolios' ? 'portfolio' : 'artwork'}`;
 
     // Upload to backend API
+    // Note: Don't set Content-Type header manually - axios will set it with proper boundary
     const response = await axios.post(endpoint, formData, {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
+        // Axios will automatically set Content-Type: multipart/form-data with boundary
       },
     });
 
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Upload failed');
+    if (!response.data || !response.data.success) {
+      throw new Error(response.data?.error || 'Upload failed');
     }
 
     return response.data.url;
   } catch (error) {
     console.error('Error uploading image:', error);
     if (error.response) {
-      throw new Error(error.response.data.error || 'Failed to upload image');
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+      const errorMessage = error.response.data?.error || error.response.data?.message || 'Failed to upload image';
+      throw new Error(errorMessage);
     }
-    throw new Error('Failed to upload image');
+    if (error.request) {
+      console.error('Request made but no response received:', error.request);
+      throw new Error('Network error: Could not reach server');
+    }
+    throw new Error(error.message || 'Failed to upload image');
   }
 }
 
@@ -91,7 +99,7 @@ export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '
       const response = await axios.post(`${API_URL}/uploads/portfolio`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          // Axios will automatically set Content-Type: multipart/form-data with boundary
         },
       });
 
