@@ -264,7 +264,7 @@ router.get('/:id/boards', optionalAuth, async (req, res) => {
   try {
     const userId = req.params.id;
 
-    // Build query to get boards
+    // Build query to get boards - optimized to only get count, not full artwork data
     let query = supabaseAdmin
       .from('boards')
       .select(`
@@ -274,14 +274,7 @@ router.get('/:id/boards', optionalAuth, async (req, res) => {
         board_type,
         is_public,
         created_at,
-        board_artworks(
-          artworks(
-            id,
-            title,
-            image_url,
-            thumbnail_url
-          )
-        )
+        board_artworks(count)
       `)
       .eq('user_id', userId);
 
@@ -295,10 +288,15 @@ router.get('/:id/boards', optionalAuth, async (req, res) => {
 
     if (error) throw error;
 
-    // Add artwork count to each board
+    // Add artwork count to each board (more efficient than loading full artwork data)
     const boardsWithCount = boards.map(board => ({
-      ...board,
-      artwork_count: board.board_artworks?.length || 0,
+      id: board.id,
+      name: board.name,
+      description: board.description,
+      board_type: board.board_type,
+      is_public: board.is_public,
+      created_at: board.created_at,
+      artwork_count: Array.isArray(board.board_artworks) ? board.board_artworks.length : 0,
     }));
 
     res.json(boardsWithCount);

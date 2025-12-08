@@ -105,17 +105,21 @@ router.post('/request', authenticate, async (req, res) => {
 // Get user's commissions (as client or artist)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { type = 'all', status } = req.query;
+    const { type = 'all', status, clientId, artistId } = req.query;
 
     let query = supabaseAdmin
       .from('commissions')
-      .select(`
-        *,
-        artwork:artworks(id, title, thumbnail_url, image_url)
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (type === 'received') {
+    // Support filtering by clientId and artistId (for client profile view)
+    if (clientId && artistId) {
+      query = query.eq('client_id', clientId).eq('artist_id', artistId);
+    } else if (clientId) {
+      query = query.eq('client_id', clientId);
+    } else if (artistId) {
+      query = query.eq('artist_id', artistId);
+    } else if (type === 'received') {
       // Commissions received as artist
       query = query.eq('artist_id', req.user.id);
     } else if (type === 'sent') {
@@ -134,44 +138,72 @@ router.get('/', authenticate, async (req, res) => {
 
     if (error) throw error;
 
-    // Manually fetch client and artist data for each commission
-    const enrichedCommissions = await Promise.all(
-      commissions.map(async (commission) => {
-        // Fetch client data
-        const { data: client } = await supabaseAdmin
+    if (!commissions || commissions.length === 0) {
+      return res.json({ commissions: [] });
+    }
+
+    // Get unique client and artist IDs for batch fetching
+    const clientIds = [...new Set(commissions.map(c => c.client_id).filter(Boolean))];
+    const artistIds = [...new Set(commissions.map(c => c.artist_id).filter(Boolean))];
+    const artworkIds = [...new Set(commissions.map(c => c.artwork_id).filter(Boolean))];
+
+    // Fetch all related data in parallel (no loops!)
+    const [clientsResult, artistsResult, artworksResult] = await Promise.all([
+      // Fetch all clients
+      supabaseAdmin
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', clientIds),
+      
+      // Fetch all artists
+      supabaseAdmin
+        .from('artists')
+        .select('id, user_id')
+        .in('id', artistIds),
+      
+      // Fetch all artworks (if any)
+      artworkIds.length > 0
+        ? supabaseAdmin
+            .from('artworks')
+            .select('id, title, thumbnail_url, image_url')
+            .in('id', artworkIds)
+        : Promise.resolve({ data: [] })
+    ]);
+
+    // Get artist user IDs
+    const artistUserIds = artistsResult.data?.map(a => a.user_id || a.id).filter(Boolean) || [];
+    
+    // Fetch artist users
+    const { data: artistUsers } = artistUserIds.length > 0
+      ? await supabaseAdmin
           .from('users')
           .select('id, username, full_name, avatar_url')
-          .eq('id', commission.client_id)
-          .single();
+          .in('id', artistUserIds)
+      : { data: [] };
 
-        // Fetch artist data
-        const { data: artist } = await supabaseAdmin
-          .from('artists')
-          .select('id')
-          .eq('id', commission.artist_id)
-          .single();
+    // Create lookup maps for O(1) access
+    const clientMap = new Map(clientsResult.data?.map(c => [c.id, c]) || []);
+    const artistMap = new Map(artistsResult.data?.map(a => [a.id, a]) || []);
+    const artistUserMap = new Map(artistUsers?.map(u => [u.id, u]) || []);
+    const artworkMap = new Map(artworksResult.data?.map(a => [a.id, a]) || []);
 
-        let artistWithUser = null;
-        if (artist) {
-          const { data: artistUser } = await supabaseAdmin
-            .from('users')
-            .select('username, full_name, avatar_url')
-            .eq('id', artist.id)
-            .single();
+    // Enrich commissions with pre-fetched data (no additional queries)
+    const enrichedCommissions = commissions.map((commission) => {
+      const client = clientMap.get(commission.client_id);
+      const artist = artistMap.get(commission.artist_id);
+      const artistUser = artist ? artistUserMap.get(artist.user_id || artist.id) : null;
+      const artwork = commission.artwork_id ? artworkMap.get(commission.artwork_id) : null;
 
-          artistWithUser = {
-            ...artist,
-            users: artistUser
-          };
-        }
-
-        return {
-          ...commission,
-          client,
-          artist: artistWithUser
-        };
-      })
-    );
+      return {
+        ...commission,
+        client,
+        artist: artist ? {
+          ...artist,
+          users: artistUser
+        } : null,
+        artwork: artwork || null
+      };
+    });
 
     res.json({ commissions: enrichedCommissions });
   } catch (error) {
@@ -336,21 +368,23 @@ router.patch('/:id/status', authenticate, async (req, res) => {
 
     if (error) throw error;
 
-    // Send status update message
-    const { data: conversation } = await supabaseAdmin
-      .from('conversations')
-      .select('id')
-      .eq('commission_id', req.params.id)
-      .single();
+    // Only send status update message if skip_message is not true
+    if (!req.body.skip_message) {
+      const { data: conversation } = await supabaseAdmin
+        .from('conversations')
+        .select('id')
+        .eq('commission_id', req.params.id)
+        .single();
 
-    if (conversation) {
-      await supabaseAdmin.from('messages').insert({
-        conversation_id: conversation.id,
-        sender_id: req.user.id,
-        message_type: 'commission_update',
-        content: `Commission status updated to: ${finalStatus}`,
-        metadata: { status: finalStatus, commission_id: req.params.id }
-      });
+      if (conversation) {
+        await supabaseAdmin.from('messages').insert({
+          conversation_id: conversation.id,
+          sender_id: req.user.id,
+          message_type: 'commission_update',
+          content: `Commission status updated to: ${finalStatus}`,
+          metadata: { status: finalStatus, commission_id: req.params.id }
+        });
+      }
     }
 
     res.json(updated);

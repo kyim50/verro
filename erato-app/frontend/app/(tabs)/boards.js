@@ -18,6 +18,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import ReviewModal from '../../components/ReviewModal';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -37,6 +38,8 @@ export default function BoardsScreen() {
   const [likedSortOrder, setLikedSortOrder] = useState('newest'); // 'newest' or 'oldest'
   const [selectedCommission, setSelectedCommission] = useState(null);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [pendingReviewCommission, setPendingReviewCommission] = useState(null);
 
   useEffect(() => {
     loadBoards();
@@ -110,12 +113,25 @@ export default function BoardsScreen() {
             try {
               await axios.patch(
                 `${API_URL}/commissions/${commissionId}/status`,
-                { status: 'completed' },
+                { status: 'completed', skip_message: true },
                 { headers: { Authorization: `Bearer ${token}` } }
               );
+              
+              // Get the updated commission
+              const commissionResponse = await axios.get(
+                `${API_URL}/commissions/${commissionId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              
               setShowCommissionModal(false);
               await loadCommissions();
               Alert.alert('Success', 'Commission has been completed!');
+              
+              // Prompt for review after completion
+              setTimeout(() => {
+                setPendingReviewCommission(commissionResponse.data);
+                setShowReviewModal(true);
+              }, 1500);
             } catch (error) {
               console.error('Error completing commission:', error);
               Alert.alert('Error', 'Failed to complete commission. Please try again.');
@@ -124,6 +140,27 @@ export default function BoardsScreen() {
         }
       ]
     );
+  };
+
+  const handleSubmitReview = async (rating, comment) => {
+    if (!pendingReviewCommission) return;
+
+    const reviewType = pendingReviewCommission.client_id === user?.id 
+      ? 'client_to_artist' 
+      : 'artist_to_client';
+
+    await axios.post(
+      `${API_URL}/reviews`,
+      {
+        commission_id: pendingReviewCommission.id,
+        rating,
+        comment,
+        review_type: reviewType,
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    Alert.alert('Thank you!', 'Your review has been submitted.');
   };
 
   const onRefresh = useCallback(async () => {
@@ -876,6 +913,39 @@ export default function BoardsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Review Modal */}
+      <ReviewModal
+        visible={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false);
+          setPendingReviewCommission(null);
+        }}
+        onSubmit={handleSubmitReview}
+        userName={
+          pendingReviewCommission
+            ? (user?.id === pendingReviewCommission.client_id
+                ? (pendingReviewCommission.artist?.users?.full_name || 
+                   pendingReviewCommission.artist?.users?.username || 
+                   'Artist')
+                : (pendingReviewCommission.client?.full_name || 
+                   pendingReviewCommission.client?.username || 
+                   'Client'))
+            : ''
+        }
+        userAvatar={
+          pendingReviewCommission
+            ? (user?.id === pendingReviewCommission.client_id
+                ? (pendingReviewCommission.artist?.users?.avatar_url || DEFAULT_AVATAR)
+                : (pendingReviewCommission.client?.avatar_url || DEFAULT_AVATAR))
+            : DEFAULT_AVATAR
+        }
+        reviewType={
+          pendingReviewCommission && user?.id === pendingReviewCommission.client_id
+            ? 'client_to_artist'
+            : 'artist_to_client'
+        }
+      />
     </View>
   );
 }

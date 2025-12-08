@@ -54,39 +54,47 @@ router.get(
 
       if (error) throw error;
 
-      // Fetch artist and user data for each artwork
-      const enrichedArtworks = await Promise.all(
-        artworks.map(async (artwork) => {
-          // Try to fetch artist record
-          const { data: artist } = await supabaseAdmin
-            .from('artists')
-            .select('id, rating, commission_status, user_id')
-            .eq('id', artwork.artist_id)
-            .maybeSingle();
+      // Batch fetch all artists and users
+      const artistIds = [...new Set(artworks.map(a => a.artist_id).filter(Boolean))];
+      
+      const [artistsResult, usersResult] = await Promise.all([
+        artistIds.length > 0
+          ? supabaseAdmin
+              .from('artists')
+              .select('id, rating, commission_status, user_id')
+              .in('id', artistIds)
+          : { data: [] },
+        artistIds.length > 0
+          ? supabaseAdmin
+              .from('users')
+              .select('id, username, avatar_url, full_name')
+              .in('id', artistIds)
+          : { data: [] }
+      ]);
 
-          // Fetch the linked user (fallback: use artist_id as user id)
-          const userId = artist?.user_id || artwork.artist_id;
-          const { data: user } = await supabaseAdmin
-            .from('users')
-            .select('id, username, avatar_url, full_name')
-            .eq('id', userId)
-            .maybeSingle();
+      const artistsMap = new Map(artistsResult.data?.map(a => [a.id, a]) || []);
+      const usersMap = new Map(usersResult.data?.map(u => [u.id, u]) || []);
 
-          return {
-            ...artwork,
-            artist_username: user?.username ?? artwork.artist_username,
-            artist_avatar: user?.avatar_url ?? artwork.artist_avatar,
-            artist_full_name: user?.full_name ?? artwork.artist_full_name,
-            artist_user_id: user?.id ?? artist?.user_id ?? artwork.artist_id,
-            artists: artist
-              ? {
-                  ...artist,
-                  users: user,
-                }
-              : undefined,
-          };
-        })
-      );
+      // Enrich artworks with batched data
+      const enrichedArtworks = artworks.map(artwork => {
+        const artist = artistsMap.get(artwork.artist_id);
+        const userId = artist?.user_id || artwork.artist_id;
+        const user = usersMap.get(userId);
+
+        return {
+          ...artwork,
+          artist_username: user?.username ?? artwork.artist_username,
+          artist_avatar: user?.avatar_url ?? artwork.artist_avatar,
+          artist_full_name: user?.full_name ?? artwork.artist_full_name,
+          artist_user_id: user?.id ?? artist?.user_id ?? artwork.artist_id,
+          artists: artist
+            ? {
+                ...artist,
+                users: user,
+              }
+            : undefined,
+        };
+      });
 
       res.json({
         artworks: enrichedArtworks,
@@ -129,10 +137,39 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       throw new AppError('Artwork not found', 404);
     }
 
+    // Calculate actual like count from "Liked" boards
+    const { data: likedBoards } = await supabaseAdmin
+      .from('boards')
+      .select('id')
+      .eq('name', 'Liked');
+
+    const likedBoardIds = likedBoards?.map(b => b.id) || [];
+    let actualLikeCount = 0;
+
+    if (likedBoardIds.length > 0) {
+      const { count } = await supabaseAdmin
+        .from('board_artworks')
+        .select('*', { count: 'exact', head: true })
+        .eq('artwork_id', req.params.id)
+        .in('board_id', likedBoardIds);
+      
+      actualLikeCount = count || 0;
+    }
+
+    // Update like_count if it's different (sync)
+    if (actualLikeCount !== (artwork.like_count || 0)) {
+      await supabaseAdmin
+        .from('artworks')
+        .update({ like_count: actualLikeCount })
+        .eq('id', req.params.id);
+      
+      artwork.like_count = actualLikeCount;
+    }
+
     // Increment view count
     await supabaseAdmin
       .from('artworks')
-      .update({ view_count: artwork.view_count + 1 })
+      .update({ view_count: (artwork.view_count || 0) + 1 })
       .eq('id', req.params.id);
 
     res.json({ artwork });
@@ -338,19 +375,169 @@ router.delete('/:id', authenticate, requireArtist, async (req, res, next) => {
   }
 });
 
-// Like artwork
+// Like artwork - increments like_count and ensures artwork is in user's Liked board
 router.post('/:id/like', authenticate, async (req, res, next) => {
   try {
-    const { data: artwork, error } = await supabase
+    const artworkId = req.params.id;
+
+    // Check if artwork exists
+    const { data: artwork, error: artworkError } = await supabaseAdmin
       .from('artworks')
-      .update({ like_count: supabase.raw('like_count + 1') })
-      .eq('id', req.params.id)
-      .select('like_count')
+      .select('id, like_count')
+      .eq('id', artworkId)
       .single();
 
-    if (error) throw error;
+    if (artworkError || !artwork) {
+      throw new AppError('Artwork not found', 404);
+    }
 
-    res.json({ message: 'Artwork liked', likeCount: artwork.like_count });
+    // Get or create user's "Liked" board
+    let { data: likedBoard } = await supabaseAdmin
+      .from('boards')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('name', 'Liked')
+      .maybeSingle();
+
+    if (!likedBoard) {
+      const { data: newBoard, error: createError } = await supabaseAdmin
+        .from('boards')
+        .insert({
+          user_id: req.user.id,
+          name: 'Liked',
+          description: 'Artworks you liked',
+          board_type: 'general',
+          is_public: false
+        })
+        .select('id')
+        .single();
+
+      if (createError) throw createError;
+      likedBoard = newBoard;
+    }
+
+    // Check if artwork is already in the board
+    const { data: existing } = await supabaseAdmin
+      .from('board_artworks')
+      .select('id')
+      .eq('board_id', likedBoard.id)
+      .eq('artwork_id', artworkId)
+      .maybeSingle();
+
+    // Only increment if not already liked
+    if (!existing) {
+      // Add to board
+      await supabaseAdmin
+        .from('board_artworks')
+        .insert({
+          board_id: likedBoard.id,
+          artwork_id: artworkId
+        });
+
+      // Increment like_count
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('artworks')
+        .update({ like_count: (artwork.like_count || 0) + 1 })
+        .eq('id', artworkId)
+        .select('like_count')
+        .single();
+
+      if (updateError) throw updateError;
+
+      res.json({ message: 'Artwork liked', likeCount: updated.like_count });
+    } else {
+      res.json({ message: 'Already liked', likeCount: artwork.like_count });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Unlike artwork - decrements like_count and removes from user's Liked board
+router.post('/:id/unlike', authenticate, async (req, res, next) => {
+  try {
+    const artworkId = req.params.id;
+
+    // Check if artwork exists
+    const { data: artwork, error: artworkError } = await supabaseAdmin
+      .from('artworks')
+      .select('id, like_count')
+      .eq('id', artworkId)
+      .single();
+
+    if (artworkError || !artwork) {
+      throw new AppError('Artwork not found', 404);
+    }
+
+    // Get user's "Liked" board
+    const { data: likedBoard } = await supabaseAdmin
+      .from('boards')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('name', 'Liked')
+      .maybeSingle();
+
+    if (likedBoard) {
+      // Remove from board
+      await supabaseAdmin
+        .from('board_artworks')
+        .delete()
+        .eq('board_id', likedBoard.id)
+        .eq('artwork_id', artworkId);
+
+      // Decrement like_count (don't go below 0)
+      const newCount = Math.max(0, (artwork.like_count || 0) - 1);
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('artworks')
+        .update({ like_count: newCount })
+        .eq('id', artworkId)
+        .select('like_count')
+        .single();
+
+      if (updateError) throw updateError;
+
+      res.json({ message: 'Artwork unliked', likeCount: updated.like_count });
+    } else {
+      res.json({ message: 'Not liked', likeCount: artwork.like_count });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get actual like count from boards (for syncing)
+router.get('/:id/like-count', optionalAuth, async (req, res, next) => {
+  try {
+    const artworkId = req.params.id;
+
+    // Get all "Liked" boards
+    const { data: likedBoards } = await supabaseAdmin
+      .from('boards')
+      .select('id')
+      .eq('name', 'Liked');
+
+    const likedBoardIds = likedBoards?.map(b => b.id) || [];
+    let count = 0;
+
+    if (likedBoardIds.length > 0) {
+      // Count how many users have this artwork in their "Liked" board
+      const { count: likeCount, error } = await supabaseAdmin
+        .from('board_artworks')
+        .select('*', { count: 'exact', head: true })
+        .eq('artwork_id', artworkId)
+        .in('board_id', likedBoardIds);
+
+      if (error) throw error;
+      count = likeCount || 0;
+    }
+
+    // Update the artwork's like_count to match
+    await supabaseAdmin
+      .from('artworks')
+      .update({ like_count: count })
+      .eq('id', artworkId);
+
+    res.json({ likeCount: count });
   } catch (error) {
     next(error);
   }

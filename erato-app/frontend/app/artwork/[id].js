@@ -19,6 +19,10 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../consta
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+const STATUS_BAR_HEIGHT = Constants.statusBarHeight || 44;
+const HEADER_HEIGHT = STATUS_BAR_HEIGHT + spacing.sm + 40 + spacing.xs; // status bar + padding + button + bottom padding
+const SCROLL_PADDING_TOP = HEADER_HEIGHT;
+const IMAGE_HEIGHT = Math.min(height * 0.6, width * 1.3);
 
 export default function ArtworkDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -90,31 +94,38 @@ export default function ArtworkDetailScreen() {
 
     // Store previous state for rollback
     const previousLikedState = isLiked;
+    const previousLikeCount = artwork?.like_count || 0;
 
     try {
-      // Find or create "Liked" board
-      let likedBoard = boards.find(b => b.name === 'Liked');
-
-      if (!likedBoard) {
-        likedBoard = await createBoard({ name: 'Liked', is_private: true });
-        await fetchBoards(); // Refresh boards after creating
-        // Get the newly created board from the updated boards list
-        const updatedBoards = useBoardStore.getState().boards;
-        likedBoard = updatedBoards.find(b => b.name === 'Liked');
+      // Optimistically update UI
+      setIsLiked(!isLiked);
+      if (artwork) {
+        setArtwork({
+          ...artwork,
+          like_count: isLiked ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1
+        });
       }
 
       if (isLiked) {
-        // Optimistically update UI
-        setIsLiked(false);
-        // Unlike - remove from board
-        await axios.delete(`${API_URL}/boards/${likedBoard.id}/artworks/${id}`, {
+        // Unlike - call unlike endpoint which handles both board and count
+        const response = await axios.post(`${API_URL}/artworks/${id}/unlike`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        // Update like count from response
+        if (artwork && response.data.likeCount !== undefined) {
+          setArtwork({ ...artwork, like_count: response.data.likeCount });
+        }
       } else {
-        // Optimistically update UI
-        setIsLiked(true);
-        // Like - add to board
-        await saveArtworkToBoard(likedBoard.id, id);
+        // Like - call like endpoint which handles both board and count
+        const response = await axios.post(`${API_URL}/artworks/${id}/like`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Update like count from response
+        if (artwork && response.data.likeCount !== undefined) {
+          setArtwork({ ...artwork, like_count: response.data.likeCount });
+        }
       }
 
       // Refresh boards to ensure state is in sync
@@ -125,6 +136,9 @@ export default function ArtworkDetailScreen() {
 
       // Rollback optimistic update on error
       setIsLiked(previousLikedState);
+      if (artwork) {
+        setArtwork({ ...artwork, like_count: previousLikeCount });
+      }
 
       // Show user-friendly error message
       const errorMessage = error.response?.data?.error || 'Failed to update like status';
@@ -219,16 +233,16 @@ export default function ArtworkDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerActions}>
           {isOwnArtwork && (
             <TouchableOpacity style={styles.headerButton} onPress={handleDeleteArtwork}>
-              <Ionicons name="trash-outline" size={22} color="#fff" />
+              <Ionicons name="trash-outline" size={20} color="#fff" />
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="share-outline" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -237,17 +251,20 @@ export default function ArtworkDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Main Image */}
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: artwork.image_url }}
-            style={styles.mainImage}
-            contentFit="cover"
-          />
+        {/* Main Image - Card container with rounded edges */}
+        <View style={styles.imageCardContainer}>
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: artwork.image_url }}
+              style={styles.mainImage}
+              contentFit="cover"
+            />
+          </View>
         </View>
 
-        {/* Artwork Info */}
-        <View style={styles.infoSection}>
+        {/* Content Section - Below image, no overlap */}
+        <View style={styles.contentSection}>
+          {/* Title and Like */}
           <View style={styles.titleRow}>
             <Text style={styles.title}>{artwork.title}</Text>
             <TouchableOpacity onPress={handleLike} style={styles.likeButton}>
@@ -258,58 +275,24 @@ export default function ArtworkDetailScreen() {
               />
             </TouchableOpacity>
           </View>
-          {artwork.description && (
-            <Text style={styles.description}>{artwork.description}</Text>
-          )}
 
-          {/* Tags */}
-          {artwork.tags && artwork.tags.length > 0 && (
-            <View style={styles.tagsContainer}>
-              {artwork.tags.map((tag, index) => (
-                <TouchableOpacity key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>#{tag}</Text>
-                </TouchableOpacity>
-              ))}
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statChip}>
+              <Ionicons name="eye-outline" size={18} color={colors.text.secondary} />
+              <Text style={styles.statChipText}>{artwork.view_count || 0} views</Text>
             </View>
-          )}
-
-          {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.stat}>
-              <Ionicons name="eye-outline" size={20} color={colors.text.secondary} />
-              <Text style={styles.statText}>{artwork.view_count || 0} views</Text>
-            </View>
-            <View style={styles.stat}>
-              <Ionicons name="heart-outline" size={20} color={colors.text.secondary} />
-              <Text style={styles.statText}>{artwork.like_count || 0} likes</Text>
+            <View style={styles.statChip}>
+              <Ionicons name="heart-outline" size={18} color={colors.text.secondary} />
+              <Text style={styles.statChipText}>{artwork.like_count || 0} likes</Text>
             </View>
           </View>
-
-          {/* Owner actions */}
-          {isOwnArtwork && (
-            <View style={styles.ownerActions}>
-              <TouchableOpacity style={styles.ownerActionButton} onPress={handleDeleteArtwork}>
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
-                <Text style={styles.ownerActionText}>Delete artwork</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
-        {/* Owner actions */}
-        {isOwnArtwork && (
-          <View style={styles.ownerActions}>
-            <TouchableOpacity style={styles.ownerActionButton} onPress={handleDeleteArtwork}>
-              <Ionicons name="trash-outline" size={20} color={colors.error} />
-              <Text style={styles.ownerActionText}>Delete artwork</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Artist Info */}
-        <View style={styles.artistSection}>
+        {/* Artist Card */}
+        <View style={styles.artistCard}>
           <TouchableOpacity
-            style={styles.artistInfo}
+            style={styles.artistCardContent}
             onPress={() => {
               if (!isOwnArtwork && artwork.artist_id) {
                 router.push(`/artist/${artwork.artist_id}`);
@@ -326,13 +309,13 @@ export default function ArtworkDetailScreen() {
               <Text style={styles.artistName}>
                 {artwork.artists?.users?.full_name || artwork.artists?.users?.username || 'Unknown Artist'}
               </Text>
-              <Text style={styles.artistBio} numberOfLines={1}>
+              <Text style={styles.artistBio} numberOfLines={2}>
                 {artwork.artists?.users?.bio || 'Artist on Verro'}
               </Text>
-              {!isOwnArtwork && (
-                <Text style={styles.viewProfileHint}>Tap to view profile</Text>
-              )}
             </View>
+            {!isOwnArtwork && (
+              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+            )}
           </TouchableOpacity>
 
           {!isOwnArtwork && (
@@ -343,7 +326,6 @@ export default function ArtworkDetailScreen() {
                   Alert.alert('Login Required', 'Please login to request a commission');
                   return;
                 }
-                // Check if current user is an artist
                 if (user?.artists) {
                   Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
                   return;
@@ -351,7 +333,7 @@ export default function ArtworkDetailScreen() {
                 router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
               }}
             >
-              <Ionicons name="mail-outline" size={20} color={colors.text.primary} />
+              <Ionicons name="mail-outline" size={18} color={colors.text.primary} />
               <Text style={styles.commissionButtonText}>Request Commission</Text>
             </TouchableOpacity>
           )}
@@ -407,181 +389,220 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingTop: STATUS_BAR_HEIGHT + spacing.xs,
+    paddingBottom: spacing.xs,
     zIndex: 10,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'transparent',
     alignItems: 'center',
+    height: HEADER_HEIGHT,
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  ownerActions: {
-    marginTop: spacing.sm,
-  },
-  ownerActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  ownerActionText: {
-    ...typography.bodyBold,
-    color: colors.error,
-  },
   scrollContent: {
     flexGrow: 1,
-    paddingTop: 80,
+    paddingTop: SCROLL_PADDING_TOP,
+    paddingBottom: spacing.xxl,
+  },
+  imageCardContainer: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    ...shadows.medium,
   },
   imageContainer: {
-    width: width,
-    height: height * 0.5,
+    width: '100%',
+    height: IMAGE_HEIGHT,
     backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   mainImage: {
     width: '100%',
     height: '100%',
   },
-  infoSection: {
+  contentSection: {
+    backgroundColor: colors.background,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    marginBottom: 0,
+    gap: spacing.md,
   },
   title: {
-    ...typography.h2,
+    ...typography.h1,
     color: colors.text.primary,
+    fontSize: width < 375 ? 24 : 28,
     flex: 1,
-    marginRight: spacing.sm,
+    lineHeight: width < 375 ? 32 : 36,
+    fontWeight: '700',
   },
   likeButton: {
     padding: spacing.xs,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statChipText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '500',
   },
   description: {
     ...typography.body,
     color: colors.text.secondary,
-    lineHeight: 22,
-    marginBottom: spacing.sm,
+    lineHeight: 24,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    fontSize: width < 375 ? 15 : 16,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
   },
   tag: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surface,
+    paddingVertical: 6,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tagText: {
     ...typography.caption,
     color: colors.primary,
+    fontSize: 13,
+    fontWeight: '500',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: 0,
+  ownerActions: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    borderBottomWidth: 0,
-    alignItems: 'center',
-    marginTop: -spacing.sm,
-    marginBottom: spacing.xs,
   },
-  stat: {
+  deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.error + '40',
   },
-  statText: {
-    ...typography.body,
-    color: colors.text.secondary,
+  deleteButtonText: {
+    ...typography.bodyBold,
+    color: colors.error,
+    fontSize: 15,
   },
-  artistSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 0,
-    paddingBottom: spacing.md,
-    marginTop: -spacing.md,
+  artistCard: {
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    ...shadows.small,
   },
-  artistInfo: {
+  artistCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   artistAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.surface,
-    marginRight: spacing.md,
+    width: width < 375 ? 44 : 48,
+    height: width < 375 ? 44 : 48,
+    borderRadius: width < 375 ? 22 : 24,
+    backgroundColor: colors.background,
+    marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   artistDetails: {
     flex: 1,
+    minWidth: 0,
   },
   artistName: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: width < 375 ? 15 : 16,
+    marginBottom: 2,
+    fontWeight: '600',
   },
   artistBio: {
     ...typography.small,
     color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  viewProfileHint: {
-    ...typography.small,
-    color: colors.primary,
-    marginTop: spacing.xs - 2,
-    fontWeight: '600',
+    fontSize: width < 375 ? 12 : 13,
+    lineHeight: 16,
   },
   commissionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
     backgroundColor: colors.primary,
-    padding: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
+    marginTop: spacing.sm,
+    ...shadows.small,
   },
   commissionButtonText: {
     ...typography.button,
     color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   similarSection: {
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xl,
   },
   sectionTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
     marginBottom: spacing.md,
+    fontSize: width < 375 ? 20 : 22,
+    fontWeight: '700',
   },
   similarGrid: {
-    gap: spacing.md,
-    paddingRight: spacing.lg,
+    gap: spacing.sm,
+    paddingRight: spacing.md,
   },
   similarItem: {
-    width: width * 0.4,
+    width: width < 375 ? width * 0.38 : width * 0.4,
   },
   similarImage: {
     width: '100%',

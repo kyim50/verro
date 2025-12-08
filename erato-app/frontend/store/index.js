@@ -149,6 +149,15 @@ export const useFeedStore = create((set, get) => ({
       };
     }),
 
+  updateArtworkLikeCount: (artworkId, likeCount) =>
+    set((state) => ({
+      artworks: state.artworks.map((a) =>
+        String(a.id) === String(artworkId)
+          ? { ...a, like_count: likeCount }
+          : a
+      ),
+    })),
+
   reset: () => set({ artworks: [], page: 1, hasMore: true, isLoading: false }),
 }));
 

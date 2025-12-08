@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,9 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Animated,
-  Modal,
   Alert,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,11 +20,13 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
-import { useCallback } from 'react';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import { uploadImage } from '../../utils/imageUpload';
+import ReviewModal from '../../components/ReviewModal';
 
+const { width } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+const STATUS_BAR_HEIGHT = Constants.statusBarHeight || 44;
 
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams();
@@ -38,6 +40,8 @@ export default function ConversationScreen() {
   const [commission, setCommission] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedCommissionDetails, setSelectedCommissionDetails] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [pendingReviewCommission, setPendingReviewCommission] = useState(null);
   const flatListRef = useRef(null);
 
   useEffect(() => {
@@ -47,7 +51,6 @@ export default function ConversationScreen() {
     }
   }, [id, token]);
 
-  // Mark messages as read when screen is focused
   useFocusEffect(
     useCallback(() => {
       const markAsRead = async () => {
@@ -64,14 +67,9 @@ export default function ConversationScreen() {
 
       if (id && token) {
         markAsRead();
-        // Refresh messages when screen comes into focus
         fetchMessages();
         fetchConversationDetails();
       }
-
-      return () => {
-        // Cleanup if needed
-      };
     }, [id, token])
   );
 
@@ -81,26 +79,74 @@ export default function ConversationScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      console.log('Conversation data:', response.data);
-
       const otherParticipant = response.data.participants?.find(p => p.id !== user?.id);
       setOtherUser(otherParticipant);
 
-      // Get commission details if this conversation has one
       if (response.data.commission_id) {
-        console.log('Found commission_id in conversation:', response.data.commission_id);
         const commissionResponse = await axios.get(
           `${API_URL}/commissions/${response.data.commission_id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log('Commission data:', commissionResponse.data);
-        setCommission(commissionResponse.data);
-      } else {
-        console.log('No commission_id in conversation data');
+        const commissionData = commissionResponse.data;
+        setCommission(commissionData);
+
+        // Check if commission is completed and if user needs to review
+        if (commissionData.status === 'completed') {
+          await checkAndPromptReview(commissionData);
+        }
       }
     } catch (error) {
       console.error('Error fetching conversation details:', error);
     }
+  };
+
+  const checkAndPromptReview = async (commissionData) => {
+    try {
+      // Check if user has already reviewed
+      const reviewType = commissionData.client_id === user?.id ? 'client_to_artist' : 'artist_to_client';
+      
+      // Check existing reviews for this commission
+      const response = await axios.get(
+        `${API_URL}/reviews/commission/${commissionData.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const existingReviews = Array.isArray(response.data) ? response.data : [];
+
+      // Check if review already exists for this type
+      const hasReviewed = existingReviews.some(r => r.review_type === reviewType);
+
+      if (!hasReviewed) {
+        // Show review prompt after a short delay
+        setTimeout(() => {
+          setPendingReviewCommission(commissionData);
+          setShowReviewModal(true);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error checking review status:', error);
+    }
+  };
+
+  const handleSubmitReview = async (rating, comment) => {
+    if (!pendingReviewCommission) return;
+
+    const reviewType = pendingReviewCommission.client_id === user?.id 
+      ? 'client_to_artist' 
+      : 'artist_to_client';
+
+    await axios.post(
+      `${API_URL}/reviews`,
+      {
+        commission_id: pendingReviewCommission.id,
+        rating,
+        comment,
+        review_type: reviewType,
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    Alert.alert('Thank you!', 'Your review has been submitted.');
   };
 
   const fetchMessages = async () => {
@@ -109,29 +155,24 @@ export default function ConversationScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const msgs = response.data.messages || [];
+      
+      // Filter out commission_update messages
+      const filteredMsgs = msgs.filter(m => m.message_type !== 'commission_update');
 
-      // Check for commission request in messages
-      const commissionRequestMsg = msgs.find(m => m.message_type === 'commission_request');
-      if (commissionRequestMsg) {
-        console.log('Found commission request message:', commissionRequestMsg);
-        console.log('Commission ID from metadata:', commissionRequestMsg.metadata?.commission_id);
-
-        // If we have a commission_id in metadata but no commission loaded, fetch it
-        if (commissionRequestMsg.metadata?.commission_id && !commission) {
-          try {
-            const commissionResponse = await axios.get(
-              `${API_URL}/commissions/${commissionRequestMsg.metadata.commission_id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            console.log('Loaded commission from message metadata:', commissionResponse.data);
-            setCommission(commissionResponse.data);
-          } catch (err) {
-            console.error('Error loading commission from message:', err);
-          }
+      const commissionRequestMsg = filteredMsgs.find(m => m.message_type === 'commission_request');
+      if (commissionRequestMsg?.metadata?.commission_id && !commission) {
+        try {
+          const commissionResponse = await axios.get(
+            `${API_URL}/commissions/${commissionRequestMsg.metadata.commission_id}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setCommission(commissionResponse.data);
+        } catch (err) {
+          console.error('Error loading commission:', err);
         }
       }
 
-      setMessages(msgs);
+      setMessages(filteredMsgs);
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -156,9 +197,7 @@ export default function ConversationScreen() {
       setSending(true);
       try {
         const imageUrl = await uploadImage(result.assets[0].uri, 'messages', '', token);
-        if (!imageUrl) {
-          throw new Error('Upload failed');
-        }
+        if (!imageUrl) throw new Error('Upload failed');
 
         await axios.post(
           `${API_URL}/messages/conversations/${id}/messages`,
@@ -204,20 +243,6 @@ export default function ConversationScreen() {
     }
   };
 
-  const handleCommissionResponse = async (commissionId, status, response) => {
-    try {
-      await axios.patch(
-        `${API_URL}/commissions/${commissionId}/status`,
-        { status, artist_response: response },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      // Refresh messages and commission details to update UI immediately
-      await Promise.all([fetchMessages(), fetchConversationDetails()]);
-    } catch (error) {
-      console.error('Error responding to commission:', error);
-      Alert.alert('Error', 'Failed to update commission status. Please try again.');
-    }
-  };
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -238,7 +263,6 @@ export default function ConversationScreen() {
   const isUserOnline = (user) => {
     if (!user) return false;
     if (user.is_online) return true;
-
     if (user.last_seen) {
       const lastSeen = new Date(user.last_seen);
       const now = new Date();
@@ -248,119 +272,40 @@ export default function ConversationScreen() {
     return false;
   };
 
-  const renderCommissionRequest = (item, index) => {
-    const metadata = item.metadata || {};
-    // The sender is the client, so if current user is NOT the sender, they are the artist
-    const isArtist = user?.id !== item.sender_id;
-    const isPending = commission && commission.status === 'pending';
-
-    return (
-      <>
-        {shouldShowDayHeader(item, index) && (
-          <View style={styles.dayHeaderContainer}>
-            <Text style={styles.dayHeaderText}>{formatDayHeader(item.created_at)}</Text>
-          </View>
-        )}
-        <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
-        <TouchableOpacity
-          style={styles.commissionCardContent}
-          onPress={() => {
-            setSelectedCommissionDetails({
-              title: metadata.title,
-              description: item.content,
-              budget: metadata.budget,
-              deadline: metadata.deadline,
-            });
-            setShowDetailsModal(true);
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.commissionHeader}>
-            <View style={styles.commissionHeaderLeft}>
-              <Ionicons name="briefcase" size={20} color={colors.primary} />
-              <Text style={styles.commissionTitle}>Commission Request</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
-          </View>
-
-          {metadata.title && (
-            <Text style={styles.commissionRequestTitle} numberOfLines={2}>
-              {metadata.title}
-            </Text>
-          )}
-
-          <View style={styles.commissionQuickInfo}>
-            {metadata.budget && (
-              <View style={styles.quickInfoChip}>
-                <Ionicons name="cash-outline" size={14} color={colors.primary} />
-                <Text style={styles.quickInfoText}>${metadata.budget}</Text>
-              </View>
-            )}
-            {metadata.deadline && (
-              <View style={styles.quickInfoChip}>
-                <Ionicons name="time-outline" size={14} color={colors.primary} />
-                <Text style={styles.quickInfoText}>{metadata.deadline}</Text>
-              </View>
-            )}
-          </View>
-
-          <Text style={styles.tapToViewText}>Tap to view details</Text>
-        </TouchableOpacity>
-
-        {isArtist && isPending && (
-          <View style={styles.commissionActions}>
-            <TouchableOpacity
-              style={[styles.commissionButton, styles.declineButton]}
-              onPress={() => handleCommissionResponse(metadata.commission_id, 'declined', '')}
-            >
-              <Ionicons name="close-circle" size={20} color="#F44336" />
-              <Text style={styles.declineButtonText}>Decline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.commissionButton, styles.acceptButton]}
-              onPress={() => handleCommissionResponse(metadata.commission_id, 'accepted', '')}
-            >
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
-              <Text style={styles.acceptButtonText}>Accept</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <Text style={styles.commissionTime}>{formatTime(item.created_at)}</Text>
-      </View>
-      </>
-    );
-  };
-
   const formatDayHeader = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) {
-      return 'Today';
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString([], { weekday: 'long' });
-    } else {
-      return date.toLocaleDateString([], { 
-        month: 'long', 
-        day: 'numeric', 
-        year: now.getFullYear() !== date.getFullYear() ? 'numeric' : undefined 
-      });
-    }
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'long' });
+    return date.toLocaleDateString([], { 
+      month: 'long', 
+      day: 'numeric', 
+      year: now.getFullYear() !== date.getFullYear() ? 'numeric' : undefined 
+    });
   };
 
   const shouldShowDayHeader = (item, index) => {
     if (index === 0) return true;
     const prevMessage = messages[index - 1];
     if (!prevMessage) return true;
+    return new Date(item.created_at).toDateString() !== new Date(prevMessage.created_at).toDateString();
+  };
 
-    const currentDate = new Date(item.created_at);
-    const prevDate = new Date(prevMessage.created_at);
-
-    return currentDate.toDateString() !== prevDate.toDateString();
+  const handleCommissionResponse = async (commissionId, status, response) => {
+    try {
+      await axios.patch(
+        `${API_URL}/commissions/${commissionId}/status`,
+        { status, artist_response: response, skip_message: true },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await Promise.all([fetchMessages(), fetchConversationDetails()]);
+    } catch (error) {
+      console.error('Error responding to commission:', error);
+      Alert.alert('Error', 'Failed to update commission status. Please try again.');
+    }
   };
 
   const handleDeleteMessage = async (messageId) => {
@@ -374,14 +319,12 @@ export default function ConversationScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Primary (original) route
               await axios.delete(
                 `${API_URL}/messages/conversations/${id}/messages/${messageId}`,
                 { headers: { Authorization: `Bearer ${token}` } }
               );
               await fetchMessages();
             } catch (error) {
-              // Fallback route
               try {
                 await axios.delete(
                   `${API_URL}/conversations/${id}/messages/${messageId}`,
@@ -389,9 +332,7 @@ export default function ConversationScreen() {
                 );
                 await fetchMessages();
               } catch (err) {
-                console.error('Error deleting message:', err?.response?.data || err.message || err);
-                const msg = err.response?.data?.error || 'Failed to delete message';
-                Alert.alert('Error', msg);
+                Alert.alert('Error', err.response?.data?.error || 'Failed to delete message');
               }
             }
           },
@@ -400,59 +341,74 @@ export default function ConversationScreen() {
     );
   };
 
-  const renderCommissionUpdate = (item, index) => {
+  const renderDayHeader = (timestamp) => (
+    <View style={styles.dayHeader}>
+      <View style={styles.dayHeaderLine} />
+      <Text style={styles.dayHeaderText}>{formatDayHeader(timestamp)}</Text>
+      <View style={styles.dayHeaderLine} />
+    </View>
+  );
+
+  const renderCommissionRequest = (item, index) => {
     const metadata = item.metadata || {};
-    const prevMessage = index > 0 ? messages[index - 1] : null;
-    const showTime = !prevMessage ||
-      prevMessage.sender_id !== item.sender_id ||
-      (new Date(item.created_at) - new Date(prevMessage.created_at)) > 60000;
-
-    // Determine icon and color based on update type
-    let iconName = 'information-circle';
-    let iconColor = colors.primary;
-
-    if (item.content.toLowerCase().includes('accepted')) {
-      iconName = 'checkmark-circle';
-      iconColor = '#4CAF50';
-    } else if (item.content.toLowerCase().includes('completed')) {
-      iconName = 'checkmark-done-circle';
-      iconColor = '#4CAF50';
-    } else if (item.content.toLowerCase().includes('cancelled') || item.content.toLowerCase().includes('declined')) {
-      iconName = 'close-circle';
-      iconColor = '#F44336';
-    } else if (item.content.toLowerCase().includes('progress')) {
-      iconName = 'time';
-      iconColor = colors.primary;
-    }
+    const isArtist = user?.id !== item.sender_id;
 
     return (
       <>
-        {shouldShowDayHeader(item, index) && (
-          <View style={styles.dayHeaderContainer}>
-            <Text style={styles.dayHeaderText}>{formatDayHeader(item.created_at)}</Text>
-          </View>
-        )}
-        <View style={styles.systemMessageContainer}>
-          <View style={[styles.systemMessageBubble, { borderColor: iconColor + '30' }]}>
-            <Ionicons name={iconName} size={18} color={iconColor} />
-            <Text style={styles.systemMessageText}>{item.content}</Text>
-          </View>
-          {showTime && (
-            <Text style={styles.systemMessageTime}>{formatTime(item.created_at)}</Text>
-          )}
+        {shouldShowDayHeader(item, index) && renderDayHeader(item.created_at)}
+        <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
+          <TouchableOpacity
+            style={styles.commissionCardContent}
+            onPress={() => {
+              setSelectedCommissionDetails({
+                title: metadata.title,
+                description: item.content,
+                budget: metadata.budget,
+                deadline: metadata.deadline,
+              });
+              setShowDetailsModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.commissionHeader}>
+              <View style={styles.commissionHeaderLeft}>
+                <Ionicons name="briefcase" size={20} color={colors.primary} />
+                <Text style={styles.commissionTitle}>Commission Request</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
+            </View>
+
+            {metadata.title && (
+              <Text style={styles.commissionRequestTitle} numberOfLines={2}>
+                {metadata.title}
+              </Text>
+            )}
+
+            <View style={styles.commissionQuickInfo}>
+              {metadata.budget && (
+                <View style={styles.quickInfoChip}>
+                  <Ionicons name="cash-outline" size={14} color={colors.primary} />
+                  <Text style={styles.quickInfoText}>${metadata.budget}</Text>
+                </View>
+              )}
+              {metadata.deadline && (
+                <View style={styles.quickInfoChip}>
+                  <Ionicons name="time-outline" size={14} color={colors.primary} />
+                  <Text style={styles.quickInfoText}>{metadata.deadline}</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.tapToViewText}>Tap to view details</Text>
+          </TouchableOpacity>
         </View>
       </>
     );
   };
 
   const renderMessage = ({ item, index }) => {
-    // Handle special message types
     if (item.message_type === 'commission_request') {
       return renderCommissionRequest(item, index);
-    }
-
-    if (item.message_type === 'commission_update') {
-      return renderCommissionUpdate(item);
     }
 
     const isOwn = item.sender_id === user?.id;
@@ -469,53 +425,47 @@ export default function ConversationScreen() {
 
     return (
       <>
-        {shouldShowDayHeader(item, index) && (
-          <View style={styles.dayHeaderContainer}>
-            <Text style={styles.dayHeaderText}>{formatDayHeader(item.created_at)}</Text>
-          </View>
-        )}
+        {shouldShowDayHeader(item, index) && renderDayHeader(item.created_at)}
         <TouchableOpacity
-          style={[styles.messageRow, isOwn && styles.messageRowOwn]}
+          style={[styles.messageWrapper, isOwn && styles.messageWrapperOwn]}
           onLongPress={() => {
-            if (isOwn) {
-              handleDeleteMessage(item.id);
-            }
+            if (isOwn) handleDeleteMessage(item.id);
           }}
           activeOpacity={0.7}
         >
-          <View style={[styles.messageContentContainer, isOwn && styles.messageContentContainerOwn]}>
-            {item.image_url ? (
-              <View style={styles.imageMessageContainer}>
+          {item.image_url ? (
+            <View style={styles.imageMessageContainer}>
+              <View style={[styles.imageBubble, isOwn && styles.imageBubbleOwn]}>
                 <Image
                   source={{ uri: item.image_url }}
-                  style={styles.imageMessage}
+                  style={styles.messageImage}
                   contentFit="cover"
-                  cachePolicy="none"
                 />
               </View>
-            ) : (
-              <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+              {isLastInGroup && isOwn && (
+                <View style={styles.messageStatusContainer}>
+                  <Text style={styles.messageStatusText}>
+                    {isRead ? 'Read' : 'Delivered'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.textMessageContainer}>
+              <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}>
                 <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
                   {item.content}
                 </Text>
               </View>
-            )}
-            
-            {(showTime || (isOwn && isLastInGroup)) && (
-              <View style={styles.messageFooter}>
-                {showTime && isLastInGroup && (
-                  <Text style={[styles.time, isOwn && styles.timeOwn]}>
-                    {formatTime(item.created_at)}
-                  </Text>
-                )}
-                {isOwn && isLastInGroup && (
-                  <Text style={[styles.statusText, isRead && styles.statusTextRead]}>
+              {isLastInGroup && isOwn && (
+                <View style={styles.messageStatusContainer}>
+                  <Text style={styles.messageStatusText}>
                     {isRead ? 'Read' : 'Delivered'}
                   </Text>
-                )}
-              </View>
-            )}
-          </View>
+                </View>
+              )}
+            </View>
+          )}
         </TouchableOpacity>
       </>
     );
@@ -531,7 +481,6 @@ export default function ConversationScreen() {
 
   return (
     <>
-      {/* Commission Details Modal */}
       <Modal
         visible={showDetailsModal}
         animationType="slide"
@@ -543,49 +492,31 @@ export default function ConversationScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Commission Details</Text>
               <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
-                <Ionicons name="close" size={28} color={colors.text.primary} />
+                <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
-
             {selectedCommissionDetails && (
               <View style={styles.modalBody}>
                 {selectedCommissionDetails.title && (
                   <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionLabel}>Title</Text>
-                    <Text style={styles.modalSectionValue}>
-                      {selectedCommissionDetails.title}
-                    </Text>
+                    <Text style={styles.modalLabel}>Title</Text>
+                    <Text style={styles.modalValue}>{selectedCommissionDetails.title}</Text>
                   </View>
                 )}
-
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionLabel}>Description</Text>
-                  <Text style={styles.modalSectionValue}>
-                    {selectedCommissionDetails.description}
-                  </Text>
+                  <Text style={styles.modalLabel}>Description</Text>
+                  <Text style={styles.modalValue}>{selectedCommissionDetails.description}</Text>
                 </View>
-
                 {selectedCommissionDetails.budget && (
                   <View style={styles.modalSection}>
-                    <View style={styles.modalSectionHeader}>
-                      <Ionicons name="cash-outline" size={20} color={colors.primary} />
-                      <Text style={styles.modalSectionLabel}>Budget</Text>
-                    </View>
-                    <Text style={styles.modalSectionValue}>
-                      ${selectedCommissionDetails.budget}
-                    </Text>
+                    <Text style={styles.modalLabel}>Budget</Text>
+                    <Text style={styles.modalValue}>${selectedCommissionDetails.budget}</Text>
                   </View>
                 )}
-
                 {selectedCommissionDetails.deadline && (
                   <View style={styles.modalSection}>
-                    <View style={styles.modalSectionHeader}>
-                      <Ionicons name="time-outline" size={20} color={colors.primary} />
-                      <Text style={styles.modalSectionLabel}>Deadline</Text>
-                    </View>
-                    <Text style={styles.modalSectionValue}>
-                      {selectedCommissionDetails.deadline}
-                    </Text>
+                    <Text style={styles.modalLabel}>Deadline</Text>
+                    <Text style={styles.modalValue}>{selectedCommissionDetails.deadline}</Text>
                   </View>
                 )}
               </View>
@@ -609,12 +540,13 @@ export default function ConversationScreen() {
                             try {
                               await axios.patch(
                                 `${API_URL}/commissions/${commission.id}/status`,
-                                { status: 'cancelled' },
+                                { status: 'cancelled', skip_message: true },
                                 { headers: { Authorization: `Bearer ${token}` } }
                               );
                               setShowDetailsModal(false);
                               await Promise.all([fetchMessages(), fetchConversationDetails()]);
                               Alert.alert('Success', 'Commission has been cancelled');
+                              router.back();
                             } catch (error) {
                               console.error('Error cancelling commission:', error);
                               Alert.alert('Error', 'Failed to cancel commission. Please try again.');
@@ -644,12 +576,21 @@ export default function ConversationScreen() {
                               try {
                                 await axios.patch(
                                   `${API_URL}/commissions/${commission.id}/status`,
-                                  { status: 'completed' },
+                                  { status: 'completed', skip_message: true },
                                   { headers: { Authorization: `Bearer ${token}` } }
                                 );
                                 setShowDetailsModal(false);
+                                const updatedCommission = await axios.get(
+                                  `${API_URL}/commissions/${commission.id}`,
+                                  { headers: { Authorization: `Bearer ${token}` } }
+                                );
                                 await Promise.all([fetchMessages(), fetchConversationDetails()]);
                                 Alert.alert('Success', 'Commission has been completed!');
+                                // Prompt for review after completion
+                                setTimeout(() => {
+                                  setPendingReviewCommission(updatedCommission.data);
+                                  setShowReviewModal(true);
+                                }, 1500);
                               } catch (error) {
                                 console.error('Error completing commission:', error);
                                 Alert.alert('Error', 'Failed to complete commission. Please try again.');
@@ -670,91 +611,95 @@ export default function ConversationScreen() {
         </View>
       </Modal>
 
+      {/* Review Modal */}
+      <ReviewModal
+        visible={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false);
+          setPendingReviewCommission(null);
+        }}
+        onSubmit={handleSubmitReview}
+        userName={
+          pendingReviewCommission
+            ? (user?.id === pendingReviewCommission.client_id
+                ? (otherUser?.full_name || otherUser?.username || 'Artist')
+                : (otherUser?.full_name || otherUser?.username || 'Client'))
+            : ''
+        }
+        userAvatar={otherUser?.avatar_url || DEFAULT_AVATAR}
+        reviewType={
+          pendingReviewCommission && user?.id === pendingReviewCommission.client_id
+            ? 'client_to_artist'
+            : 'artist_to_client'
+        }
+      />
+
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
       >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color={colors.primary} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.headerInfo} onPress={() => {
-          if (otherUser?.id) {
-            // Navigate to artist profile if they have an artist record, otherwise client profile
-            if (otherUser.artists) {
-              router.push(`/artist/${otherUser.artists.id}`);
-            } else {
-              router.push(`/client/${otherUser.id}`);
-            }
-          }
-        }}>
-          {otherUser && (
-            <>
-              <View style={styles.headerAvatarContainer}>
-                <Image
-                  source={{ uri: otherUser.avatar_url || 'https://via.placeholder.com/36' }}
-                  style={styles.headerAvatar}
-                  contentFit="cover"
-                />
-                {isUserOnline(otherUser) && (
-                  <View style={styles.onlineIndicator} />
-                )}
-              </View>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.headerName}>{otherUser.username}</Text>
-                <Text style={styles.headerStatus}>
-                  {isUserOnline(otherUser) ? 'Active now' : 'Offline'}
-                </Text>
-              </View>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {commission && (commission.status === 'in_progress' || commission.status === 'accepted') && (
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
-            style={styles.headerButton}
+            style={styles.headerInfo}
             onPress={() => {
-              setSelectedCommissionDetails({
-                title: commission.title,
-                description: commission.details,
-                budget: commission.price,
-                deadline: commission.deadline,
-              });
-              setShowDetailsModal(true);
+              if (otherUser?.id) {
+                if (otherUser.artists) {
+                  router.push(`/artist/${otherUser.artists.id}`);
+                } else {
+                  router.push(`/client/${otherUser.id}`);
+                }
+              }
             }}
+            activeOpacity={0.7}
           >
-            <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
+            {otherUser && (
+              <>
+                <View style={styles.headerAvatarContainer}>
+                  <Image
+                    source={{ uri: otherUser.avatar_url || DEFAULT_AVATAR }}
+                    style={styles.headerAvatar}
+                    contentFit="cover"
+                  />
+                  {isUserOnline(otherUser) && <View style={styles.onlineDot} />}
+                </View>
+                <View style={styles.headerTextContainer}>
+                  <Text style={styles.headerName}>{otherUser.username || 'Unknown'}</Text>
+                  <Text style={styles.headerStatus}>
+                    {isUserOnline(otherUser) ? 'Active now' : 'Offline'}
+                  </Text>
+                </View>
+              </>
+            )}
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
 
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesList}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={48} color={colors.text.disabled} />
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>Send a message to start chatting</Text>
-          </View>
-        }
-      />
+        {/* Messages List */}
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messagesList}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubbles-outline" size={48} color={colors.text.disabled} />
+              <Text style={styles.emptyText}>No messages yet</Text>
+              <Text style={styles.emptySubtext}>Send a message to start chatting</Text>
+            </View>
+          }
+        />
 
-      <View style={styles.inputContainer}>
-        <View style={styles.inputRow}>
-          <TouchableOpacity 
-            style={styles.inputActionButton}
-            onPress={handleImagePick}
-          >
-            <Ionicons name="add-circle" size={32} color={colors.primary} />
+        {/* Input */}
+        <View style={styles.inputContainer}>
+          <TouchableOpacity style={styles.attachButton} onPress={handleImagePick}>
+            <Ionicons name="add-circle" size={28} color={colors.primary} />
           </TouchableOpacity>
-
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
@@ -766,7 +711,6 @@ export default function ConversationScreen() {
               maxLength={1000}
             />
           </View>
-
           {newMessage.trim() && (
             <TouchableOpacity
               style={styles.sendButton}
@@ -776,13 +720,12 @@ export default function ConversationScreen() {
               {sending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Ionicons name="arrow-up" size={22} color="#fff" />
+                <Ionicons name="send" size={20} color="#fff" />
               )}
             </TouchableOpacity>
           )}
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
     </>
   );
 }
@@ -799,17 +742,16 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: STATUS_BAR_HEIGHT + spacing.sm,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    borderBottomLeftRadius: borderRadius.lg,
-    borderBottomRightRadius: borderRadius.lg,
   },
   backButton: {
-    marginRight: spacing.xs,
+    marginRight: spacing.sm,
+    padding: spacing.xs,
   },
   headerInfo: {
     flex: 1,
@@ -821,11 +763,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
-  onlineIndicator: {
+  onlineDot: {
     position: 'absolute',
     bottom: 0,
     right: 0,
@@ -845,144 +787,99 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   headerStatus: {
-    ...typography.caption,
+    ...typography.small,
     color: colors.text.secondary,
     fontSize: 12,
   },
-  headerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
+  infoButton: {
+    padding: spacing.xs,
   },
   messagesList: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
-  dayHeaderContainer: {
+  dayHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.md,
+    marginVertical: spacing.lg,
+    gap: spacing.md,
+  },
+  dayHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
   },
   dayHeaderText: {
     ...typography.caption,
-    color: colors.text.primary,
+    color: colors.text.secondary,
     fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.1,
+    fontWeight: '600',
   },
-  messageRow: {
+  messageWrapper: {
     flexDirection: 'row',
-    marginBottom: spacing.xs,
-    alignItems: 'flex-end',
+    marginBottom: spacing.sm,
+    maxWidth: '80%',
   },
-  messageRowOwn: {
-    justifyContent: 'flex-end',
+  messageWrapperOwn: {
+    alignSelf: 'flex-end',
   },
-  messageContentContainer: {
-    flex: 1,
-    maxWidth: '90%',
-  },
-  messageContentContainerOwn: {
-    alignItems: 'flex-end',
-  },
-  avatarContainer: {
-    width: 28,
-    marginRight: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  avatarSpacer: {
-    width: 28,
-    height: 28,
-  },
-  bubble: {
-    maxWidth: '100%',
+  messageBubble: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 1,
-    borderRadius: 16,
-    marginBottom: spacing.xs / 2,
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 1.5,
-    elevation: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderBottomLeftRadius: 4,
+    ...shadows.small,
   },
-  bubbleOwn: {
+  messageBubbleOwn: {
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 10,
+    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: borderRadius.lg,
   },
-  bubbleOther: {
-    backgroundColor: colors.surfaceLight,
-    borderBottomLeftRadius: 10,
+  messageBubbleOther: {
     borderWidth: 1,
     borderColor: colors.border,
   },
   messageText: {
     ...typography.body,
-    color: colors.text.primary,
+    color: colors.text.secondary,
     fontSize: 15,
     lineHeight: 20,
   },
   messageTextOwn: {
     color: colors.text.primary,
   },
-  time: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 11,
-  },
-  timeOwn: {
-    color: colors.text.secondary,
-  },
-  statusText: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 11,
-    marginLeft: spacing.sm,
-  },
-  statusTextRead: {
-    color: colors.text.primary,
-    fontWeight: '700',
+  textMessageContainer: {
+    width: '100%',
+    alignItems: 'flex-end',
   },
   imageMessageContainer: {
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    marginBottom: 2,
-    maxWidth: 260,
-    backgroundColor: colors.surfaceLight,
+    width: '100%',
+    alignItems: 'flex-end',
   },
-  imageMessage: {
-    width: 260,
-    height: 220,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+  messageStatusContainer: {
     marginTop: 4,
+    paddingRight: spacing.xs,
   },
-  statusContainer: {
-    marginLeft: spacing.xs / 2,
-  },
-  systemMessageTime: {
-    ...typography.caption,
+  messageStatusText: {
+    ...typography.small,
     color: colors.text.disabled,
     fontSize: 11,
-    textAlign: 'center',
-    marginTop: spacing.xs,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  imageBubble: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    ...shadows.small,
+  },
+  imageBubbleOwn: {
+    backgroundColor: colors.surface,
+  },
+  messageImage: {
+    width: 250,
+    height: 200,
   },
   commissionCard: {
     backgroundColor: colors.surface,
@@ -990,13 +887,15 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
     marginHorizontal: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.primary + '30',
+    borderColor: colors.border,
     maxWidth: '90%',
     alignSelf: 'flex-start',
     overflow: 'hidden',
+    ...shadows.small,
   },
   commissionCardReceived: {
-    backgroundColor: colors.primary + '10',
+    backgroundColor: colors.surface,
+    borderColor: colors.primary + '30',
   },
   commissionCardContent: {
     padding: spacing.md,
@@ -1018,6 +917,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontWeight: '700',
   },
   commissionRequestTitle: {
     ...typography.h3,
@@ -1035,12 +935,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   quickInfoText: {
     ...typography.small,
@@ -1054,52 +952,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
   },
-  commissionActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
-  },
-  commissionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  acceptButton: {
-    backgroundColor: '#4CAF50',
-  },
-  acceptButtonText: {
-    ...typography.bodyBold,
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  declineButton: {
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: '#F44336',
-  },
-  declineButtonText: {
-    ...typography.bodyBold,
-    color: '#F44336',
-    fontSize: 14,
-    fontWeight: '700',
-  },
   commissionTime: {
-    ...typography.caption,
+    ...typography.small,
     color: colors.text.disabled,
     fontSize: 11,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
@@ -1131,21 +990,15 @@ const styles = StyleSheet.create({
   modalSection: {
     marginBottom: spacing.lg,
   },
-  modalSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  modalSectionLabel: {
+  modalLabel: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    marginBottom: spacing.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  modalSectionValue: {
+  modalValue: {
     ...typography.body,
     color: colors.text.primary,
     fontSize: 16,
@@ -1186,28 +1039,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  systemMessageContainer: {
-    alignItems: 'center',
-    marginVertical: spacing.md,
-  },
-  systemMessageBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    maxWidth: '85%',
-  },
-  systemMessageText: {
-    ...typography.caption,
-    color: colors.text.primary,
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -1225,35 +1056,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   inputContainer: {
-    backgroundColor: colors.background,
-    paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     gap: spacing.sm,
   },
-  inputActionButton: {
-    width: 38,
-    height: 38,
+  attachButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 44,
-    maxHeight: 110,
+    minHeight: 40,
+    maxHeight: 100,
     justifyContent: 'center',
-    paddingVertical: 4,
   },
   input: {
     ...typography.body,
@@ -1262,15 +1090,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     fontSize: 15,
     lineHeight: 20,
-    textAlignVertical: 'center',
   },
   sendButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
 });

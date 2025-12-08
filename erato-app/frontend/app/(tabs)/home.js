@@ -31,7 +31,8 @@ const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING) / NUM_COLUMNS;
 
 export default function HomeScreen() {
-  const { artworks, fetchArtworks, reset, hasMore, isLoading } = useFeedStore();
+  const feedStore = useFeedStore();
+  const { artworks, fetchArtworks, reset, hasMore, isLoading, updateArtworkLikeCount } = feedStore;
   const { boards, fetchBoards, saveArtworkToBoard, createBoard } = useBoardStore();
   const { token, user: currentUser } = useAuthStore();
   const { profile: userProfile } = useProfileStore();
@@ -141,6 +142,18 @@ export default function HomeScreen() {
           if (boards.length === 0) {
             await fetchBoards();
           }
+          
+          // Reload liked artworks when screen comes into focus to sync with artwork view page
+          if (token && boards.length > 0) {
+            const likedBoard = boards.find(b => b.name === 'Liked');
+            if (likedBoard) {
+              const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              const artworkIds = response.data.board_artworks?.map(ba => ba.artwork_id) || [];
+              setLikedArtworks(new Set(artworkIds.map(String)));
+            }
+          }
         } catch (error) {
           if (error.response?.status !== 429) {
             console.error('Error refreshing data:', error);
@@ -148,7 +161,7 @@ export default function HomeScreen() {
         }
       };
       refreshData();
-    }, [activeTab, loadForYouArtworks, artworks.length, forYouArtworks.length, boards.length])
+    }, [activeTab, loadForYouArtworks, artworks.length, forYouArtworks.length, boards.length, token])
   );
 
   useEffect(() => {
@@ -294,22 +307,46 @@ export default function HomeScreen() {
       return newSet;
     });
 
+    // Update local artwork like count optimistically
+    const previousLikeCount = artwork.like_count || 0;
+    if (updateArtworkLikeCount) {
+      updateArtworkLikeCount(artwork.id, isLiked ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1);
+    }
+
     try {
-      let likedBoard = boards.find(b => b.name === 'Liked');
-
-      if (!likedBoard) {
-        likedBoard = await createBoard({ name: 'Liked', is_public: false });
-        await fetchBoards();
-        const updatedBoards = useBoardStore.getState().boards;
-        likedBoard = updatedBoards.find(b => b.name === 'Liked');
-      }
-
       if (isLiked) {
-        await axios.delete(`${API_URL}/boards/${likedBoard.id}/artworks/${artwork.id}`, {
+        // Unlike - call unlike endpoint which handles both board and count
+        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/unlike`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        // Update like count from response
+        if (response.data.likeCount !== undefined && updateArtworkLikeCount) {
+          updateArtworkLikeCount(artwork.id, response.data.likeCount);
+        }
       } else {
-        await saveArtworkToBoard(likedBoard.id, artwork.id);
+        // Like - call like endpoint which handles both board and count
+        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/like`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Update like count from response
+        if (response.data.likeCount !== undefined && updateArtworkLikeCount) {
+          updateArtworkLikeCount(artwork.id, response.data.likeCount);
+        }
+      }
+      
+      // Refresh boards to ensure liked artworks state stays in sync
+      const updatedBoards = await fetchBoards();
+      
+      // Refresh liked artworks from the updated board
+      const likedBoard = updatedBoards?.find(b => b.name === 'Liked');
+      if (likedBoard) {
+        const boardResponse = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const artworkIds = boardResponse.data.board_artworks?.map(ba => ba.artwork_id) || [];
+        setLikedArtworks(new Set(artworkIds.map(String)));
       }
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -323,6 +360,11 @@ export default function HomeScreen() {
         }
         return newSet;
       });
+      
+      // Rollback like count
+      if (updateArtworkLikeCount) {
+        updateArtworkLikeCount(artwork.id, previousLikeCount);
+      }
     }
   };
 
@@ -670,7 +712,7 @@ export default function HomeScreen() {
                 cachePolicy="memory-disk"
               />
             ) : (
-              <Ionicons name="person-circle" size={26} color={colors.text.primary} />
+              <Ionicons name="person-circle" size={22} color={colors.text.primary} />
             )}
           </TouchableOpacity>
         </View>
@@ -954,15 +996,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     overflow: 'hidden',
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   profileAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   // TikTok-style styles
   tikTokCard: {

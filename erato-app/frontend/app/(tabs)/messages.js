@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -103,10 +103,6 @@ export default function MessagesScreen() {
 
     if (conv.latest_message.message_type === 'commission_request') {
       return 'Commission request';
-    }
-
-    if (conv.latest_message.message_type === 'commission_update') {
-      return 'Commission status updated';
     }
 
     return conv.latest_message.content;
@@ -313,17 +309,18 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   conversationCard: {
-    marginHorizontal: spacing.xs,
-    marginBottom: spacing.xs,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
+    ...shadows.small,
   },
   cardContent: {
     flexDirection: 'row',
-    padding: spacing.sm + 2,
+    padding: spacing.md,
     alignItems: 'center',
   },
   avatarContainer: {

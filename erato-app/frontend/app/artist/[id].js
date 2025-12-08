@@ -253,10 +253,29 @@ export default function ArtistProfileScreen() {
             style={styles.avatar}
             contentFit="cover"
           />
-          <Text style={styles.artistName}>
-            {artist.users?.full_name || artist.users?.username}
-          </Text>
-          <Text style={styles.artistUsername}>@{artist.users?.username}</Text>
+          <View style={styles.nameSection}>
+            <Text style={styles.artistName}>
+              {artist.users?.full_name || artist.users?.username}
+            </Text>
+            <Text style={styles.artistUsername}>@{artist.users?.username}</Text>
+            {artist.average_rating && artist.average_rating > 0 && (
+              <View style={styles.ratingContainer}>
+                <View style={styles.ratingStars}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={star}
+                      name={star <= Math.round(artist.average_rating) ? "star" : "star-outline"}
+                      size={18}
+                      color={colors.status.warning}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.ratingText}>
+                  {artist.average_rating.toFixed(1)} ({artist.review_count || 0} {artist.review_count === 1 ? 'review' : 'reviews'})
+                </Text>
+              </View>
+            )}
+          </View>
 
           {artist.users?.bio && (
             <Text style={styles.bio}>{artist.users.bio}</Text>
@@ -653,7 +672,23 @@ const styles = StyleSheet.create({
   artistUsername: {
     ...typography.body,
     color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
+  },
+  ratingStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  ratingText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
   },
   bio: {
     ...typography.body,

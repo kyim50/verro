@@ -43,50 +43,60 @@ router.get('/conversations', authenticate, async (req, res) => {
 
     if (convError) throw convError;
 
-    // Get latest message for each conversation
-    const conversationsWithMessages = await Promise.all(
-      conversations.map(async (conv) => {
-        const { data: latestMessage } = await supabaseAdmin
-          .from('messages')
-          .select(`
-            id,
-            content,
-            message_type,
-            created_at,
-            sender_id
-          `)
-          .eq('conversation_id', conv.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        // Get other participant info
-        const { data: otherParticipant } = await supabaseAdmin
-          .from('conversation_participants')
-          .select(`
-            user:users(id, username, full_name, avatar_url)
-          `)
-          .eq('conversation_id', conv.id)
-          .neq('user_id', req.user.id)
-          .single();
-
-        // Count unread messages
-        const userParticipation = participations.find(p => p.conversation_id === conv.id);
-        const { count: unreadCount } = await supabaseAdmin
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conv.id)
-          .neq('sender_id', req.user.id)
-          .gt('created_at', userParticipation.last_read_at || conv.created_at);
-
-        return {
-          ...conv,
-          latest_message: latestMessage,
-          other_participant: otherParticipant?.user,
-          unread_count: unreadCount || 0
-        };
-      })
+    // Batch fetch all latest messages
+    const latestMessagesPromises = conversations.map(conv => 
+      supabaseAdmin
+        .from('messages')
+        .select('id, content, message_type, created_at, sender_id, conversation_id')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
     );
+    const latestMessagesResults = await Promise.all(latestMessagesPromises);
+    const latestMessagesMap = new Map();
+    latestMessagesResults.forEach(({ data }) => {
+      if (data) latestMessagesMap.set(data.conversation_id, data);
+    });
+
+    // Batch fetch all other participants
+    const otherParticipantsPromises = conversations.map(conv =>
+      supabaseAdmin
+        .from('conversation_participants')
+        .select('conversation_id, user:users(id, username, full_name, avatar_url)')
+        .eq('conversation_id', conv.id)
+        .neq('user_id', req.user.id)
+        .single()
+    );
+    const otherParticipantsResults = await Promise.all(otherParticipantsPromises);
+    const otherParticipantsMap = new Map();
+    otherParticipantsResults.forEach(({ data }) => {
+      if (data) otherParticipantsMap.set(data.conversation_id, data?.user);
+    });
+
+    // Batch fetch all unread counts
+    const unreadCountPromises = conversations.map(conv => {
+      const userParticipation = participations.find(p => p.conversation_id === conv.id);
+      return supabaseAdmin
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('conversation_id', conv.id)
+        .neq('sender_id', req.user.id)
+        .gt('created_at', userParticipation?.last_read_at || conv.created_at);
+    });
+    const unreadCountResults = await Promise.all(unreadCountPromises);
+    const unreadCountMap = new Map();
+    unreadCountResults.forEach(({ count }, index) => {
+      unreadCountMap.set(conversations[index].id, count || 0);
+    });
+
+    // Combine all data
+    const conversationsWithMessages = conversations.map(conv => ({
+      ...conv,
+      latest_message: latestMessagesMap.get(conv.id) || null,
+      other_participant: otherParticipantsMap.get(conv.id) || null,
+      unread_count: unreadCountMap.get(conv.id) || 0
+    }));
 
     res.json({ conversations: conversationsWithMessages });
   } catch (error) {

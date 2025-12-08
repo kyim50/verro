@@ -32,45 +32,59 @@ router.get('/', authenticate, async (req, res) => {
       throw error;
     }
 
-    // Get artwork data separately for each board
-    const boardsWithData = await Promise.all(
-      boards.map(async (board) => {
-        // Count artworks
-        const { count } = await supabaseAdmin
-          .from('board_artworks')
-          .select('*', { count: 'exact', head: true })
-          .eq('board_id', board.id);
+    // Batch fetch all board artworks data
+    const boardIds = boards.map(b => b.id);
+    
+    // Get all board artworks in one query
+    const { data: allBoardArtworks } = await supabaseAdmin
+      .from('board_artworks')
+      .select('id, board_id, artwork_id, created_at')
+      .in('board_id', boardIds)
+      .order('created_at', { ascending: false });
 
-        // Get first 4 artworks with full data
-        const { data: boardArtworks } = await supabaseAdmin
-          .from('board_artworks')
-          .select('id, artwork_id, created_at')
-          .eq('board_id', board.id)
-          .order('created_at', { ascending: false })
-          .limit(4);
+    // Group by board_id and get counts
+    const boardArtworksMap = new Map();
+    const boardCountsMap = new Map();
+    
+    allBoardArtworks?.forEach(ba => {
+      if (!boardArtworksMap.has(ba.board_id)) {
+        boardArtworksMap.set(ba.board_id, []);
+        boardCountsMap.set(ba.board_id, 0);
+      }
+      const boardArtworks = boardArtworksMap.get(ba.board_id);
+      if (boardArtworks.length < 4) {
+        boardArtworks.push(ba);
+      }
+      boardCountsMap.set(ba.board_id, boardCountsMap.get(ba.board_id) + 1);
+    });
 
-        // Get artwork details
-        let artworksWithDetails = [];
-        if (boardArtworks && boardArtworks.length > 0) {
-          const artworkIds = boardArtworks.map(ba => ba.artwork_id);
-          const { data: artworks } = await supabaseAdmin
-            .from('artworks')
-            .select('id, title, image_url, thumbnail_url')
-            .in('id', artworkIds);
+    // Get all unique artwork IDs
+    const artworkIds = [...new Set(allBoardArtworks?.map(ba => ba.artwork_id) || [])];
+    
+    // Batch fetch all artwork details
+    const { data: allArtworks } = artworkIds.length > 0
+      ? await supabaseAdmin
+          .from('artworks')
+          .select('id, title, image_url, thumbnail_url')
+          .in('id', artworkIds)
+      : { data: [] };
 
-          artworksWithDetails = boardArtworks.map(ba => ({
-            ...ba,
-            artworks: artworks?.find(a => a.id === ba.artwork_id)
-          }));
-        }
+    const artworksMap = new Map(allArtworks?.map(a => [a.id, a]) || []);
 
-        return {
-          ...board,
-          artworks: [{ count: count || 0 }],
-          board_artworks: artworksWithDetails
-        };
-      })
-    );
+    // Combine all data
+    const boardsWithData = boards.map(board => {
+      const boardArtworks = boardArtworksMap.get(board.id) || [];
+      const artworksWithDetails = boardArtworks.map(ba => ({
+        ...ba,
+        artworks: artworksMap.get(ba.artwork_id) || null
+      }));
+
+      return {
+        ...board,
+        artworks: [{ count: boardCountsMap.get(board.id) || 0 }],
+        board_artworks: artworksWithDetails
+      };
+    });
 
     res.json(boardsWithData);
   } catch (error) {
@@ -97,63 +111,77 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get user info
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('id, username, avatar_url')
-      .eq('id', board.user_id)
-      .single();
+    // Parallel fetch user info, board artworks, and artwork details
+    const [userResult, boardArtworksResult] = await Promise.all([
+      supabaseAdmin
+        .from('users')
+        .select('id, username, avatar_url')
+        .eq('id', board.user_id)
+        .single(),
+      supabaseAdmin
+        .from('board_artworks')
+        .select('id, artwork_id, created_at')
+        .eq('board_id', board.id)
+        .order('created_at', { ascending: false })
+    ]);
 
-    // Get artworks in this board
-    const { data: boardArtworks } = await supabaseAdmin
-      .from('board_artworks')
-      .select('id, artwork_id, created_at')
-      .eq('board_id', board.id)
-      .order('created_at', { ascending: false });
+    const { data: user } = userResult;
+    const { data: boardArtworks } = boardArtworksResult;
 
     // Get artwork details
     let artworksWithDetails = [];
     if (boardArtworks && boardArtworks.length > 0) {
       const artworkIds = boardArtworks.map(ba => ba.artwork_id);
+      
+      // Batch fetch artworks
       const { data: artworks } = await supabaseAdmin
         .from('artworks')
-        .select(`
-          id,
-          title,
-          image_url,
-          thumbnail_url,
-          artist_id,
-          aspect_ratio
-        `)
+        .select('id, title, image_url, thumbnail_url, artist_id, aspect_ratio')
         .in('id', artworkIds);
 
-      // Get artist info for each artwork
-      const artistIds = [...new Set(artworks.map(a => a.artist_id))];
-      const { data: artists } = await supabaseAdmin
-        .from('artists')
-        .select('id, user_id')
-        .in('id', artistIds);
+      // Get unique artist IDs (artist_id in artworks is the user_id)
+      const userIds = [...new Set(artworks?.map(a => a.artist_id).filter(Boolean) || [])];
 
-      const userIds = [...new Set((artists || []).map(a => a.user_id))];
-      const { data: artistUsers } = await supabaseAdmin
-        .from('users')
-        .select('id, username, avatar_url')
-        .in('id', userIds);
+      // Batch fetch artists and users in parallel
+      const [artistsResult, artistUsersResult] = await Promise.all([
+        userIds.length > 0
+          ? supabaseAdmin
+              .from('artists')
+              .select('id, user_id')
+              .in('id', userIds)
+          : { data: [] },
+        userIds.length > 0
+          ? supabaseAdmin
+              .from('users')
+              .select('id, username, avatar_url')
+              .in('id', userIds)
+          : { data: [] }
+      ]);
+
+      const { data: artists } = artistsResult;
+      const { data: artistUsers } = artistUsersResult;
+
+      const artworksMap = new Map(artworks?.map(a => [a.id, a]) || []);
+      const artistsMap = new Map(artists?.map(a => [a.id, a]) || []);
+      const artistUsersMap = new Map(artistUsers?.map(u => [u.id, u]) || []);
 
       artworksWithDetails = boardArtworks.map(ba => {
-        const artwork = artworks?.find(a => a.id === ba.artwork_id);
-        const artist = artists?.find(a => a.id === artwork?.artist_id);
-        const artistUser = artistUsers?.find(u => u.id === artist?.user_id);
+        const artwork = artworksMap.get(ba.artwork_id);
+        if (!artwork) return { ...ba, artworks: null };
+        
+        // artist_id in artworks is the user_id, so find artist by id (which equals user_id)
+        const artist = artistsMap.get(artwork.artist_id);
+        const artistUser = artistUsersMap.get(artwork.artist_id);
 
         return {
           ...ba,
-          artworks: artwork ? {
+          artworks: {
             ...artwork,
             artists: artist ? {
               ...artist,
               users: artistUser
             } : null
-          } : null
+          }
         };
       });
     }

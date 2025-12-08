@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { useSwipeStore, useAuthStore } from '../../store';
+import { useSwipeStore, useAuthStore, useBoardStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -31,10 +31,13 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
   const { token, user } = useAuthStore();
+  const { boards, fetchBoards } = useBoardStore();
   const isArtist = user?.user_type === 'artist';
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [likedArtworks, setLikedArtworks] = useState(new Set());
+  const [likedArtworksLoaded, setLikedArtworksLoaded] = useState(false);
 
   const position = useRef(new Animated.ValueXY()).current;
   const swipeAnimation = useRef(new Animated.Value(0)).current;
@@ -78,8 +81,35 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (isArtist) {
       fetchTrendingArtworks();
+      if (token) {
+        fetchBoards();
+      }
     }
-  }, [isArtist]);
+  }, [isArtist, token]);
+
+  // Load liked artworks
+  useEffect(() => {
+    if (isArtist && token && boards.length > 0 && !likedArtworksLoaded) {
+      loadLikedArtworks();
+    }
+  }, [isArtist, token, boards, likedArtworksLoaded]);
+
+  const loadLikedArtworks = async () => {
+    try {
+      const likedBoard = boards.find(b => b.name === 'Liked');
+      if (likedBoard) {
+        const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const artworkIds = response.data.board_artworks?.map(ba => String(ba.artwork_id)) || [];
+        setLikedArtworks(new Set(artworkIds));
+      }
+      setLikedArtworksLoaded(true);
+    } catch (error) {
+      console.error('Error loading liked artworks:', error);
+      setLikedArtworksLoaded(true);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -104,10 +134,99 @@ export default function ExploreScreen() {
     }
   };
 
+  const handleLikeArtwork = async (artwork, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
+    if (!token) {
+      Alert.alert('Login Required', 'Please login to like artworks');
+      return;
+    }
+
+    const artworkId = String(artwork.id);
+    const isLiked = likedArtworksLoaded ? likedArtworks.has(artworkId) : false;
+    const previousLikedState = isLiked;
+    const previousLikeCount = artwork.like_count || 0;
+
+    // Optimistic update
+    setLikedArtworks(prev => {
+      const newSet = new Set(prev);
+      if (isLiked) {
+        newSet.delete(artworkId);
+      } else {
+        newSet.add(artworkId);
+      }
+      return newSet;
+    });
+
+    // Update local state optimistically
+    setTrendingArtworks(prev => prev.map(item => 
+      item.id === artwork.id
+        ? { ...item, like_count: isLiked ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1 }
+        : item
+    ));
+
+    try {
+      if (isLiked) {
+        // Unlike
+        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/unlike`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (response.data.likeCount !== undefined) {
+          setTrendingArtworks(prev => prev.map(item => 
+            item.id === artwork.id
+              ? { ...item, like_count: response.data.likeCount }
+              : item
+          ));
+        }
+      } else {
+        // Like
+        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/like`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (response.data.likeCount !== undefined) {
+          setTrendingArtworks(prev => prev.map(item => 
+            item.id === artwork.id
+              ? { ...item, like_count: response.data.likeCount }
+              : item
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      
+      // Rollback optimistic update
+      setLikedArtworks(prev => {
+        const newSet = new Set(prev);
+        if (previousLikedState) {
+          newSet.add(artworkId);
+        } else {
+          newSet.delete(artworkId);
+        }
+        return newSet;
+      });
+      
+      setTrendingArtworks(prev => prev.map(item => 
+        item.id === artwork.id
+          ? { ...item, like_count: previousLikeCount }
+          : item
+      ));
+      
+      Alert.alert('Error', 'Failed to update like status');
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     if (isArtist) {
       await fetchTrendingArtworks();
+      if (token) {
+        await fetchBoards();
+        setLikedArtworksLoaded(false); // Trigger reload of liked artworks
+      }
     } else {
       await fetchArtists();
     }
@@ -207,44 +326,58 @@ export default function ExploreScreen() {
         ) : (
           <FlatList
             data={trendingArtworks}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.trendingCard}
-                onPress={() => router.push(`/artwork/${item.id}`)}
-                activeOpacity={0.95}
-              >
-                <View style={styles.trendingImageContainer}>
-                  <Image
-                    source={{ uri: item.image_url || item.thumbnail_url }}
-                    style={styles.trendingImage}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={200}
-                  />
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
-                    style={styles.trendingOverlay}
-                  >
-                    <View style={styles.trendingStats}>
-                      {item.like_count > 0 && (
-                        <View style={styles.trendingStat}>
-                          <Ionicons name="heart" size={13} color="#FF6B6B" />
-                          <Text style={styles.trendingStatText}>
-                            {item.like_count || 0}
-                          </Text>
-                        </View>
-                      )}
-                      {item.view_count > 0 && (
-                        <View style={styles.trendingStat}>
-                          <Ionicons name="eye" size={13} color="#fff" />
-                          <Text style={styles.trendingStatText}>
-                            {item.view_count || 0}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </LinearGradient>
-                </View>
+            renderItem={({ item }) => {
+              const isLiked = likedArtworksLoaded ? likedArtworks.has(String(item.id)) : false;
+              return (
+                <TouchableOpacity
+                  style={styles.trendingCard}
+                  onPress={() => router.push(`/artwork/${item.id}`)}
+                  activeOpacity={0.95}
+                >
+                  <View style={styles.trendingImageContainer}>
+                    <Image
+                      source={{ uri: item.image_url || item.thumbnail_url }}
+                      style={styles.trendingImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={200}
+                    />
+                    {/* Like Button - Top Right */}
+                    <TouchableOpacity
+                      style={styles.trendingLikeButton}
+                      onPress={(e) => handleLikeArtwork(item, e)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isLiked ? "heart" : "heart-outline"}
+                        size={20}
+                        color={isLiked ? "#FF6B6B" : "#fff"}
+                      />
+                    </TouchableOpacity>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
+                      style={styles.trendingOverlay}
+                    >
+                      <View style={styles.trendingStats}>
+                        {item.like_count > 0 && (
+                          <View style={styles.trendingStat}>
+                            <Ionicons name="heart" size={13} color="#FF6B6B" />
+                            <Text style={styles.trendingStatText}>
+                              {item.like_count || 0}
+                            </Text>
+                          </View>
+                        )}
+                        {item.view_count > 0 && (
+                          <View style={styles.trendingStat}>
+                            <Ionicons name="eye" size={13} color="#fff" />
+                            <Text style={styles.trendingStatText}>
+                              {item.view_count || 0}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </LinearGradient>
+                  </View>
                 <View style={styles.trendingInfo}>
                   <Text style={styles.trendingTitleText} numberOfLines={1}>
                     {item.title}
@@ -276,8 +409,9 @@ export default function ExploreScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
-              </TouchableOpacity>
-            )}
+                </TouchableOpacity>
+              );
+            }}
             keyExtractor={(item) => String(item.id)}
             numColumns={2}
             contentContainerStyle={styles.trendingList}
@@ -1138,6 +1272,20 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 0.85,
     backgroundColor: colors.background,
+  },
+  trendingLikeButton: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   trendingImage: {
     width: '100%',
