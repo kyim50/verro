@@ -49,13 +49,13 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Apply rate limiting to all routes
-app.use(rateLimiter);
-
-// Health check endpoint
+// Health check endpoint (before rate limiting for monitoring services)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Apply rate limiting to all routes (except health check)
+app.use(rateLimiter);
 
 // API Routes
 app.use('/api/auth', authRoutes);

@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import Constants from 'expo-constants';
 import { useAuthStore } from './authStore';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 export const useBoardStore = create((set, get) => ({
   boards: [],
@@ -16,7 +17,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       const params = type ? { type } : {};
       
-      const response = await axios.get(`${API_URL}/api/boards`, {
+      const response = await axios.get(`${API_URL}/boards`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       });
@@ -34,7 +35,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      const response = await axios.get(`${API_URL}/api/boards/${boardId}`, {
+      const response = await axios.get(`${API_URL}/boards/${boardId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -51,7 +52,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      const response = await axios.post(`${API_URL}/api/boards`, boardData, {
+      const response = await axios.post(`${API_URL}/boards`, boardData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -72,7 +73,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      const response = await axios.put(`${API_URL}/api/boards/${boardId}`, updates, {
+      const response = await axios.put(`${API_URL}/boards/${boardId}`, updates, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -94,7 +95,7 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
-      await axios.delete(`${API_URL}/api/boards/${boardId}`, {
+      await axios.delete(`${API_URL}/boards/${boardId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -113,7 +114,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
       
       const response = await axios.post(
-        `${API_URL}/api/boards/${boardId}/collaborators`,
+        `${API_URL}/boards/${boardId}/collaborators`,
         { user_id: userId, role },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -129,7 +130,7 @@ export const useBoardStore = create((set, get) => ({
       const token = useAuthStore.getState().token;
 
       await axios.delete(
-        `${API_URL}/api/boards/${boardId}/collaborators/${collaboratorId}`,
+        `${API_URL}/boards/${boardId}/collaborators/${collaboratorId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (error) {

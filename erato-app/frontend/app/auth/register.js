@@ -20,7 +20,7 @@ export default function RegisterScreen() {
     username: '',
     password: '',
     fullName: '',
-    userType: 'client', // 'client', 'artist', or 'both'
+    userType: 'client', // 'client' or 'artist'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,8 +39,8 @@ export default function RegisterScreen() {
     const result = await register(formData);
 
     if (result.success) {
-      // If user is an artist or both, redirect to artist onboarding
-      if (formData.userType === 'artist' || formData.userType === 'both') {
+      // If user is an artist, redirect to artist onboarding
+      if (formData.userType === 'artist') {
         router.replace('/onboarding/welcome');
       } else {
         // Clients get the client onboarding
@@ -146,24 +146,6 @@ export default function RegisterScreen() {
                   ]}
                 >
                   Artist
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  formData.userType === 'both' && styles.typeButtonActive,
-                ]}
-                onPress={() => setFormData({ ...formData, userType: 'both' })}
-                disabled={loading}
-              >
-                <Text
-                  style={[
-                    styles.typeText,
-                    formData.userType === 'both' && styles.typeTextActive,
-                  ]}
-                >
-                  Both
                 </Text>
               </TouchableOpacity>
             </View>

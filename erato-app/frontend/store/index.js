@@ -5,6 +5,29 @@ import Constants from 'expo-constants';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
+// Axios interceptor to handle 401 errors globally
+// This will be set up after the store is created to avoid circular imports
+let authStoreRef = null;
+export const setAuthStoreRef = (store) => {
+  authStoreRef = store;
+};
+
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401 && authStoreRef) {
+      // Token is invalid, clear it
+      const authStore = authStoreRef.getState();
+      if (authStore.token) {
+        console.log('401 detected, clearing invalid token...');
+        await authStore.setToken(null);
+        authStore.setUser(null);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Auth store
 export const useAuthStore = create((set) => ({
   user: null,
@@ -96,9 +119,18 @@ export const useAuthStore = create((set) => ({
       set({ user: response.data.user });
     } catch (error) {
       console.error('Error fetching user:', error);
+      // If token is invalid (401), clear it and logout
+      if (error.response?.status === 401) {
+        console.log('Token invalid, clearing and logging out...');
+        await useAuthStore.getState().setToken(null);
+        set({ user: null, isAuthenticated: false });
+      }
     }
   },
 }));
+
+// Set up the auth store reference for the interceptor
+setAuthStoreRef(useAuthStore);
 
 // Feed store for artworks
 export const useFeedStore = create((set, get) => ({

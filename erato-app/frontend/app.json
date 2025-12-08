@@ -48,7 +48,9 @@
       },
       "eas": {
         "projectId": "c28d6897-a427-4bbb-8f35-74abae16eef0"
-      }
+      },
+      "EXPO_PUBLIC_API_URL": "https://verro.onrender.com/api",
+      "EXPO_PUBLIC_SOCKET_URL": "https://verro.onrender.com"
     },
     "owner": "kyim50"
   }

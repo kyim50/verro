@@ -20,9 +20,11 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../consta
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const STATUS_BAR_HEIGHT = Constants.statusBarHeight || 44;
-const HEADER_HEIGHT = STATUS_BAR_HEIGHT + spacing.sm + 40 + spacing.xs; // status bar + padding + button + bottom padding
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
+const HEADER_HEIGHT = STATUS_BAR_HEIGHT + (IS_SMALL_SCREEN ? spacing.xs : spacing.sm) + (IS_SMALL_SCREEN ? 36 : 40) + spacing.xs;
 const SCROLL_PADDING_TOP = HEADER_HEIGHT;
-const IMAGE_HEIGHT = Math.min(height * 0.6, width * 1.3);
+const IMAGE_HEIGHT = IS_SMALL_SCREEN ? Math.min(height * 0.55, width * 1.2) : Math.min(height * 0.6, width * 1.3);
 
 export default function ArtworkDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -318,16 +320,12 @@ export default function ArtworkDetailScreen() {
             )}
           </TouchableOpacity>
 
-          {!isOwnArtwork && (
+          {!isOwnArtwork && user?.user_type !== 'artist' && !user?.artists && (
             <TouchableOpacity
               style={styles.commissionButton}
               onPress={() => {
                 if (!user) {
                   Alert.alert('Login Required', 'Please login to request a commission');
-                  return;
-                }
-                if (user?.artists) {
-                  Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
                   return;
                 }
                 router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
@@ -388,7 +386,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingTop: STATUS_BAR_HEIGHT + spacing.xs,
     paddingBottom: spacing.xs,
     zIndex: 10,
@@ -397,9 +395,9 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: IS_SMALL_SCREEN ? 36 : 40,
+    height: IS_SMALL_SCREEN ? 36 : 40,
+    borderRadius: IS_SMALL_SCREEN ? 18 : 20,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -417,9 +415,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   imageCardContainer: {
-    marginHorizontal: spacing.md,
+    marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     borderRadius: borderRadius.xl,
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -436,9 +434,9 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     backgroundColor: colors.background,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   titleRow: {
     flexDirection: 'row',
@@ -450,9 +448,9 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: width < 375 ? 24 : 28,
+    fontSize: IS_VERY_SMALL_SCREEN ? 22 : IS_SMALL_SCREEN ? 24 : 28,
     flex: 1,
-    lineHeight: width < 375 ? 32 : 36,
+    lineHeight: IS_VERY_SMALL_SCREEN ? 28 : IS_SMALL_SCREEN ? 32 : 36,
     fontWeight: '700',
   },
   likeButton: {
@@ -480,10 +478,10 @@ const styles = StyleSheet.create({
   description: {
     ...typography.body,
     color: colors.text.secondary,
-    lineHeight: 24,
+    lineHeight: IS_SMALL_SCREEN ? 22 : 24,
     marginTop: spacing.md,
-    marginBottom: spacing.lg,
-    fontSize: width < 375 ? 15 : 16,
+    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
   tagsContainer: {
     flexDirection: 'row',

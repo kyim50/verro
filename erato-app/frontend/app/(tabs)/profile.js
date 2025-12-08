@@ -20,6 +20,8 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../consta
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = (width - spacing.md * 4) / 3;
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function ProfileScreen() {
   const { user, token, logout } = useAuthStore();
@@ -556,30 +558,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
   },
   profileSection: {
     alignItems: 'center',
-    padding: spacing.xl,
+    padding: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
   },
   avatarContainer: {
     marginBottom: spacing.md,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: IS_SMALL_SCREEN ? 90 : 100,
+    height: IS_SMALL_SCREEN ? 90 : 100,
+    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
   },
   avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: IS_SMALL_SCREEN ? 90 : 100,
+    height: IS_SMALL_SCREEN ? 90 : 100,
+    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -587,6 +590,7 @@ const styles = StyleSheet.create({
   username: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
     marginBottom: spacing.xs,
   },
   fullName: {
@@ -613,8 +617,8 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   section: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
@@ -622,11 +626,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
   },
   artworkCount: {
     ...typography.body,
@@ -643,7 +648,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   portfolioItem: {
-    width: (width - spacing.md * 4) / 2,
+    width: (width - (IS_SMALL_SCREEN ? spacing.sm : spacing.md) * 4) / 2,
     aspectRatio: 3 / 4,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',

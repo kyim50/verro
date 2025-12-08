@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -18,6 +19,9 @@ import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+const { width } = Dimensions.get('window');
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function MessagesScreen() {
   const { user, token } = useAuthStore();
@@ -297,20 +301,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
   },
   listContent: {
     paddingBottom: spacing.xl,
   },
   conversationCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -320,17 +325,17 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flexDirection: 'row',
-    padding: spacing.md,
+    padding: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: spacing.md,
+    marginRight: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: IS_SMALL_SCREEN ? 44 : 48,
+    height: IS_SMALL_SCREEN ? 44 : 48,
+    borderRadius: IS_SMALL_SCREEN ? 22 : 24,
     backgroundColor: colors.background,
   },
   onlineDot: {
@@ -357,7 +362,7 @@ const styles = StyleSheet.create({
   name: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '600',
     flex: 1,
     marginRight: spacing.sm,
@@ -440,18 +445,18 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingTop: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    gap: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
     marginBottom: spacing.sm,
   },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
   },

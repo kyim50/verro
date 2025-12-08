@@ -23,9 +23,11 @@ import { colors, spacing, typography, borderRadius } from '../../constants/theme
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
-const SPACING = 4;
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
+const SPACING = IS_SMALL_SCREEN ? 3 : 4;
 const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - spacing.md * 2) / NUM_COLUMNS;
+const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - (IS_SMALL_SCREEN ? spacing.sm : spacing.md) * 2) / NUM_COLUMNS;
 
 export default function ArtistProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -398,20 +400,22 @@ export default function ArtistProfileScreen() {
                 <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
                 <Text style={styles.messageButtonText}>Message</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  styles.commissionButton,
-                  artist.commission_status !== 'open' && styles.commissionButtonDisabled,
-                ]}
-                onPress={handleCommission}
-                disabled={artist.commission_status !== 'open'}
-              >
-                <Ionicons name="brush-outline" size={20} color={colors.text.primary} />
-                <Text style={styles.commissionButtonText}>
-                  {artist.commission_status === 'open' ? 'Request Commission' : 'Commissions Closed'}
-                </Text>
-              </TouchableOpacity>
+              {user?.user_type !== 'artist' && !user?.artists && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    styles.commissionButton,
+                    artist.commission_status !== 'open' && styles.commissionButtonDisabled,
+                  ]}
+                  onPress={handleCommission}
+                  disabled={artist.commission_status !== 'open'}
+                >
+                  <Ionicons name="brush-outline" size={20} color={colors.text.primary} />
+                  <Text style={styles.commissionButtonText}>
+                    {artist.commission_status === 'open' ? 'Request Commission' : 'Commissions Closed'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -591,9 +595,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -610,7 +614,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   content: {
-    paddingBottom: spacing.xxl,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
   },
   loadingContainer: {
     flex: 1,
@@ -628,7 +632,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
     gap: spacing.md,
   },
   errorTitle: {
@@ -654,19 +658,20 @@ const styles = StyleSheet.create({
   },
   artistHeader: {
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingTop: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: IS_SMALL_SCREEN ? 100 : 120,
+    height: IS_SMALL_SCREEN ? 100 : 120,
+    borderRadius: IS_SMALL_SCREEN ? 50 : 60,
     marginBottom: spacing.md,
   },
   artistName: {
     ...typography.h1,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 26 : 32,
     marginBottom: spacing.xs,
   },
   artistUsername: {
@@ -786,14 +791,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   section: {
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
@@ -803,6 +808,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
   },
   seeAllText: {
     ...typography.caption,

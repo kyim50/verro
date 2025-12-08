@@ -26,9 +26,11 @@ import SearchModal from '../../components/SearchModal';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
-const SPACING = 4;
+const SPACING = width < 400 ? 3 : 4; // Tighter spacing on smaller screens
 const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING) / NUM_COLUMNS;
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function HomeScreen() {
   const feedStore = useFeedStore();
@@ -903,21 +905,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     backgroundColor: colors.background,
   },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
-    padding: 4,
+    padding: 3,
     alignItems: 'center',
   },
   tab: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: IS_SMALL_SCREEN ? 16 : 20,
+    paddingVertical: IS_SMALL_SCREEN ? 6 : 8,
     borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -928,7 +930,7 @@ const styles = StyleSheet.create({
   tabText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 15,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
   },
   tabTextActive: {
     color: colors.text.primary,
@@ -936,11 +938,11 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
   },
   iconButton: {
-    width: 38,
-    height: 38,
+    width: IS_SMALL_SCREEN ? 36 : 38,
+    height: IS_SMALL_SCREEN ? 36 : 38,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
     justifyContent: 'center',
@@ -996,18 +998,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   profileButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: IS_SMALL_SCREEN ? 36 : 38,
+    height: IS_SMALL_SCREEN ? 36 : 38,
+    borderRadius: IS_SMALL_SCREEN ? 18 : 19,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: IS_SMALL_SCREEN ? 36 : 38,
+    height: IS_SMALL_SCREEN ? 36 : 38,
+    borderRadius: IS_SMALL_SCREEN ? 18 : 19,
   },
   // TikTok-style styles
   tikTokCard: {
@@ -1201,25 +1203,27 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: 80,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingTop: IS_SMALL_SCREEN ? 60 : 80,
   },
   emptyTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   emptyText: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     textAlign: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
   },
   exploreButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     borderRadius: borderRadius.full,
   },
   exploreButtonText: {
@@ -1241,7 +1245,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -1255,21 +1259,22 @@ const styles = StyleSheet.create({
   boardOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.md,
+    padding: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    gap: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   boardOptionText: {
     ...typography.body,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     flex: 1,
   },
   createBoardButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.lg,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     gap: spacing.sm,
   },
   createBoardText: {
@@ -1277,7 +1282,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   createBoardForm: {
-    padding: spacing.lg,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   input: {
     backgroundColor: colors.background,

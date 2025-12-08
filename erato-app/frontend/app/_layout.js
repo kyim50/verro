@@ -14,7 +14,12 @@ export default function RootLayout() {
       const token = await loadToken();
       // Fetch user data with artists relationship if token exists
       if (token) {
-        await fetchUser();
+        try {
+          await fetchUser();
+        } catch (error) {
+          // fetchUser will handle clearing invalid tokens
+          console.log('Failed to fetch user, token may be invalid');
+        }
       }
     };
     initializeApp();
