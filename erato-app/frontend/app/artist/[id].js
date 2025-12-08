@@ -31,6 +31,7 @@ export default function ArtistProfileScreen() {
   const { id } = useLocalSearchParams();
   const { token, user } = useAuthStore();
   const [artist, setArtist] = useState(null);
+  const [artworks, setArtworks] = useState([]);
   const [boards, setBoards] = useState([]);
   const [createdBoard, setCreatedBoard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +52,15 @@ export default function ArtistProfileScreen() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const artistResponse = await axios.get(`${API_URL}/artists/${id}`, { headers });
       setArtist(artistResponse.data);
+
+      // Fetch artist's artworks (uploaded by this artist)
+      try {
+        const artworksResponse = await axios.get(`${API_URL}/artworks?artistId=${id}`, { headers });
+        setArtworks(artworksResponse.data.artworks || []);
+      } catch (artworkError) {
+        console.error('Error fetching artworks:', artworkError);
+        setArtworks([]);
+      }
 
       // Fetch artist's boards
       const boardsResponse = await axios.get(`${API_URL}/users/${artistResponse.data.user_id}/boards`, { headers });
@@ -423,6 +433,28 @@ export default function ArtistProfileScreen() {
           </View>
         )}
 
+        {/* All Artworks Section */}
+        {artworks.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="grid-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>All Artworks</Text>
+              </View>
+              <Text style={styles.artworkCountText}>{artworks.length} artworks</Text>
+            </View>
+
+            <FlatList
+              data={artworks}
+              renderItem={renderArtwork}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              columnWrapperStyle={styles.row}
+              scrollEnabled={false}
+            />
+          </View>
+        )}
+
         {/* Created Board (Pinned) */}
         {createdBoard && (
           <View style={styles.section}>
@@ -741,6 +773,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary,
     fontWeight: '600',
+  },
+  artworkCountText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
   },
   row: {
     justifyContent: 'space-between',

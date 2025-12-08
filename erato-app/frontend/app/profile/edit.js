@@ -79,6 +79,14 @@ export default function EditProfileScreen() {
     setLoading(true);
 
     try {
+      let finalAvatarUrl = avatarUrl;
+
+      // Upload new profile image if it's a local file
+      if (avatarUrl && avatarUrl.startsWith('file://')) {
+        const { uploadImage } = require('../../utils/imageUpload');
+        finalAvatarUrl = await uploadImage(avatarUrl, 'profiles', '', token);
+      }
+
       // Update user profile
       const userResponse = await fetch(
         `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/users/me`,
@@ -89,7 +97,7 @@ export default function EditProfileScreen() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            avatar_url: avatarUrl,
+            avatar_url: finalAvatarUrl,
             full_name: fullName,
             bio: bio,
           }),
@@ -134,6 +142,9 @@ export default function EditProfileScreen() {
       }
 
       await fetchUser();
+      // Update local state with the uploaded avatar URL
+      setAvatarUrl(finalAvatarUrl);
+
       Alert.alert('Success!', 'Profile updated successfully', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -177,9 +188,11 @@ export default function EditProfileScreen() {
           <Text style={styles.sectionTitle}>Profile Picture</Text>
           <View style={styles.avatarContainer}>
             <Image
+              key={avatarUrl}
               source={{ uri: avatarUrl || 'https://via.placeholder.com/150' }}
               style={styles.avatar}
               contentFit="cover"
+              cachePolicy="none"
             />
             <TouchableOpacity
               style={styles.changePhotoButton}

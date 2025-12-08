@@ -28,8 +28,16 @@ export default function UploadArtworkScreen() {
   const [isFeatured, setIsFeatured] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState([4, 5]); // Default 4:5 ratio
 
-  
+  const aspectRatioOptions = [
+    { label: '4:5 (Portrait)', value: [4, 5] },
+    { label: '1:1 (Square)', value: [1, 1] },
+    { label: '3:4 (Portrait)', value: [3, 4] },
+    { label: '2:3 (Portrait)', value: [2, 3] },
+  ];
+
+
   // Reset states when component mounts
   useEffect(() => {
     return () => {
@@ -37,6 +45,7 @@ export default function UploadArtworkScreen() {
       setUploading(false);
     };
   }, []);
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -47,7 +56,7 @@ export default function UploadArtworkScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 5],
+      aspect: aspectRatio,
       quality: 0.8,
     });
 
@@ -99,6 +108,7 @@ export default function UploadArtworkScreen() {
             thumbnailUrl: imageUrl, // Use same URL, or generate thumbnail
             tags: tagArray,
             isFeatured,
+            aspectRatio: `${aspectRatio[0]}:${aspectRatio[1]}`, // Store aspect ratio
           }),
         }
       );
@@ -176,9 +186,44 @@ export default function UploadArtworkScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {/* Aspect Ratio Selector */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Choose Aspect Ratio</Text>
+          <Text style={styles.sectionHint}>Select your preferred aspect ratio before choosing an image</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ratioScroll}>
+            {aspectRatioOptions.map((option, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.ratioOption,
+                  aspectRatio[0] === option.value[0] && aspectRatio[1] === option.value[1] && styles.ratioOptionActive
+                ]}
+                onPress={() => {
+                  setAspectRatio(option.value);
+                }}
+                disabled={loading}
+              >
+                <View style={[
+                  styles.ratioPreview,
+                  { aspectRatio: option.value[0] / option.value[1] }
+                ]} />
+                <Text style={[
+                  styles.ratioLabel,
+                  aspectRatio[0] === option.value[0] && aspectRatio[1] === option.value[1] && styles.ratioLabelActive
+                ]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Image Picker */}
         <TouchableOpacity
-          style={styles.imagePickerContainer}
+          style={[
+            styles.imagePickerContainer,
+            { aspectRatio: aspectRatio[0] / aspectRatio[1] }
+          ]}
           onPress={pickImage}
           disabled={loading}
         >
@@ -194,7 +239,9 @@ export default function UploadArtworkScreen() {
             <View style={styles.imagePlaceholder}>
               <Ionicons name="image-outline" size={64} color={colors.text.disabled} />
               <Text style={styles.placeholderText}>Tap to select an image</Text>
-              <Text style={styles.placeholderSubtext}>Recommended: 4:5 ratio</Text>
+              <Text style={styles.placeholderSubtext}>
+                {aspectRatioOptions.find(opt => opt.value[0] === aspectRatio[0] && opt.value[1] === aspectRatio[1])?.label || 'Select ratio above'}
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -334,11 +381,13 @@ const styles = StyleSheet.create({
   },
   imagePickerContainer: {
     width: '100%',
-    aspectRatio: 4 / 5,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     marginBottom: spacing.lg,
     position: 'relative',
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   imagePreview: {
     width: '100%',
@@ -493,5 +542,57 @@ const styles = StyleSheet.create({
   guidelineText: {
     ...typography.caption,
     color: colors.text.secondary,
+  },
+  section: {
+    marginBottom: spacing.lg,
+  },
+  sectionLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    fontSize: 16,
+  },
+  sectionHint: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+    fontSize: 13,
+  },
+  ratioScroll: {
+    marginBottom: spacing.sm,
+  },
+  ratioOption: {
+    alignItems: 'center',
+    marginRight: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    minWidth: 80,
+  },
+  ratioOptionActive: {
+    borderColor: colors.primary,
+    borderWidth: 3,
+    backgroundColor: `${colors.primary}15`,
+  },
+  ratioPreview: {
+    width: 44,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.xs,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  ratioLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  ratioLabelActive: {
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

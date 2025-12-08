@@ -249,6 +249,24 @@ router.get('/conversations/:id', authenticate, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Mark conversation as read
+router.post('/conversations/:id/read', authenticate, async (req, res) => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('conversation_participants')
+      .update({ last_read_at: new Date().toISOString() })
+      .eq('conversation_id', req.params.id)
+      .eq('user_id', req.user.id);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking conversation as read:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // Get messages in a conversation
 router.get('/conversations/:id/messages', authenticate, async (req, res) => {
   try {

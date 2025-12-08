@@ -122,7 +122,8 @@ router.get('/:id', authenticate, async (req, res) => {
           title,
           image_url,
           thumbnail_url,
-          artist_id
+          artist_id,
+          aspect_ratio
         `)
         .in('id', artworkIds);
 
@@ -133,7 +134,7 @@ router.get('/:id', authenticate, async (req, res) => {
         .select('id, user_id')
         .in('id', artistIds);
 
-      const userIds = [...new Set(artists.map(a => a.user_id))];
+      const userIds = [...new Set((artists || []).map(a => a.user_id))];
       const { data: artistUsers } = await supabaseAdmin
         .from('users')
         .select('id, username, avatar_url')

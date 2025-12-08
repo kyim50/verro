@@ -35,6 +35,8 @@ export default function BoardsScreen() {
   const [likedArtists, setLikedArtists] = useState([]);
   const [likedLoading, setLikedLoading] = useState(false);
   const [likedSortOrder, setLikedSortOrder] = useState('newest'); // 'newest' or 'oldest'
+  const [selectedCommission, setSelectedCommission] = useState(null);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
 
   useEffect(() => {
     loadBoards();
@@ -94,6 +96,34 @@ export default function BoardsScreen() {
       console.error('Error unliking artist:', error);
       Alert.alert('Error', 'Failed to remove artist from liked list');
     }
+  };
+
+  const handleCompleteCommission = async (commissionId) => {
+    Alert.alert(
+      'Complete Commission',
+      'Mark this commission as completed?',
+      [
+        { text: 'Not Yet', style: 'cancel' },
+        {
+          text: 'Complete',
+          onPress: async () => {
+            try {
+              await axios.patch(
+                `${API_URL}/commissions/${commissionId}/status`,
+                { status: 'completed' },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              setShowCommissionModal(false);
+              await loadCommissions();
+              Alert.alert('Success', 'Commission has been completed!');
+            } catch (error) {
+              console.error('Error completing commission:', error);
+              Alert.alert('Error', 'Failed to complete commission. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const onRefresh = useCallback(async () => {
@@ -303,76 +333,47 @@ export default function BoardsScreen() {
     const isClient = item.client_id === user?.id;
     const otherUser = isClient ? item.artist?.users : item.client;
     const statusColor = getStatusColor(item.status);
+    const artistName = isClient
+      ? (item.artist?.users?.full_name || item.artist?.users?.username || 'Unknown')
+      : (item.client?.full_name || item.client?.username || 'Unknown Client');
 
     return (
       <TouchableOpacity
         style={styles.commissionCard}
         onPress={() => {
-          // Navigate to commission details or conversation
-          if (item.conversation_id) {
-            router.push(`/messages/${item.conversation_id}`);
-          }
+          setSelectedCommission(item);
+          setShowCommissionModal(true);
         }}
-        activeOpacity={0.9}
+        activeOpacity={0.7}
       >
-        <View style={styles.commissionHeader}>
-          <View style={styles.commissionUser}>
-            <Image
-              source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-              style={styles.commissionAvatar}
-              contentFit="cover"
-            />
-            <View style={styles.commissionUserInfo}>
-              <Text style={styles.commissionUsername}>{otherUser?.username || 'Unknown'}</Text>
-              <Text style={styles.commissionRole}>{isClient ? 'Artist' : 'Client'}</Text>
+        <View style={styles.commissionCardContent}>
+          <Image
+            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+            style={styles.commissionAvatar}
+            contentFit="cover"
+          />
+
+          <View style={styles.commissionInfo}>
+            <View style={styles.commissionTopRow}>
+              <Text style={styles.commissionUsername} numberOfLines={1}>{artistName}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusText, { color: statusColor }]}>
+                  {item.status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-            <Ionicons name={getStatusIcon(item.status)} size={14} color={statusColor} />
-            <Text style={[styles.statusText, { color: statusColor }]}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+
+            <Text style={styles.commissionDetails} numberOfLines={2}>
+              {item.details}
             </Text>
+
+            {item.price && (
+              <Text style={styles.commissionPrice}>${item.price}</Text>
+            )}
           </View>
-        </View>
 
-        {item.artwork && (
-          <View style={styles.commissionArtwork}>
-            <Image
-              source={{ uri: item.artwork.thumbnail_url || item.artwork.image_url }}
-              style={styles.commissionArtworkImage}
-              contentFit="cover"
-            />
-            <Text style={styles.commissionArtworkTitle} numberOfLines={1}>
-              {item.artwork.title}
-            </Text>
-          </View>
-        )}
-
-        <Text style={styles.commissionDetails} numberOfLines={2}>
-          {item.details}
-        </Text>
-
-        {item.client_note && isClient && (
-          <View style={styles.noteContainer}>
-            <Text style={styles.noteLabel}>Your note:</Text>
-            <Text style={styles.noteText} numberOfLines={2}>{item.client_note}</Text>
-          </View>
-        )}
-
-        {item.artist_response && !isClient && (
-          <View style={styles.noteContainer}>
-            <Text style={styles.noteLabel}>Your response:</Text>
-            <Text style={styles.noteText} numberOfLines={2}>{item.artist_response}</Text>
-          </View>
-        )}
-
-        <View style={styles.commissionFooter}>
-          <Text style={styles.commissionDate}>
-            {new Date(item.created_at).toLocaleDateString()}
-          </Text>
-          {item.price && (
-            <Text style={styles.commissionPrice}>${item.price}</Text>
-          )}
+          <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} style={styles.commissionChevron} />
         </View>
       </TouchableOpacity>
     );
@@ -383,7 +384,7 @@ export default function BoardsScreen() {
       return (
         <View style={styles.emptyState}>
           <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>No Boards Yet</Text>
+          <Text style={styles.emptyTitle}>No Collections Yet</Text>
           <Text style={styles.emptyText}>
             Create boards to save and organize artworks you love!
           </Text>
@@ -544,7 +545,7 @@ export default function BoardsScreen() {
             color={activeTab === 'boards' ? colors.primary : colors.text.secondary}
           />
           <Text style={[styles.tabText, activeTab === 'boards' && styles.tabTextActive]}>
-            Boards
+            Library
           </Text>
         </TouchableOpacity>
 
@@ -657,6 +658,200 @@ export default function BoardsScreen() {
                 <Text style={styles.saveButtonText}>Create</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Commission Detail Modal */}
+      <Modal
+        visible={showCommissionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCommissionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.commissionDetailModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Commission Details</Text>
+              <TouchableOpacity onPress={() => setShowCommissionModal(false)}>
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedCommission && (
+              <ScrollView style={styles.commissionDetailContent}>
+                {/* User Info */}
+                <View style={styles.detailSection}>
+                  <TouchableOpacity
+                    style={styles.detailUserHeader}
+                    onPress={() => {
+                      const isClient = selectedCommission.client_id === user?.id;
+                      if (isClient) {
+                        // Navigate to artist profile
+                        const artistId = selectedCommission.artist?.id || selectedCommission.artist_id;
+                        if (artistId) {
+                          setShowCommissionModal(false);
+                          router.push(`/artist/${artistId}`);
+                        }
+                      } else {
+                        // Navigate to client profile
+                        const clientId = selectedCommission.client?.id || selectedCommission.client_id;
+                        if (clientId) {
+                          setShowCommissionModal(false);
+                          router.push(`/client/${clientId}`);
+                        }
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Image
+                      source={{
+                        uri: (selectedCommission.client_id === user?.id
+                          ? selectedCommission.artist?.users?.avatar_url
+                          : selectedCommission.client?.avatar_url) || DEFAULT_AVATAR
+                      }}
+                      style={styles.detailAvatar}
+                      contentFit="cover"
+                    />
+                    <View style={styles.detailUserInfo}>
+                      <Text style={styles.detailUsername}>
+                        {selectedCommission.client_id === user?.id
+                          ? (selectedCommission.artist?.users?.full_name || selectedCommission.artist?.users?.username || 'Unknown')
+                          : (selectedCommission.client?.full_name || selectedCommission.client?.username || 'Unknown Client')}
+                      </Text>
+                      <Text style={styles.detailUserRole}>
+                        {selectedCommission.client_id === user?.id ? 'Artist' : 'Client'}
+                      </Text>
+                    </View>
+                    <View style={styles.detailUserHeaderRight}>
+                      <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedCommission.status) + '20' }]}>
+                        <Ionicons name={getStatusIcon(selectedCommission.status)} size={16} color={getStatusColor(selectedCommission.status)} />
+                        <Text style={[styles.detailStatusText, { color: getStatusColor(selectedCommission.status) }]}>
+                          {selectedCommission.status.replace('_', ' ').charAt(0).toUpperCase() + selectedCommission.status.replace('_', ' ').slice(1)}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} style={{ marginLeft: 8 }} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Artwork Reference */}
+                {selectedCommission.artwork && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Reference Artwork</Text>
+                    <View style={styles.detailArtwork}>
+                      <Image
+                        source={{ uri: selectedCommission.artwork.thumbnail_url || selectedCommission.artwork.image_url }}
+                        style={styles.detailArtworkImage}
+                        contentFit="cover"
+                      />
+                      <Text style={styles.detailArtworkTitle}>{selectedCommission.artwork.title}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Commission Details */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailSectionTitle}>Description</Text>
+                  <Text style={styles.detailText}>{selectedCommission.details}</Text>
+                </View>
+
+                {/* Client Note */}
+                {selectedCommission.client_note && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Client Note</Text>
+                    <Text style={styles.detailText}>{selectedCommission.client_note}</Text>
+                  </View>
+                )}
+
+                {/* Artist Response */}
+                {selectedCommission.artist_response && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Artist Response</Text>
+                    <Text style={styles.detailText}>{selectedCommission.artist_response}</Text>
+                  </View>
+                )}
+
+                {/* Price & Date */}
+                <View style={styles.detailSection}>
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Price</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedCommission.price ? `$${selectedCommission.price}` : 'Not set'}
+                      </Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Created</Text>
+                      <Text style={styles.detailValue}>
+                        {new Date(selectedCommission.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Action Buttons */}
+                {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && selectedCommission.artist_id === user?.artists?.id && (
+                  <View style={styles.detailActions}>
+                    <TouchableOpacity
+                      style={styles.detailCancelButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'Cancel Commission',
+                          'Are you sure you want to cancel this commission?',
+                          [
+                            { text: 'No', style: 'cancel' },
+                            {
+                              text: 'Yes, Cancel',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  await axios.patch(
+                                    `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                    { status: 'cancelled' },
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                  );
+                                  setShowCommissionModal(false);
+                                  await loadCommissions();
+                                  Alert.alert('Success', 'Commission has been cancelled');
+                                } catch (error) {
+                                  console.error('Error cancelling commission:', error);
+                                  Alert.alert('Error', 'Failed to cancel commission. Please try again.');
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="close-circle-outline" size={20} color="#F44336" />
+                      <Text style={styles.detailCancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.detailCompleteButton}
+                      onPress={() => handleCompleteCommission(selectedCommission.id)}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                      <Text style={styles.detailCompleteButtonText}>Complete</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedCommission.conversation_id && (
+                  <TouchableOpacity
+                    style={styles.detailMessageButton}
+                    onPress={() => {
+                      setShowCommissionModal(false);
+                      router.push(`/messages/${selectedCommission.conversation_id}`);
+                    }}
+                  >
+                    <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
+                    <Text style={styles.detailMessageButtonText}>View Conversation</Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -824,55 +1019,82 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 13,
   },
+  commissionCardWrapper: {
+    marginBottom: spacing.md,
+  },
   commissionCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    ...shadows.small,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  commissionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  commissionUser: {
+  completeCommissionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomLeftRadius: borderRadius.xl,
+    borderBottomRightRadius: borderRadius.xl,
+    gap: spacing.xs,
+    marginTop: -1,
+  },
+  completeCommissionText: {
+    ...typography.button,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  commissionCardContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
   },
   commissionAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
-  commissionUserInfo: {
+  commissionInfo: {
     flex: 1,
+    gap: spacing.xs,
+  },
+  commissionTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
   },
   commissionUsername: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
-  },
-  commissionRole: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 16,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    gap: 6,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 5,
     borderRadius: borderRadius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  commissionChevron: {
+    marginTop: 2,
   },
   commissionArtwork: {
     flexDirection: 'row',
@@ -897,7 +1119,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 14,
-    marginBottom: spacing.sm,
+    lineHeight: 20,
   },
   noteContainer: {
     backgroundColor: colors.background,
@@ -920,9 +1142,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginTop: spacing.md,
+  },
+  tapToViewText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 13,
   },
   commissionDate: {
     ...typography.caption,
@@ -930,9 +1156,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   commissionPrice: {
-    ...typography.bodyBold,
+    ...typography.h3,
     color: colors.primary,
-    fontSize: 15,
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: spacing.xs,
   },
   emptyState: {
     flex: 1,
@@ -1129,5 +1357,156 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: spacing.sm,
+  },
+  commissionDetailModal: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '90%',
+    width: '100%',
+  },
+  commissionDetailContent: {
+    padding: spacing.lg,
+  },
+  detailSection: {
+    marginBottom: spacing.xl,
+  },
+  detailUserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  detailUserHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+  },
+  detailAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.full,
+  },
+  detailUserInfo: {
+    flex: 1,
+  },
+  detailUsername: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    marginBottom: 2,
+  },
+  detailUserRole: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  detailStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  detailStatusText: {
+    ...typography.caption,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  detailSectionTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 16,
+    marginBottom: spacing.md,
+  },
+  detailText: {
+    ...typography.body,
+    color: colors.text.primary,
+    lineHeight: 22,
+  },
+  detailArtwork: {
+    alignItems: 'center',
+  },
+  detailArtworkImage: {
+    width: '100%',
+    height: 250,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
+  },
+  detailArtworkTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
+  detailItem: {
+    flex: 1,
+  },
+  detailLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  detailValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  detailMessageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  detailMessageButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  detailActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  detailCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+    borderWidth: 1.5,
+    borderColor: '#F44336',
+  },
+  detailCancelButtonText: {
+    ...typography.bodyBold,
+    color: '#F44336',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailCompleteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  detailCompleteButtonText: {
+    ...typography.bodyBold,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

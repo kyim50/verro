@@ -108,49 +108,50 @@ export default function MessagesScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.conversationItem}
+        style={styles.conversationCard}
         onPress={() => router.push(`/messages/${item.id}`)}
         activeOpacity={0.7}
       >
-        <View style={styles.avatarContainer}>
-          <Image
-            source={{ uri: item.other_participant?.avatar_url || DEFAULT_AVATAR }}
-            style={styles.avatar}
-            contentFit="cover"
-          />
-          {isOnline && <View style={styles.onlineDot} />}
-        </View>
-
-        <View style={styles.conversationContent}>
-          <View style={styles.conversationHeader}>
-            <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
-              {getConversationTitle(item)}
-            </Text>
-            {item.latest_message && (
-              <Text style={[styles.time, hasUnread && styles.timeUnread]}>
-                {formatTime(item.latest_message.created_at)}
-              </Text>
-            )}
+        <View style={styles.cardContent}>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: item.other_participant?.avatar_url || DEFAULT_AVATAR }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+            {isOnline && <View style={styles.onlineDot} />}
           </View>
 
-          <View style={styles.messageRow}>
+          <View style={styles.conversationContent}>
+            <View style={styles.conversationHeader}>
+              <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
+                {getConversationTitle(item)}
+              </Text>
+              {item.latest_message && (
+                <Text style={[styles.time, hasUnread && styles.timeUnread]}>
+                  {formatTime(item.latest_message.created_at)}
+                </Text>
+              )}
+            </View>
+
             <Text
               style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]}
               numberOfLines={2}
             >
               {getMessagePreview(item)}
             </Text>
-            {hasUnread && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unread_count}</Text>
+
+            {isCommissionRequest && (
+              <View style={styles.commissionBadge}>
+                <Ionicons name="briefcase" size={14} color={colors.primary} />
+                <Text style={styles.commissionBadgeText}>New Commission Request</Text>
               </View>
             )}
           </View>
 
-          {isCommissionRequest && (
-            <View style={styles.commissionBadge}>
-              <Ionicons name="briefcase" size={12} color={colors.primary} />
-              <Text style={styles.commissionBadgeText}>New Request</Text>
+          {hasUnread && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{item.unread_count}</Text>
             </View>
           )}
         </View>
@@ -275,53 +276,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
   },
   listContent: {
-    paddingTop: spacing.xs,
+    paddingBottom: spacing.xl,
   },
-  conversationItem: {
+  conversationCard: {
+    marginHorizontal: spacing.xs,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  cardContent: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background,
+    padding: spacing.sm + 2,
+    alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
     marginRight: spacing.md,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.surface,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.background,
   },
   onlineDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
+    bottom: 0,
+    right: 0,
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: colors.status.success,
-    borderWidth: 2,
-    borderColor: colors.background,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2.5,
+    borderColor: colors.surface,
   },
   conversationContent: {
     flex: 1,
     justifyContent: 'center',
-    paddingRight: spacing.sm,
   },
   conversationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs + 2,
+    marginBottom: 1,
   },
   name: {
     ...typography.bodyBold,
@@ -343,22 +349,16 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
   messagePreview: {
     ...typography.body,
     color: colors.text.secondary,
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 16,
+    marginTop: 1,
   },
   messagePreviewUnread: {
     color: colors.text.primary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   unreadBadge: {
     backgroundColor: colors.primary,
@@ -367,8 +367,11 @@ const styles = StyleSheet.create({
     height: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-    marginTop: 2,
+    paddingHorizontal: 6,
+    position: 'absolute',
+    right: spacing.md,
+    top: '50%',
+    transform: [{ translateY: -11 }],
   },
   unreadText: {
     ...typography.small,
@@ -379,18 +382,18 @@ const styles = StyleSheet.create({
   commissionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    gap: 4,
+    marginTop: 6,
     alignSelf: 'flex-start',
     backgroundColor: `${colors.primary}15`,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs - 2,
-    borderRadius: borderRadius.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
   },
   commissionBadgeText: {
     ...typography.small,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 12,
   },
   emptyState: {
@@ -413,10 +416,10 @@ const styles = StyleSheet.create({
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
     gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginBottom: spacing.sm,
   },
   filterTab: {
     flexDirection: 'row',

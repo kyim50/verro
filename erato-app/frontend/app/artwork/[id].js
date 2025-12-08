@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { useAuthStore } from '../../store';
+import { useAuthStore, useBoardStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -23,15 +23,29 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 export default function ArtworkDetailScreen() {
   const { id } = useLocalSearchParams();
   const { user, token } = useAuthStore();
+  const { saveArtworkToBoard, boards, fetchBoards, createBoard } = useBoardStore();
 
   const [artwork, setArtwork] = useState(null);
   const [similarArtworks, setSimilarArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isLiked, setIsLiked] = useState(false);
 
   useEffect(() => {
-    fetchArtworkDetails();
-    fetchSimilarArtworks();
+    const loadData = async () => {
+      await fetchArtworkDetails();
+      await fetchSimilarArtworks();
+      if (token) {
+        await fetchBoards();
+      }
+    };
+    loadData();
   }, [id]);
+
+  useEffect(() => {
+    if (token && boards.length > 0) {
+      checkIfLiked();
+    }
+  }, [boards, id, token]);
 
   const fetchArtworkDetails = async () => {
     try {
@@ -45,6 +59,75 @@ export default function ArtworkDetailScreen() {
       Alert.alert('Error', 'Failed to load artwork');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkIfLiked = async () => {
+    try {
+      const likedBoard = boards.find(b => b.name === 'Liked');
+      if (likedBoard) {
+        const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        // The API returns board_artworks array, each with artwork_id
+        const artworkIds = response.data.board_artworks?.map(ba => String(ba.artwork_id)) || [];
+        setIsLiked(artworkIds.includes(String(id)));
+      } else {
+        setIsLiked(false);
+      }
+    } catch (error) {
+      console.error('Error checking like status:', error);
+      setIsLiked(false);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!token) {
+      Alert.alert('Login Required', 'Please login to like artworks');
+      return;
+    }
+
+    // Store previous state for rollback
+    const previousLikedState = isLiked;
+
+    try {
+      // Find or create "Liked" board
+      let likedBoard = boards.find(b => b.name === 'Liked');
+
+      if (!likedBoard) {
+        likedBoard = await createBoard({ name: 'Liked', is_private: true });
+        await fetchBoards(); // Refresh boards after creating
+        // Get the newly created board from the updated boards list
+        const updatedBoards = useBoardStore.getState().boards;
+        likedBoard = updatedBoards.find(b => b.name === 'Liked');
+      }
+
+      if (isLiked) {
+        // Optimistically update UI
+        setIsLiked(false);
+        // Unlike - remove from board
+        await axios.delete(`${API_URL}/boards/${likedBoard.id}/artworks/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        // Optimistically update UI
+        setIsLiked(true);
+        // Like - add to board
+        await saveArtworkToBoard(likedBoard.id, id);
+      }
+
+      // Refresh boards to ensure state is in sync
+      await fetchBoards();
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      console.error('Error details:', error.response?.data || error.message);
+
+      // Rollback optimistic update on error
+      setIsLiked(previousLikedState);
+
+      // Show user-friendly error message
+      const errorMessage = error.response?.data?.error || 'Failed to update like status';
+      Alert.alert('Error', errorMessage);
     }
   };
 
@@ -91,7 +174,10 @@ export default function ArtworkDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Main Image */}
         <View style={styles.imageContainer}>
           <Image
@@ -103,7 +189,16 @@ export default function ArtworkDetailScreen() {
 
         {/* Artwork Info */}
         <View style={styles.infoSection}>
-          <Text style={styles.title}>{artwork.title}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{artwork.title}</Text>
+            <TouchableOpacity onPress={handleLike} style={styles.likeButton}>
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={28}
+                color={isLiked ? "#FF6B6B" : colors.text.secondary}
+              />
+            </TouchableOpacity>
+          </View>
           {artwork.description && (
             <Text style={styles.description}>{artwork.description}</Text>
           )}
@@ -246,9 +341,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: 80,
+  },
   imageContainer: {
     width: width,
-    height: height * 0.6,
+    height: height * 0.5,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -260,10 +359,20 @@ const styles = StyleSheet.create({
   infoSection: {
     padding: spacing.lg,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
   title: {
     ...typography.h2,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  likeButton: {
+    padding: spacing.xs,
   },
   description: {
     ...typography.body,

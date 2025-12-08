@@ -47,21 +47,39 @@ export default function HomeScreen() {
       const columnHeights = [0, 0];
 
       artworks.forEach((item, index) => {
-        // Vary image heights for visual interest
-        const heightMultipliers = [1.2, 1.5, 1.3, 1.6, 1.4, 1.7, 1.25, 1.45, 1.35, 1.55];
-        const imageHeight = ITEM_WIDTH * heightMultipliers[index % heightMultipliers.length];
+        // Calculate image height based on aspect ratio if available
+        let imageHeight;
+        const ratio = item.aspect_ratio || item.aspectRatio; // Handle both snake_case and camelCase
+
+        if (ratio && typeof ratio === 'string' && ratio.includes(':')) {
+          const parts = ratio.split(':');
+          const w = parseFloat(parts[0]);
+          const h = parseFloat(parts[1]);
+
+          // Ensure valid numbers
+          if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+            imageHeight = ITEM_WIDTH * (h / w);
+          } else {
+            // Use default 4:5 ratio if invalid
+            imageHeight = ITEM_WIDTH * 1.25;
+          }
+        } else {
+          // Use default 4:5 ratio for artworks without aspect ratio
+          imageHeight = ITEM_WIDTH * 1.25;
+        }
+
         const textHeight = 60; // Space for title + artist name below image
         const totalHeight = imageHeight + textHeight;
 
         // Add to the shorter column
         const shortestColumnIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
-        
+
         newColumns[shortestColumnIndex].push({
           ...item,
           imageHeight,
           totalHeight,
         });
-        
+
         columnHeights[shortestColumnIndex] += totalHeight + SPACING;
       });
 
@@ -127,22 +145,22 @@ export default function HomeScreen() {
       </Link>
       
       <View style={styles.textContainer}>
-        <Text style={styles.title} numberOfLines={2}>
-          {item.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={(e) => handleOpenSaveMenu(item, e)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
         {item.artists?.users && (
-          <View style={styles.artistRow}>
-            <Text style={styles.artistName} numberOfLines={1}>
-              {item.artists.users.username}
-            </Text>
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={(e) => handleOpenSaveMenu(item, e)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.artistName} numberOfLines={1}>
+            {item.artists.users.username}
+          </Text>
         )}
       </View>
     </View>
@@ -396,27 +414,32 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   title: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 14,
-    marginBottom: 2,
     fontWeight: '600',
-  },
-  artistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flex: 1,
+    marginRight: 4,
   },
   artistName: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
-    flex: 1,
   },
   menuButton: {
-    padding: 4,
-    marginLeft: 4,
+    padding: 3,
+    borderRadius: borderRadius.sm,
+    width: 26,
+    height: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingState: {
     flex: 1,

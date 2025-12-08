@@ -11,14 +11,16 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { useCallback } from 'react';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -42,6 +44,34 @@ export default function ConversationScreen() {
       fetchConversationDetails();
     }
   }, [id, token]);
+
+  // Mark messages as read when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const markAsRead = async () => {
+        try {
+          await axios.post(
+            `${API_URL}/messages/conversations/${id}/read`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+        }
+      };
+
+      if (id && token) {
+        markAsRead();
+        // Refresh messages when screen comes into focus
+        fetchMessages();
+        fetchConversationDetails();
+      }
+
+      return () => {
+        // Cleanup if needed
+      };
+    }, [id, token])
+  );
 
   const fetchConversationDetails = async () => {
     try {
@@ -138,11 +168,11 @@ export default function ConversationScreen() {
         { status, artist_response: response },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Refresh messages and commission details to update UI
-      fetchMessages();
-      fetchConversationDetails();
+      // Refresh messages and commission details to update UI immediately
+      await Promise.all([fetchMessages(), fetchConversationDetails()]);
     } catch (error) {
       console.error('Error responding to commission:', error);
+      Alert.alert('Error', 'Failed to update commission status. Please try again.');
     }
   };
 
@@ -266,10 +296,28 @@ export default function ConversationScreen() {
   const renderCommissionUpdate = (item) => {
     const metadata = item.metadata || {};
 
+    // Determine icon and color based on update type
+    let iconName = 'information-circle';
+    let iconColor = colors.primary;
+
+    if (item.content.toLowerCase().includes('accepted')) {
+      iconName = 'checkmark-circle';
+      iconColor = '#4CAF50';
+    } else if (item.content.toLowerCase().includes('completed')) {
+      iconName = 'checkmark-done-circle';
+      iconColor = '#4CAF50';
+    } else if (item.content.toLowerCase().includes('cancelled') || item.content.toLowerCase().includes('declined')) {
+      iconName = 'close-circle';
+      iconColor = '#F44336';
+    } else if (item.content.toLowerCase().includes('progress')) {
+      iconName = 'time';
+      iconColor = colors.primary;
+    }
+
     return (
       <View style={styles.systemMessageContainer}>
-        <View style={styles.systemMessageBubble}>
-          <Ionicons name="information-circle" size={16} color={colors.text.secondary} />
+        <View style={[styles.systemMessageBubble, { borderColor: iconColor + '30' }]}>
+          <Ionicons name={iconName} size={18} color={iconColor} />
           <Text style={styles.systemMessageText}>{item.content}</Text>
         </View>
       </View>
@@ -393,6 +441,82 @@ export default function ConversationScreen() {
                 )}
               </View>
             )}
+
+            {/* Action Buttons for In-Progress Commissions */}
+            {commission && (commission.status === 'in_progress' || commission.status === 'accepted') && (
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalActionButton, styles.cancelActionButton]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Cancel Commission',
+                      'Are you sure you want to cancel this commission? This action cannot be undone.',
+                      [
+                        { text: 'No', style: 'cancel' },
+                        {
+                          text: 'Yes, Cancel',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await axios.patch(
+                                `${API_URL}/commissions/${commission.id}/status`,
+                                { status: 'cancelled' },
+                                { headers: { Authorization: `Bearer ${token}` } }
+                              );
+                              setShowDetailsModal(false);
+                              await Promise.all([fetchMessages(), fetchConversationDetails()]);
+                              Alert.alert('Success', 'Commission has been cancelled');
+                            } catch (error) {
+                              console.error('Error cancelling commission:', error);
+                              Alert.alert('Error', 'Failed to cancel commission. Please try again.');
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Ionicons name="close-circle-outline" size={22} color="#F44336" />
+                  <Text style={styles.cancelActionButtonText}>Cancel Commission</Text>
+                </TouchableOpacity>
+
+                {user?.artists && commission.artist_id === user.artists.id && (
+                  <TouchableOpacity
+                    style={[styles.modalActionButton, styles.completeActionButton]}
+                    onPress={() => {
+                      Alert.alert(
+                        'Complete Commission',
+                        'Mark this commission as completed?',
+                        [
+                          { text: 'Not Yet', style: 'cancel' },
+                          {
+                            text: 'Complete',
+                            onPress: async () => {
+                              try {
+                                await axios.patch(
+                                  `${API_URL}/commissions/${commission.id}/status`,
+                                  { status: 'completed' },
+                                  { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                                setShowDetailsModal(false);
+                                await Promise.all([fetchMessages(), fetchConversationDetails()]);
+                                Alert.alert('Success', 'Commission has been completed!');
+                              } catch (error) {
+                                console.error('Error completing commission:', error);
+                                Alert.alert('Error', 'Failed to complete commission. Please try again.');
+                              }
+                            }
+                          }
+                        ]
+                      );
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+                    <Text style={styles.completeActionButtonText}>Mark as Complete</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -409,7 +533,12 @@ export default function ConversationScreen() {
 
         <TouchableOpacity style={styles.headerInfo} onPress={() => {
           if (otherUser?.id) {
-            router.push(`/user/${otherUser.id}`);
+            // Navigate to artist profile if they have an artist record, otherwise client profile
+            if (otherUser.artists) {
+              router.push(`/artist/${otherUser.artists.id}`);
+            } else {
+              router.push(`/client/${otherUser.id}`);
+            }
           }
         }}>
           {otherUser && (
@@ -434,7 +563,22 @@ export default function ConversationScreen() {
           )}
         </TouchableOpacity>
 
-        <View style={styles.headerActions} />
+        {commission && (commission.status === 'in_progress' || commission.status === 'accepted') && (
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => {
+              setSelectedCommissionDetails({
+                title: commission.title,
+                description: commission.details,
+                budget: commission.price,
+                deadline: commission.deadline,
+              });
+              setShowDetailsModal(true);
+            }}
+          >
+            <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <FlatList
@@ -503,11 +647,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.xxl + spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border + '50',
+    paddingBottom: spacing.md,
     backgroundColor: colors.background,
   },
   backButton: {
@@ -563,7 +705,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messagesList: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   messageRow: {
@@ -590,19 +732,21 @@ const styles = StyleSheet.create({
     height: 28,
   },
   bubble: {
-    maxWidth: '70%',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
+    maxWidth: '75%',
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 20,
     marginBottom: 2,
   },
   bubbleOwn: {
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
   },
   bubbleOther: {
     backgroundColor: colors.surface,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   messageText: {
     ...typography.body,
@@ -791,23 +935,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
+  modalActions: {
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.sm,
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+  },
+  cancelActionButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: '#F44336',
+  },
+  cancelActionButtonText: {
+    ...typography.bodyBold,
+    color: '#F44336',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  completeActionButton: {
+    backgroundColor: '#4CAF50',
+  },
+  completeActionButtonText: {
+    ...typography.bodyBold,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   systemMessageContainer: {
     alignItems: 'center',
-    marginVertical: spacing.sm,
+    marginVertical: spacing.md,
   },
   systemMessageBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
+    borderWidth: 1,
+    maxWidth: '85%',
   },
   systemMessageText: {
     ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 12,
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   emptyState: {
     flex: 1,
@@ -826,10 +1009,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   inputContainer: {
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border + '50',
     backgroundColor: colors.background,
-    paddingBottom: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   inputRow: {
     flexDirection: 'row',
@@ -843,7 +1026,7 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   inputWrapper: {
     flex: 1,
@@ -851,16 +1034,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 36,
+    minHeight: 40,
     maxHeight: 100,
     justifyContent: 'center',
+    paddingVertical: 2,
   },
   input: {
     ...typography.body,
     color: colors.text.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
     fontSize: 15,
+    lineHeight: 20,
+    textAlignVertical: 'center',
   },
   sendButton: {
     width: 32,
@@ -869,6 +1055,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
 });

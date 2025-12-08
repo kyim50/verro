@@ -1,9 +1,10 @@
 import { Redirect } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { useState, useEffect } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store';
-import { colors } from '../constants/theme';
+import { colors, typography, spacing } from '../constants/theme';
 
 export default function Index() {
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -33,9 +34,16 @@ export default function Index() {
 
   if (isLoading || checkingFirstLaunch) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <LinearGradient
+        colors={[colors.background, colors.surfaceLight, colors.background]}
+        style={styles.loadingContainer}
+      >
+        <View style={styles.loadingContent}>
+          <Text style={styles.appName}>Verro</Text>
+          <Text style={styles.tagline}>Discover. Create. Connect.</Text>
+          <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+        </View>
+      </LinearGradient>
     );
   }
 
@@ -50,3 +58,33 @@ export default function Index() {
 
   return <Redirect href="/auth/login" />;
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  appName: {
+    ...typography.h1,
+    fontSize: 48,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 2,
+    marginBottom: spacing.xs,
+  },
+  tagline: {
+    ...typography.body,
+    fontSize: 16,
+    color: colors.text.secondary,
+    letterSpacing: 1,
+    marginBottom: spacing.lg,
+  },
+  loader: {
+    marginTop: spacing.xl,
+  },
+});

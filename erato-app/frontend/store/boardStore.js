@@ -127,9 +127,38 @@ export const useBoardStore = create((set, get) => ({
   removeCollaborator: async (boardId, collaboratorId) => {
     try {
       const token = useAuthStore.getState().token;
-      
+
       await axios.delete(
         `${API_URL}/api/boards/${boardId}/collaborators/${collaboratorId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  saveArtworkToBoard: async (boardId, artworkId) => {
+    try {
+      const token = useAuthStore.getState().token;
+
+      const response = await axios.post(
+        `${API_URL}/boards/${boardId}/artworks`,
+        { artwork_id: artworkId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  removeArtworkFromBoard: async (boardId, artworkId) => {
+    try {
+      const token = useAuthStore.getState().token;
+
+      await axios.delete(
+        `${API_URL}/boards/${boardId}/artworks/${artworkId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (error) {

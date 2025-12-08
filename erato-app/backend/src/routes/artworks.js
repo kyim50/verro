@@ -165,6 +165,7 @@ router.post(
         tags,
         isFeatured,
         displayOrder,
+        aspectRatio,
       } = req.body;
 
       const { data: artwork, error } = await supabaseAdmin
@@ -178,6 +179,7 @@ router.post(
           tags: tags || [],
           is_featured: isFeatured || false,
           display_order: displayOrder || 0,
+          aspect_ratio: aspectRatio || '4:5',
         })
         .select()
         .single();

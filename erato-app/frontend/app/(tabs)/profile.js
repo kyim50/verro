@@ -22,15 +22,17 @@ export default function ProfileScreen() {
   const { profile, fetchProfile, isLoading, reset } = useProfileStore();
 
   useEffect(() => {
-    if (user) {
-      // Clear old profile data first, then load new profile
-      reset();
+    // Always reset profile data when component mounts or user changes
+    reset();
+
+    if (user?.id) {
       loadProfile();
     }
   }, [user?.id]); // Use user.id to ensure it triggers on user change
 
   const loadProfile = async () => {
     try {
+      if (!user?.id) return;
       await fetchProfile(user.id, token);
     } catch (error) {
       console.error('Error loading profile:', error);

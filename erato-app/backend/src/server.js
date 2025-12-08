@@ -17,6 +17,7 @@ import messageRoutes from './routes/messages.js';
 import commissionRoutes from './routes/commissions.js';
 import userRoutes from './routes/users.js';
 import uploadRoutes from './routes/uploads.js';
+import reviewRoutes from './routes/reviews.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -66,6 +67,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/commissions', commissionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -107,7 +109,7 @@ io.on('connection', (socket) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API: http://localhost:${PORT}`);

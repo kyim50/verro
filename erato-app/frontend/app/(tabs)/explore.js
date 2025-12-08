@@ -20,7 +20,7 @@ import { useSwipeStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.25;
+const SWIPE_THRESHOLD = width * 0.20; // Reduced from 0.25 to make swiping easier
 
 export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
@@ -67,10 +67,19 @@ export default function ExploreScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        position.setOffset({
+          x: position.x._value,
+          y: position.y._value,
+        });
+      },
       onPanResponderMove: (_, gesture) => {
         position.setValue({ x: gesture.dx, y: gesture.dy });
       },
       onPanResponderRelease: (_, gesture) => {
+        position.flattenOffset();
+
         if (gesture.dx > SWIPE_THRESHOLD) {
           swipeRight();
         } else if (gesture.dx < -SWIPE_THRESHOLD) {
@@ -78,6 +87,8 @@ export default function ExploreScreen() {
         } else {
           Animated.spring(position, {
             toValue: { x: 0, y: 0 },
+            friction: 7,
+            tension: 40,
             useNativeDriver: false,
           }).start();
         }
