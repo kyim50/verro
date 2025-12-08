@@ -100,7 +100,7 @@ router.get(
 // Get artist profile
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
-    // Get artist record
+    // First try to get the artist record
     const { data: artist, error } = await supabaseAdmin
       .from('artists')
       .select('*')
@@ -109,46 +109,27 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
 
     if (error) throw error;
 
+    // Get the user data separately
     const userId = artist.user_id || artist.id;
+    const { data: userData } = await supabaseAdmin
+      .from('users')
+      .select('id, username, avatar_url, full_name, bio')
+      .eq('id', userId)
+      .single();
 
-    // Run all queries in parallel for better performance
-    const [userResult, artworksResult, reviewsResult] = await Promise.all([
-      // Get user data
-      supabaseAdmin
-        .from('users')
-        .select('id, username, avatar_url, full_name, bio')
-        .eq('id', userId)
-        .single(),
-      
-      // Get artist's artworks (limit fields for better performance)
-      supabaseAdmin
-        .from('artworks')
-        .select('id, title, description, image_url, thumbnail_url, created_at, view_count, like_count')
-        .eq('artist_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      
-      // Get reviews for rating calculation
-      supabaseAdmin
-        .from('reviews')
-        .select('rating')
-        .eq('artist_id', artist.id)
-        .eq('review_type', 'client_to_artist')
-    ]);
-
-    if (userResult.error) throw userResult.error;
-
-    const averageRating = reviewsResult.data?.length > 0
-      ? reviewsResult.data.reduce((sum, r) => sum + r.rating, 0) / reviewsResult.data.length
-      : 0;
+    // Get artist's artworks
+    const { data: artworks } = await supabaseAdmin
+      .from('artworks')
+      .select('*')
+      .eq('artist_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
 
     res.json({
       ...artist,
       user_id: userId,
-      users: userResult.data,
-      artworks: artworksResult.data || [],
-      average_rating: averageRating,
-      review_count: reviewsResult.data?.length || 0
+      users: userData,
+      artworks: artworks || []
     });
   } catch (error) {
     next(error);

@@ -351,26 +351,60 @@ router.put(
 // Delete artwork
 router.delete('/:id', authenticate, requireArtist, async (req, res, next) => {
   try {
-    // Check ownership
-    const { data: existing } = await supabase
+    const artworkId = req.params.id;
+
+    // Check ownership and that artwork exists
+    const { data: existing, error: fetchError } = await supabaseAdmin
       .from('artworks')
-      .select('artist_id')
-      .eq('id', req.params.id)
+      .select('artist_id, image_url, thumbnail_url')
+      .eq('id', artworkId)
       .single();
 
-    if (!existing || existing.artist_id !== req.user.id) {
-      throw new AppError('Artwork not found or unauthorized', 403);
+    if (fetchError || !existing) {
+      throw new AppError('Artwork not found', 404);
     }
 
-    const { error } = await supabase
+    if (existing.artist_id !== req.user.id) {
+      throw new AppError('Unauthorized to delete this artwork', 403);
+    }
+
+    // Delete all related data first (cleanup related data)
+    // 1. Delete all board_artworks entries
+    const { error: boardArtworksError } = await supabaseAdmin
+      .from('board_artworks')
+      .delete()
+      .eq('artwork_id', artworkId);
+
+    if (boardArtworksError) {
+      console.error('Error deleting board_artworks:', boardArtworksError);
+      // Continue anyway - artwork might not be in any boards
+    }
+
+    // 2. Delete the artwork itself (this should cascade to any foreign key references if configured)
+    const { error: deleteError } = await supabaseAdmin
       .from('artworks')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', artworkId);
 
-    if (error) throw error;
+    if (deleteError) {
+      console.error('Error deleting artwork:', deleteError);
+      throw new AppError(`Failed to delete artwork: ${deleteError.message}`, 500);
+    }
 
-    res.json({ message: 'Artwork deleted successfully' });
+    // Verify deletion
+    const { data: verifyDeleted } = await supabaseAdmin
+      .from('artworks')
+      .select('id')
+      .eq('id', artworkId)
+      .maybeSingle();
+
+    if (verifyDeleted) {
+      throw new AppError('Artwork deletion failed - artwork still exists', 500);
+    }
+
+    res.json({ message: 'Artwork deleted successfully', deleted: true });
   } catch (error) {
+    console.error('Error in delete artwork endpoint:', error);
     next(error);
   }
 });

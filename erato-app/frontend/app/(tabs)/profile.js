@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { useAuthStore, useProfileStore } from '../../store';
+import { useAuthStore, useProfileStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -24,6 +24,7 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 export default function ProfileScreen() {
   const { user, token, logout } = useAuthStore();
   const { profile, fetchProfile, isLoading, reset } = useProfileStore();
+  const feedStore = useFeedStore();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Auto-refresh when screen comes into focus (but keep existing data)
@@ -101,10 +102,37 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await axios.delete(`${API_URL}/artworks/${artworkId}`, {
+              const deleteResponse = await axios.delete(`${API_URL}/artworks/${artworkId}`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
+              
+              // Remove from feed store immediately
+              try {
+                feedStore.removeArtwork?.(artworkId);
+              } catch (e) {
+                console.warn('Feed store removal failed:', e?.message || e);
+              }
+              
+              // Optimistically remove from local state immediately
+              const { profile: currentProfile } = useProfileStore.getState();
+              if (currentProfile?.artist?.artworks) {
+                useProfileStore.setState({
+                  profile: {
+                    ...currentProfile,
+                    artist: {
+                      ...currentProfile.artist,
+                      artworks: currentProfile.artist.artworks.filter(a => String(a.id) !== String(artworkId))
+                    }
+                  }
+                });
+              }
+              
+              // Force refresh profile by resetting and fetching fresh data
+              reset();
+              await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure state clears
               await fetchProfile(user.id, token);
+              
+              Alert.alert('Success', 'Artwork deleted successfully');
             } catch (error) {
               console.error('Error deleting artwork:', error);
               const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
