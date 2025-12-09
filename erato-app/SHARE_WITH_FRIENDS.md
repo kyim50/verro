@@ -162,3 +162,4 @@ Then:
 
 **TL;DR**: For iOS friends without paid account → Use Expo Go. Just send them the QR code! 📸
 
+

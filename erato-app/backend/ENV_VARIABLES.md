@@ -27,6 +27,14 @@ AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION=us-east-1
 AWS_S3_BUCKET=your_bucket_name
+
+# Rate Limiting (Optional - for development/testing)
+# Set RELAXED_RATE_LIMITS=true on Render to get lenient limits (1000 req/min) for testing
+# Production should use default strict limits (100 req/15min)
+RELAXED_RATE_LIMITS=false
+# Or set custom limits:
+# RATE_LIMIT_WINDOW_MS=900000 (15 minutes in milliseconds)
+# RATE_LIMIT_MAX_REQUESTS=100
 ```
 
 ## How to Get Each Value
@@ -55,4 +63,5 @@ Or use an online generator, but keep it secret!
 ### Frontend URL
 - **Development (Expo)**: Your Expo dev server URL (shown when running `expo start`)
 - **Production**: Your deployed app domain or Expo published URL
+
 

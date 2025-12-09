@@ -389,15 +389,16 @@ export default function BoardsScreen() {
 
   const renderCommission = ({ item }) => {
     const isClient = item.client_id === user?.id;
+    const isArtist = !!user?.artists;
     const otherUser = isClient ? item.artist?.users : item.client;
     const statusColor = getStatusColor(item.status);
-    const artistName = isClient
-      ? (item.artist?.users?.full_name || item.artist?.users?.username || 'Unknown')
+    const otherUserName = isClient
+      ? (item.artist?.users?.full_name || item.artist?.users?.username || 'Unknown Artist')
       : (item.client?.full_name || item.client?.username || 'Unknown Client');
 
     return (
       <TouchableOpacity
-        style={styles.commissionCard}
+        style={[styles.commissionCard, item.status === 'pending' && isArtist && styles.pendingCommissionCard]}
         onPress={() => {
           setSelectedCommission(item);
           setShowCommissionModal(true);
@@ -405,15 +406,55 @@ export default function BoardsScreen() {
         activeOpacity={0.7}
       >
         <View style={styles.commissionCardContent}>
-          <Image
-            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-            style={styles.commissionAvatar}
-            contentFit="cover"
-          />
+          {/* Profile Picture - tappable for artists viewing pending requests */}
+          {isArtist && item.status === 'pending' ? (
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                if (item.client?.id || item.client_id) {
+                  router.push(`/client/${item.client?.id || item.client_id}`);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+                style={styles.commissionAvatar}
+                contentFit="cover"
+              />
+              <View style={styles.tapIndicatorOverlay}>
+                <Ionicons name="person-circle-outline" size={16} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <Image
+              source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+              style={styles.commissionAvatar}
+              contentFit="cover"
+            />
+          )}
 
           <View style={styles.commissionInfo}>
             <View style={styles.commissionTopRow}>
-              <Text style={styles.commissionUsername} numberOfLines={1}>{artistName}</Text>
+              {/* Name - tappable for artists viewing pending requests */}
+              {isArtist && item.status === 'pending' ? (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    if (item.client?.id || item.client_id) {
+                      router.push(`/client/${item.client?.id || item.client_id}`);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                  style={styles.tappableName}
+                >
+                  <Text style={styles.commissionUsername} numberOfLines={1}>{otherUserName}</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                  <Text style={styles.tapToViewText}>Tap to view profile</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.commissionUsername} numberOfLines={1}>{otherUserName}</Text>
+              )}
               <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
@@ -423,12 +464,20 @@ export default function BoardsScreen() {
             </View>
 
             <Text style={styles.commissionDetails} numberOfLines={2}>
-              {item.details}
+              {item.client_note || item.details}
             </Text>
 
-            {item.price && (
-              <Text style={styles.commissionPrice}>${item.price}</Text>
-            )}
+            <View style={styles.commissionFooter}>
+              {item.budget && !item.price && (
+                <View style={styles.budgetChip}>
+                  <Ionicons name="cash-outline" size={14} color={colors.primary} />
+                  <Text style={styles.budgetText}>Budget: ${item.budget}</Text>
+                </View>
+              )}
+              {item.price && (
+                <Text style={styles.commissionPrice}>${item.price}</Text>
+              )}
+            </View>
           </View>
 
           <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} style={styles.commissionChevron} />
@@ -455,13 +504,14 @@ export default function BoardsScreen() {
         </View>
       );
     } else if (activeTab === 'commissions') {
+      const isArtist = !!user?.artists;
       return (
         <View style={styles.emptyState}>
           <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
           <Text style={styles.emptyTitle}>No Commissions</Text>
           <Text style={styles.emptyText}>
-            {user?.user_type === 'artist' || user?.user_type === 'both'
-              ? 'You haven\'t received any commission requests yet.'
+            {isArtist
+              ? 'You haven\'t received any commission requests yet. They will appear here when clients request your work.'
               : 'You haven\'t requested any commissions yet.'}
           </Text>
         </View>
@@ -501,22 +551,26 @@ export default function BoardsScreen() {
     } else if (activeTab === 'commissions') {
       // Check if user is an artist
       const isArtist = !!user?.artists;
-      console.log('Is artist?', isArtist, 'User has artists:', user?.artists);
 
       // Filter commissions based on user type
-      // Artists: only show in_progress and completed commissions (pending requests are in messages)
+      // Artists: show ALL commissions (including pending requests - they're now in Library)
       // Clients: show all commissions
-      const filteredCommissions = isArtist
-        ? commissions.filter(c => c.status === 'in_progress' || c.status === 'completed')
-        : commissions;
+      const filteredCommissions = commissions;
 
-      console.log('Filtered commissions:', filteredCommissions.length, 'out of', commissions.length);
-      console.log('Filtered statuses:', filteredCommissions.map(c => c.status));
+      // Sort: pending requests first for artists, then by date
+      const sortedCommissions = [...filteredCommissions].sort((a, b) => {
+        if (isArtist) {
+          // For artists: pending first, then by date (newest first)
+          if (a.status === 'pending' && b.status !== 'pending') return -1;
+          if (a.status !== 'pending' && b.status === 'pending') return 1;
+        }
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
 
       return (
         <FlatList
           key="commissions-list"
-          data={filteredCommissions}
+          data={sortedCommissions}
           renderItem={renderCommission}
           keyExtractor={(item) => item.id}
           refreshControl={
@@ -830,26 +884,110 @@ export default function BoardsScreen() {
                   </View>
                 )}
 
-                {/* Price & Date */}
+                {/* Budget/Price & Deadline */}
                 <View style={styles.detailSection}>
                   <View style={styles.detailRow}>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Price</Text>
+                      <Text style={styles.detailLabel}>
+                        {selectedCommission.price ? 'Price' : 'Budget'}
+                      </Text>
                       <Text style={styles.detailValue}>
-                        {selectedCommission.price ? `$${selectedCommission.price}` : 'Not set'}
+                        {selectedCommission.price
+                          ? `$${selectedCommission.price}`
+                          : selectedCommission.budget
+                          ? `$${selectedCommission.budget}`
+                          : 'Not specified'}
                       </Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Created</Text>
+                      <Text style={styles.detailLabel}>
+                        {selectedCommission.deadline_text ? 'Deadline' : 'Created'}
+                      </Text>
                       <Text style={styles.detailValue}>
-                        {new Date(selectedCommission.created_at).toLocaleDateString()}
+                        {selectedCommission.deadline_text
+                          ? selectedCommission.deadline_text
+                          : new Date(selectedCommission.created_at).toLocaleDateString()}
                       </Text>
                     </View>
                   </View>
                 </View>
 
-                {/* Action Buttons */}
-                {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && selectedCommission.artist_id === user?.artists?.id && (
+                {/* Action Buttons for Pending Requests (Artist Only) */}
+                {selectedCommission.status === 'pending' && user?.artists && (selectedCommission.artist_id === user?.artists?.id || selectedCommission.artist_id === user?.id) && (
+                  <View style={styles.detailActions}>
+                    <TouchableOpacity
+                      style={styles.detailDeclineButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'Decline Commission',
+                          'Are you sure you want to decline this commission request? This action cannot be undone.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Decline',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  await axios.patch(
+                                    `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                    { status: 'declined' },
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                  );
+                                  setShowCommissionModal(false);
+                                  await loadCommissions();
+                                  Alert.alert('Declined', 'Commission request has been declined');
+                                } catch (error) {
+                                  console.error('Error declining commission:', error);
+                                  Alert.alert('Error', 'Failed to decline commission. Please try again.');
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="close-circle-outline" size={20} color="#F44336" />
+                      <Text style={styles.detailDeclineButtonText}>Decline</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.detailAcceptButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'Accept Commission',
+                          'Accept this commission request? You can start working on it right away.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Accept',
+                              onPress: async () => {
+                                try {
+                                  await axios.patch(
+                                    `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                    { status: 'accepted' },
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                  );
+                                  setShowCommissionModal(false);
+                                  await loadCommissions();
+                                  Alert.alert('Accepted!', 'Commission request has been accepted. You can now message the client.');
+                                } catch (error) {
+                                  console.error('Error accepting commission:', error);
+                                  Alert.alert('Error', 'Failed to accept commission. Please try again.');
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                      <Text style={styles.detailAcceptButtonText}>Accept</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Action Buttons for In Progress Commissions */}
+                {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && user?.artists && (selectedCommission.artist_id === user?.artists?.id || selectedCommission.artist_id === user?.id) && (
                   <View style={styles.detailActions}>
                     <TouchableOpacity
                       style={styles.detailCancelButton}
@@ -896,7 +1034,8 @@ export default function BoardsScreen() {
                   </View>
                 )}
 
-                {selectedCommission.conversation_id && (
+                {/* View Conversation Button (only show if commission is accepted/in_progress) */}
+                {selectedCommission.conversation_id && (selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted' || selectedCommission.status === 'completed') && (
                   <TouchableOpacity
                     style={styles.detailMessageButton}
                     onPress={() => {
@@ -1119,6 +1258,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  pendingCommissionCard: {
+    borderColor: colors.primary + '40',
+    borderWidth: 2,
+    backgroundColor: colors.primary + '08',
   },
   completeCommissionButton: {
     flexDirection: 'row',
@@ -1147,6 +1292,17 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    position: 'relative',
+  },
+  tapIndicatorOverlay: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    padding: 2,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   commissionInfo: {
     flex: 1,
@@ -1163,6 +1319,12 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 16,
     flex: 1,
+    marginRight: spacing.sm,
+  },
+  tappableName: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     marginRight: spacing.sm,
   },
   statusBadge: {
@@ -1233,13 +1395,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  budgetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  budgetText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 12,
   },
   tapToViewText: {
     ...typography.caption,
     color: colors.primary,
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 11,
+    marginLeft: 4,
   },
   commissionDate: {
     ...typography.caption,
@@ -1565,6 +1745,40 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
     marginBottom: spacing.md,
+  },
+  detailDeclineButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+    borderWidth: 1.5,
+    borderColor: '#F44336',
+  },
+  detailDeclineButtonText: {
+    ...typography.bodyBold,
+    color: '#F44336',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailAcceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  detailAcceptButtonText: {
+    ...typography.bodyBold,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   detailCancelButton: {
     flex: 1,

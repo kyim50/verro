@@ -28,8 +28,6 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); // 'all', 'requests', 'messages'
-
   useEffect(() => {
     if (user && token) {
       fetchConversations();
@@ -41,7 +39,17 @@ export default function MessagesScreen() {
       const response = await axios.get(`${API_URL}/messages/conversations`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setConversations(response.data.conversations || []);
+      // Filter out conversations that are commission requests (they go to Library now)
+      const allConversations = response.data.conversations || [];
+      // Only show conversations that are NOT commission requests
+      const regularConversations = allConversations.filter(conv => {
+        // If conversation has a commission_id and commission status is pending, hide it from messages
+        if (conv.commissions) {
+          return conv.commissions.status !== 'pending';
+        }
+        return true; // Show conversations without commission association
+      });
+      setConversations(regularConversations);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
@@ -129,8 +137,6 @@ export default function MessagesScreen() {
 
   const renderConversation = ({ item }) => {
     const hasUnread = item.unread_count > 0;
-    const isCommissionRequest = item.commissions?.status === 'pending' &&
-                                item.commissions?.artist_id === user?.id;
     const isOnline = isUserOnline(item.other_participant);
 
     return (
@@ -168,13 +174,6 @@ export default function MessagesScreen() {
             >
               {getMessagePreview(item)}
             </Text>
-
-            {isCommissionRequest && (
-              <View style={styles.commissionBadge}>
-                <Ionicons name="briefcase" size={14} color={colors.primary} />
-                <Text style={styles.commissionBadgeText}>New Commission Request</Text>
-              </View>
-            )}
           </View>
 
           {hasUnread && (
@@ -195,20 +194,6 @@ export default function MessagesScreen() {
     );
   }
 
-  // Filter conversations based on selected filter
-  const filteredConversations = conversations.filter(conv => {
-    if (filter === 'all') return true;
-    if (filter === 'requests') {
-      // Show only commission request conversations
-      return conv.commissions !== null;
-    }
-    if (filter === 'messages') {
-      // Show only regular messages (non-commission conversations)
-      return conv.commissions === null;
-    }
-    return true;
-  });
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -219,59 +204,17 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[styles.filterTabText, filter === 'all' && styles.filterTabTextActive]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'requests' && styles.filterTabActive]}
-          onPress={() => setFilter('requests')}
-        >
-          <Ionicons
-            name="briefcase"
-            size={16}
-            color={filter === 'requests' ? colors.primary : colors.text.secondary}
-          />
-          <Text style={[styles.filterTabText, filter === 'requests' && styles.filterTabTextActive]}>
-            Requests
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterTab, filter === 'messages' && styles.filterTabActive]}
-          onPress={() => setFilter('messages')}
-        >
-          <Ionicons
-            name="chatbubble"
-            size={16}
-            color={filter === 'messages' ? colors.primary : colors.text.secondary}
-          />
-          <Text style={[styles.filterTabText, filter === 'messages' && styles.filterTabTextActive]}>
-            Messages
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {filteredConversations.length === 0 ? (
+      {conversations.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="chatbubbles-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>
-            {filter === 'requests' ? 'No commission requests' : filter === 'messages' ? 'No messages' : 'No messages yet'}
-          </Text>
+          <Text style={styles.emptyTitle}>No messages yet</Text>
           <Text style={styles.emptySubtitle}>
-            {filter === 'requests'
-              ? 'Commission requests will appear here'
-              : 'Start a conversation by requesting a commission from an artist'}
+            Start a conversation by messaging an artist or client
           </Text>
         </View>
       ) : (
         <FlatList
-          data={filteredConversations}
+          data={conversations}
           renderItem={renderConversation}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -409,23 +352,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
-  commissionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: `${colors.primary}15`,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-  },
-  commissionBadgeText: {
-    ...typography.small,
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -442,34 +368,5 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingTop: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    gap: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-  },
-  filterTabActive: {
-    backgroundColor: `${colors.primary}15`,
-  },
-  filterTabText: {
-    ...typography.body,
-    color: colors.text.secondary,
-    fontSize: 14,
-  },
-  filterTabTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
   },
 });

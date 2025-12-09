@@ -61,7 +61,7 @@ function MessagesTabIcon({ color }) {
 
 export default function TabsLayout() {
   const { user } = useAuthStore();
-  const isArtist = user?.user_type === 'artist';
+  const isArtist = user?.user_type === 'artist' || !!user?.artists;
 
   return (
     <Tabs

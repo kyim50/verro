@@ -22,7 +22,7 @@ import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useSwipeStore, useAuthStore, useBoardStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25; // Increased threshold for better swipe detection
@@ -32,7 +32,7 @@ export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
   const { token, user } = useAuthStore();
   const { boards, fetchBoards } = useBoardStore();
-  const isArtist = user?.user_type === 'artist';
+  const isArtist = user?.user_type === 'artist' || !!user?.artists;
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -77,13 +77,20 @@ export default function ExploreScreen() {
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // For artists, show trending artworks feed instead of swipeable artists
+  // For artists, show commissions page instead of trending artworks
+  const [commissions, setCommissions] = useState([]);
+  const [commissionsLoading, setCommissionsLoading] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all', 'pending', 'in_progress', 'completed'
+  const [selectedCommission, setSelectedCommission] = useState(null);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
   useEffect(() => {
-    if (isArtist) {
-      fetchTrendingArtworks();
-      if (token) {
-        fetchBoards();
-      }
+    if (isArtist && token) {
+      loadCommissions();
+    } else if (!isArtist && artists.length === 0) {
+      fetchArtists();
     }
   }, [isArtist, token]);
 
@@ -113,11 +120,47 @@ export default function ExploreScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (isArtist) {
-        fetchTrendingArtworks();
+      if (isArtist && token) {
+        loadCommissions();
       }
-    }, [isArtist])
+    }, [isArtist, token])
   );
+
+  const loadCommissions = async () => {
+    setCommissionsLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/commissions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const allCommissions = response.data.commissions || [];
+      // Sort: pending first, then by date (newest first)
+      const sorted = [...allCommissions].sort((a, b) => {
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (a.status !== 'pending' && b.status === 'pending') return 1;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+      setCommissions(sorted);
+      
+      // Animate in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } catch (error) {
+      console.error('Error loading commissions:', error);
+    } finally {
+      setCommissionsLoading(false);
+    }
+  };
 
   const fetchTrendingArtworks = async () => {
     setTrendingLoading(true);
@@ -222,11 +265,7 @@ export default function ExploreScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     if (isArtist) {
-      await fetchTrendingArtworks();
-      if (token) {
-        await fetchBoards();
-        setLikedArtworksLoaded(false); // Trigger reload of liked artworks
-      }
+      await loadCommissions();
     } else {
       await fetchArtists();
     }
@@ -325,112 +364,271 @@ export default function ExploreScreen() {
     extrapolate: 'clamp',
   });
 
-  // For artists, show trending artworks feed
+  // Helper functions for commissions
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return '#FFA500';
+      case 'accepted': return '#4CAF50';
+      case 'declined': return '#F44336';
+      case 'in_progress': return '#2196F3';
+      case 'completed': return '#9C27B0';
+      case 'cancelled': return '#757575';
+      default: return colors.text.secondary;
+    }
+  };
+
+  const formatStatus = (status) => {
+    switch (status) {
+      case 'pending': return 'Pending';
+      case 'accepted': return 'Accepted';
+      case 'declined': return 'Declined';
+      case 'in_progress': return 'In Progress';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      default:
+        return status
+          ? status.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+          : 'Status';
+    }
+  };
+
+  // Get commission stats
+  const commissionStats = {
+    pending: commissions.filter(c => c.status === 'pending').length,
+    in_progress: commissions.filter(c => c.status === 'in_progress' || c.status === 'accepted').length,
+    completed: commissions.filter(c => c.status === 'completed').length,
+    total: commissions.length,
+  };
+
+  // Filter commissions by selected status
+  const filteredCommissions = selectedStatus === 'all'
+    ? commissions
+    : commissions.filter(c => {
+        if (selectedStatus === 'active') {
+          return c.status === 'pending' || c.status === 'in_progress' || c.status === 'accepted';
+        }
+        return c.status === selectedStatus;
+      });
+
+  // For artists, show commissions page
   if (isArtist) {
     return (
       <View style={styles.container}>
-        <View style={styles.trendingHeader}>
-          <Text style={styles.trendingTitle}>Trending Artworks</Text>
-          <Text style={styles.trendingSubtitle}>Discover what's popular</Text>
-        </View>
-        {trendingLoading && trendingArtworks.length === 0 ? (
+        <Animated.View
+          style={[
+            styles.commissionsHeader,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <Text style={styles.commissionsTitle}>Commissions</Text>
+          <Text style={styles.commissionsSubtitle}>Manage your commission requests</Text>
+          
+          {/* Stats Cards */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{commissionStats.pending}</Text>
+              <Text style={styles.statLabel}>Pending</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{commissionStats.in_progress}</Text>
+              <Text style={styles.statLabel}>Active</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{commissionStats.completed}</Text>
+              <Text style={styles.statLabel}>Completed</Text>
+            </View>
+          </View>
+
+          {/* Status Filter Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.statusTabsContainer}
+          >
+            {['all', 'pending', 'active', 'completed'].map((status) => (
+              <TouchableOpacity
+                key={status}
+                style={[
+                  styles.statusTab,
+                  selectedStatus === status && styles.statusTabActive,
+                ]}
+                onPress={() => {
+                  setSelectedStatus(status);
+                  Animated.sequence([
+                    Animated.timing(fadeAnim, {
+                      toValue: 0.5,
+                      duration: 150,
+                      useNativeDriver: true,
+                    }),
+                    Animated.timing(fadeAnim, {
+                      toValue: 1,
+                      duration: 150,
+                      useNativeDriver: true,
+                    }),
+                  ]).start();
+                }}
+              >
+                <Text
+                  style={[
+                    styles.statusTabText,
+                    selectedStatus === status && styles.statusTabTextActive,
+                  ]}
+                >
+                  {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status !== 'all' && (
+                    <Text style={styles.statusTabCount}>
+                      {' '}({status === 'active' 
+                        ? commissionStats.in_progress 
+                        : status === 'pending'
+                        ? commissionStats.pending
+                        : commissionStats.completed})
+                    </Text>
+                  )}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Animated.View>
+        {commissionsLoading && commissions.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading trending artworks...</Text>
+            <Text style={styles.loadingText}>Loading commissions...</Text>
           </View>
         ) : (
-          <FlatList
-            data={trendingArtworks}
-            renderItem={({ item }) => {
-              const isLiked = likedArtworksLoaded ? likedArtworks.has(String(item.id)) : false;
+          <Animated.FlatList
+            data={filteredCommissions}
+            renderItem={({ item, index }) => {
+              const otherUser = item.client;
+              const statusColor = getStatusColor(item.status);
+              const cardScaleAnim = useRef(new Animated.Value(0)).current;
+              const cardOpacityAnim = useRef(new Animated.Value(0)).current;
+
+              React.useEffect(() => {
+                Animated.parallel([
+                  Animated.spring(cardScaleAnim, {
+                    toValue: 1,
+                    delay: index * 50,
+                    tension: 50,
+                    friction: 7,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(cardOpacityAnim, {
+                    toValue: 1,
+                    delay: index * 50,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
+              }, []);
+
               return (
-                <TouchableOpacity
-                  style={styles.trendingCard}
-                  onPress={() => router.push(`/artwork/${item.id}`)}
-                  activeOpacity={0.95}
+                <Animated.View
+                  style={{
+                    transform: [{ scale: cardScaleAnim }],
+                    opacity: cardOpacityAnim,
+                  }}
                 >
-                  <View style={styles.trendingImageContainer}>
-                    <Image
-                      source={{ uri: item.image_url || item.thumbnail_url }}
-                      style={styles.trendingImage}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      transition={200}
-                    />
-                    {/* Like Button - Top Right */}
-                    <TouchableOpacity
-                      style={styles.trendingLikeButton}
-                      onPress={(e) => handleLikeArtwork(item, e)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={isLiked ? "heart" : "heart-outline"}
-                        size={20}
-                        color={isLiked ? "#FF6B6B" : "#fff"}
-                      />
-                    </TouchableOpacity>
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
-                      style={styles.trendingOverlay}
-                    >
-                      <View style={styles.trendingStats}>
-                        {item.like_count > 0 && (
-                          <View style={styles.trendingStat}>
-                            <Ionicons name="heart" size={13} color="#FF6B6B" />
-                            <Text style={styles.trendingStatText}>
-                              {item.like_count || 0}
-                            </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.commissionCard,
+                      item.status === 'pending' && styles.pendingCommissionCard,
+                    ]}
+                    onPress={() => {
+                      setSelectedCommission(item);
+                      setShowCommissionModal(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.commissionCardContent}>
+                      {item.status === 'pending' ? (
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            if (item.client?.id || item.client_id) {
+                              router.push(`/client/${item.client?.id || item.client_id}`);
+                            }
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Image
+                            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+                            style={styles.commissionAvatar}
+                            contentFit="cover"
+                          />
+                          <View style={styles.tapIndicatorOverlay}>
+                            <Ionicons name="person-circle-outline" size={16} color={colors.primary} />
                           </View>
-                        )}
-                        {item.view_count > 0 && (
-                          <View style={styles.trendingStat}>
-                            <Ionicons name="eye" size={13} color="#fff" />
-                            <Text style={styles.trendingStatText}>
-                              {item.view_count || 0}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </LinearGradient>
-                  </View>
-                <View style={styles.trendingInfo}>
-                  <Text style={styles.trendingTitleText} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  {item.artists?.users && (
-                    <TouchableOpacity
-                      style={styles.trendingArtistRow}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        router.push(`/artist/${item.artist_id}`);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      {item.artists.users.avatar_url ? (
-                        <Image
-                          source={{ uri: item.artists.users.avatar_url }}
-                          style={styles.trendingArtistAvatar}
-                          contentFit="cover"
-                          cachePolicy="memory-disk"
-                        />
+                        </TouchableOpacity>
                       ) : (
-                        <View style={[styles.trendingArtistAvatar, { backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
-                          <Ionicons name="person" size={10} color={colors.text.secondary} />
-                        </View>
+                        <Image
+                          source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+                          style={styles.commissionAvatar}
+                          contentFit="cover"
+                        />
                       )}
-                      <Text style={styles.trendingArtist} numberOfLines={1}>
-                        @{item.artists.users.username || item.artists.users.full_name || 'artist'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                </TouchableOpacity>
+
+                      <View style={styles.commissionInfo}>
+                        <View style={styles.commissionTopRow}>
+                          {item.status === 'pending' ? (
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                if (item.client?.id || item.client_id) {
+                                  router.push(`/client/${item.client?.id || item.client_id}`);
+                                }
+                              }}
+                              activeOpacity={0.8}
+                              style={styles.tappableName}
+                            >
+                              <Text style={styles.commissionUsername} numberOfLines={1}>
+                                {otherUser?.full_name || otherUser?.username || 'Unknown Client'}
+                              </Text>
+                              <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                            </TouchableOpacity>
+                          ) : (
+                            <Text style={styles.commissionUsername} numberOfLines={1}>
+                              {otherUser?.full_name || otherUser?.username || 'Unknown Client'}
+                            </Text>
+                          )}
+                          <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                            <Text style={[styles.statusText, { color: statusColor }]}>
+                              {formatStatus(item.status)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.commissionDetails} numberOfLines={2}>
+                          {item.client_note || item.details}
+                        </Text>
+
+                        <View style={styles.commissionFooter}>
+                          {item.budget && !item.price && (
+                            <View style={styles.budgetChip}>
+                              <Ionicons name="cash-outline" size={14} color={colors.primary} />
+                              <Text style={styles.budgetText}>Budget: ${item.budget}</Text>
+                            </View>
+                          )}
+                          {item.price && (
+                            <Text style={styles.commissionPrice}>${item.price}</Text>
+                          )}
+                          <Text style={styles.commissionDate}>
+                            {new Date(item.created_at).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
               );
             }}
             keyExtractor={(item) => String(item.id)}
-            numColumns={2}
-            contentContainerStyle={styles.trendingList}
-            columnWrapperStyle={styles.trendingRow}
+            contentContainerStyle={styles.commissionsListContent}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -440,10 +638,16 @@ export default function ExploreScreen() {
             }
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
-                <Text style={styles.emptyText}>No trending artworks yet</Text>
+                <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
+                <Text style={styles.emptyTitle}>No Commissions</Text>
+                <Text style={styles.emptyText}>
+                  {selectedStatus === 'all'
+                    ? 'You haven\'t received any commission requests yet.'
+                    : `No ${selectedStatus} commissions at this time.`}
+                </Text>
               </View>
             }
+            showsVerticalScrollIndicator={false}
           />
         )}
       </View>
@@ -1311,6 +1515,212 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+  },
+  // Commissions styles for artists
+  commissionsHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl + spacing.md,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  commissionsTitle: {
+    ...typography.h1,
+    color: colors.text.primary,
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: spacing.xs,
+    letterSpacing: -0.5,
+  },
+  commissionsSubtitle: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: spacing.lg,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+    ...shadows.small,
+  },
+  statValue: {
+    ...typography.h1,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusTabsContainer: {
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  statusTab: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+  },
+  statusTabActive: {
+    backgroundColor: colors.primary + '15',
+    borderColor: colors.primary + '40',
+  },
+  statusTabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  statusTabTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  statusTabCount: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  commissionsListContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  commissionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  pendingCommissionCard: {
+    borderColor: colors.primary + '40',
+    borderWidth: 2,
+    backgroundColor: colors.primary + '08',
+  },
+  commissionCardContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  commissionAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    position: 'relative',
+    backgroundColor: colors.background,
+  },
+  tapIndicatorOverlay: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    padding: 2,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  commissionInfo: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  commissionTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  commissionUsername: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  tappableName: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  commissionDetails: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  commissionFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  budgetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  budgetText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  commissionPrice: {
+    ...typography.h3,
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  commissionDate: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 12,
   },
   // Trending styles for artists
   trendingHeader: {

@@ -54,7 +54,23 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Apply rate limiting to all routes (except health check)
+// Development-only: Reset rate limits endpoint (must be BEFORE rate limiter)
+if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_RATE_LIMIT_RESET === 'true') {
+  app.post('/dev/reset-rate-limit', (req, res) => {
+    // Note: This endpoint won't actually clear the rate limit store
+    // The easiest way is to wait for the window to expire (now 1 minute in dev)
+    // or restart the server. The new limits will apply after the current window expires.
+    res.json({ 
+      message: 'Rate limit info',
+      currentWindow: '1 minute (development mode)',
+      maxRequests: '1000 per minute (development mode)',
+      note: 'If you\'re still rate limited, wait 1 minute for the window to reset, or restart the server.',
+      timestamp: new Date().toISOString(),
+    });
+  });
+}
+
+// Apply rate limiting to all routes (except health check and dev endpoints)
 app.use(rateLimiter);
 
 // API Routes
