@@ -32,7 +32,7 @@ export default function ExploreScreen() {
   const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
   const { token, user } = useAuthStore();
   const { boards, fetchBoards } = useBoardStore();
-  const isArtist = user?.user_type === 'artist' || !!user?.artists;
+  const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -87,12 +87,34 @@ export default function ExploreScreen() {
   const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
-    if (isArtist && token) {
+    // Only fetch user data if we don't have artists info yet, to avoid unnecessary API calls
+    const checkIsArtist = user?.user_type === 'artist' || 
+                         (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+    
+    if (checkIsArtist && token) {
       loadCommissions();
-    } else if (!isArtist && artists.length === 0) {
+    } else if (!checkIsArtist && artists.length === 0 && token) {
       fetchArtists();
+    } else if (token && user?.id && !user?.artists && user?.user_type !== 'artist') {
+      // Only fetch if we're missing artist info
+      useAuthStore.getState().fetchUser().then(() => {
+        const updatedUser = useAuthStore.getState().user;
+        const updatedCheckIsArtist = updatedUser?.user_type === 'artist' || 
+                                    (updatedUser?.artists && (Array.isArray(updatedUser.artists) ? updatedUser.artists.length > 0 : !!updatedUser.artists));
+        
+        if (updatedCheckIsArtist && token) {
+          loadCommissions();
+        } else if (!updatedCheckIsArtist && artists.length === 0 && token) {
+          fetchArtists();
+        }
+      }).catch(() => {
+        // If fetch fails, proceed with current user data
+        if (artists.length === 0 && token) {
+          fetchArtists();
+        }
+      });
     }
-  }, [isArtist, token]);
+  }, [token, user?.id]);
 
   // Load liked artworks
   useEffect(() => {
@@ -120,10 +142,18 @@ export default function ExploreScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (isArtist && token) {
+      // Don't fetch user data on every focus - only load content based on current user state
+      const checkIsArtist = user?.user_type === 'artist' || 
+                           (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+      
+      if (checkIsArtist && token) {
         loadCommissions();
+      } else if (!checkIsArtist && token) {
+        if (artists.length === 0) {
+          fetchArtists();
+        }
       }
-    }, [isArtist, token])
+    }, [token, user?.user_type, user?.artists])
   );
 
   const loadCommissions = async () => {
@@ -392,6 +422,18 @@ export default function ExploreScreen() {
     }
   };
 
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'pending': return 'time-outline';
+      case 'accepted': return 'checkmark-circle-outline';
+      case 'declined': return 'close-circle-outline';
+      case 'in_progress': return 'hourglass-outline';
+      case 'completed': return 'checkmark-done-circle-outline';
+      case 'cancelled': return 'ban-outline';
+      default: return 'help-circle-outline';
+    }
+  };
+
   // Get commission stats
   const commissionStats = {
     pending: commissions.filter(c => c.status === 'pending').length,
@@ -411,7 +453,11 @@ export default function ExploreScreen() {
       });
 
   // For artists, show commissions page
-  if (isArtist) {
+  // Re-check artist status to ensure it's current
+  const currentIsArtist = user?.user_type === 'artist' || 
+                          (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+  
+  if (currentIsArtist) {
     return (
       <View style={styles.container}>
         <Animated.View
@@ -498,37 +544,18 @@ export default function ExploreScreen() {
             <Text style={styles.loadingText}>Loading commissions...</Text>
           </View>
         ) : (
-          <Animated.FlatList
+          <FlatList
             data={filteredCommissions}
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.commissionsListContent, filteredCommissions.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
             renderItem={({ item, index }) => {
               const otherUser = item.client;
               const statusColor = getStatusColor(item.status);
-              const cardScaleAnim = useRef(new Animated.Value(0)).current;
-              const cardOpacityAnim = useRef(new Animated.Value(0)).current;
-
-              React.useEffect(() => {
-                Animated.parallel([
-                  Animated.spring(cardScaleAnim, {
-                    toValue: 1,
-                    delay: index * 50,
-                    tension: 50,
-                    friction: 7,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(cardOpacityAnim, {
-                    toValue: 1,
-                    delay: index * 50,
-                    duration: 300,
-                    useNativeDriver: true,
-                  }),
-                ]).start();
-              }, []);
 
               return (
-                <Animated.View
+                <View
                   style={{
-                    transform: [{ scale: cardScaleAnim }],
-                    opacity: cardOpacityAnim,
+                    opacity: 0.95,
                   }}
                 >
                   <TouchableOpacity
@@ -583,13 +610,13 @@ export default function ExploreScreen() {
                               activeOpacity={0.8}
                               style={styles.tappableName}
                             >
-                              <Text style={styles.commissionUsername} numberOfLines={1}>
+                              <Text style={styles.commissionUsername} numberOfLines={1} ellipsizeMode="tail">
                                 {otherUser?.full_name || otherUser?.username || 'Unknown Client'}
                               </Text>
-                              <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                              <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ flexShrink: 0 }} />
                             </TouchableOpacity>
                           ) : (
-                            <Text style={styles.commissionUsername} numberOfLines={1}>
+                            <Text style={styles.commissionUsername} numberOfLines={1} ellipsizeMode="tail">
                               {otherUser?.full_name || otherUser?.username || 'Unknown Client'}
                             </Text>
                           )}
@@ -601,34 +628,41 @@ export default function ExploreScreen() {
                           </View>
                         </View>
 
-                        <Text style={styles.commissionDetails} numberOfLines={2}>
-                          {item.client_note || item.details}
-                        </Text>
+                        {(item.client_note || item.details) && (
+                          <View style={{ marginVertical: spacing.xs }}>
+                            <Text style={styles.commissionDetails} numberOfLines={2}>
+                              {item.client_note || item.details}
+                            </Text>
+                          </View>
+                        )}
 
                         <View style={styles.commissionFooter}>
-                          {item.budget && !item.price && (
-                            <View style={styles.budgetChip}>
-                              <Ionicons name="cash-outline" size={14} color={colors.primary} />
-                              <Text style={styles.budgetText}>Budget: ${item.budget}</Text>
-                            </View>
-                          )}
-                          {item.price && (
-                            <Text style={styles.commissionPrice}>${item.price}</Text>
-                          )}
+                          <View style={styles.commissionFooterLeft}>
+                            {item.price ? (
+                              <View style={styles.priceBadge}>
+                                <Ionicons name="cash" size={14} color={colors.primary} />
+                                <Text style={styles.commissionPrice}>${item.price}</Text>
+                              </View>
+                            ) : item.budget ? (
+                              <View style={styles.budgetChip}>
+                                <Ionicons name="cash-outline" size={12} color={colors.primary} />
+                                <Text style={styles.budgetText}>${item.budget}</Text>
+                              </View>
+                            ) : null}
+                          </View>
                           <Text style={styles.commissionDate}>
-                            {new Date(item.created_at).toLocaleDateString()}
+                            {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </Text>
                         </View>
                       </View>
 
-                      <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                      <Ionicons name="chevron-forward" size={18} color={colors.text.disabled + '40'} style={{ marginTop: 2, flexShrink: 0 }} />
                     </View>
                   </TouchableOpacity>
-                </Animated.View>
+                </View>
               );
             }}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={styles.commissionsListContent}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -636,20 +670,342 @@ export default function ExploreScreen() {
                 tintColor={colors.primary}
               />
             }
-            ListEmptyComponent={
+            ListEmptyComponent={() => (
               <View style={styles.emptyState}>
                 <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
                 <Text style={styles.emptyTitle}>No Commissions</Text>
-                <Text style={styles.emptyText}>
+                <Text style={styles.commissionsEmptyText}>
                   {selectedStatus === 'all'
                     ? 'You haven\'t received any commission requests yet.'
                     : `No ${selectedStatus} commissions at this time.`}
                 </Text>
               </View>
-            }
+            )}
             showsVerticalScrollIndicator={false}
           />
         )}
+
+        {/* Commission Detail Modal */}
+        <Modal
+          visible={showCommissionModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowCommissionModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.commissionDetailModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Commission Details</Text>
+                <TouchableOpacity 
+                  onPress={() => setShowCommissionModal(false)}
+                  style={styles.modalCloseButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedCommission && (
+                <ScrollView style={styles.commissionDetailContent}>
+                  {/* User Info */}
+                  <View style={styles.detailSection}>
+                    <TouchableOpacity
+                      style={styles.detailUserHeader}
+                      onPress={() => {
+                        const clientId = selectedCommission.client?.id || selectedCommission.client_id;
+                        if (clientId) {
+                          setShowCommissionModal(false);
+                          router.push(`/client/${clientId}`);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={{
+                          uri: selectedCommission.client?.avatar_url || DEFAULT_AVATAR
+                        }}
+                        style={styles.detailAvatar}
+                        contentFit="cover"
+                      />
+                      <View style={styles.detailUserInfo}>
+                        <Text style={styles.detailUsername} numberOfLines={1} ellipsizeMode="tail">
+                          {selectedCommission.client?.full_name || selectedCommission.client?.username || 'Unknown Client'}
+                        </Text>
+                        <View style={styles.detailRoleBadge}>
+                          <Text style={styles.detailUserRole}>Client</Text>
+                        </View>
+                      </View>
+                      <View style={styles.detailUserHeaderRight}>
+                        <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedCommission.status) + '15' }]}>
+                          <Ionicons name={getStatusIcon(selectedCommission.status)} size={14} color={getStatusColor(selectedCommission.status)} />
+                          <Text style={[styles.detailStatusText, { color: getStatusColor(selectedCommission.status) }]}>
+                            {formatStatus(selectedCommission.status)}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={colors.text.disabled + '50'} style={{ flexShrink: 0 }} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Artwork Reference */}
+                  {selectedCommission.artwork && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Reference Artwork</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowCommissionModal(false);
+                          router.push(`/artwork/${selectedCommission.artwork.id}`);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.detailArtwork}>
+                          <Image
+                            source={{ uri: selectedCommission.artwork.thumbnail_url || selectedCommission.artwork.image_url }}
+                            style={styles.detailArtworkImage}
+                            contentFit="cover"
+                          />
+                          <Text style={styles.detailArtworkTitle}>{selectedCommission.artwork.title}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Commission Details */}
+                  {selectedCommission.details && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Description</Text>
+                      <Text style={styles.detailText}>{selectedCommission.details}</Text>
+                    </View>
+                  )}
+
+                  {/* Client Note */}
+                  {selectedCommission.client_note && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Client Note</Text>
+                      <View style={styles.detailNoteBox}>
+                        <Text style={styles.detailText}>{selectedCommission.client_note}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Artist Response */}
+                  {selectedCommission.artist_response && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Artist Response</Text>
+                      <View style={styles.detailNoteBox}>
+                        <Text style={styles.detailText}>{selectedCommission.artist_response}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Budget/Price */}
+                  <View style={styles.detailSection}>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>
+                          {selectedCommission.price ? 'Price' : 'Budget'}
+                        </Text>
+                        <Text style={styles.detailValue}>
+                          {selectedCommission.price
+                            ? `$${selectedCommission.price}`
+                            : selectedCommission.budget
+                            ? `$${selectedCommission.budget}`
+                            : 'Not specified'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Dates */}
+                  <View style={styles.detailSection}>
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>Created</Text>
+                        <Text style={[styles.detailValue, { color: colors.text.primary }]}>
+                          {new Date(selectedCommission.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                      {selectedCommission.deadline_text && (
+                        <View style={styles.detailItem}>
+                          <Text style={styles.detailLabel}>Deadline</Text>
+                          <Text style={[styles.detailValue, { color: '#FF9800' }]}>
+                            {selectedCommission.deadline_text}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Action Buttons for Pending Requests (Artist Only) */}
+                  {selectedCommission.status === 'pending' && user?.artists && (selectedCommission.artist_id === user?.artists?.id || selectedCommission.artist_id === user?.id) && (
+                    <View style={styles.detailActions}>
+                      <TouchableOpacity
+                        style={styles.detailDeclineButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'Decline Commission',
+                            'Are you sure you want to decline this commission request? This action cannot be undone.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Decline',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await axios.patch(
+                                      `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                      { status: 'declined' },
+                                      { headers: { Authorization: `Bearer ${token}` } }
+                                    );
+                                    setShowCommissionModal(false);
+                                    await loadCommissions();
+                                    Alert.alert('Declined', 'Commission request has been declined');
+                                  } catch (error) {
+                                    console.error('Error declining commission:', error);
+                                    Alert.alert('Error', 'Failed to decline commission. Please try again.');
+                                  }
+                                }
+                              }
+                            ]
+                          );
+                        }}
+                      >
+                        <Ionicons name="close-circle-outline" size={20} color="#F44336" />
+                        <Text style={styles.detailDeclineButtonText}>Decline</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.detailAcceptButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'Accept Commission',
+                            'Accept this commission request? You can start working on it right away.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Accept',
+                                onPress: async () => {
+                                  try {
+                                    await axios.patch(
+                                      `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                      { status: 'accepted' },
+                                      { headers: { Authorization: `Bearer ${token}` } }
+                                    );
+                                    setShowCommissionModal(false);
+                                    await loadCommissions();
+                                    Alert.alert('Accepted!', 'Commission request has been accepted. You can now message the client.');
+                                  } catch (error) {
+                                    console.error('Error accepting commission:', error);
+                                    Alert.alert('Error', 'Failed to accept commission. Please try again.');
+                                  }
+                                }
+                              }
+                            ]
+                          );
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                        <Text style={styles.detailAcceptButtonText}>Accept</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Action Buttons for In Progress Commissions */}
+                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && user?.artists && (selectedCommission.artist_id === user?.artists?.id || selectedCommission.artist_id === user?.id) && (
+                    <View style={styles.detailActions}>
+                      <TouchableOpacity
+                        style={styles.detailCancelButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'Cancel Commission',
+                            'Are you sure you want to cancel this commission?',
+                            [
+                              { text: 'No', style: 'cancel' },
+                              {
+                                text: 'Yes, Cancel',
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await axios.patch(
+                                      `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                      { status: 'cancelled' },
+                                      { headers: { Authorization: `Bearer ${token}` } }
+                                    );
+                                    setShowCommissionModal(false);
+                                    await loadCommissions();
+                                    Alert.alert('Success', 'Commission has been cancelled');
+                                  } catch (error) {
+                                    console.error('Error cancelling commission:', error);
+                                    Alert.alert('Error', 'Failed to cancel commission. Please try again.');
+                                  }
+                                }
+                              }
+                            ]
+                          );
+                        }}
+                      >
+                        <Ionicons name="close-circle-outline" size={20} color="#F44336" />
+                        <Text style={styles.detailCancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.detailCompleteButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'Complete Commission',
+                            'Mark this commission as completed?',
+                            [
+                              { text: 'Not Yet', style: 'cancel' },
+                              {
+                                text: 'Complete',
+                                onPress: async () => {
+                                  try {
+                                    await axios.patch(
+                                      `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                      { status: 'completed', skip_message: true },
+                                      { headers: { Authorization: `Bearer ${token}` } }
+                                    );
+                                    setShowCommissionModal(false);
+                                    await loadCommissions();
+                                    Alert.alert('Success', 'Commission has been completed!');
+                                  } catch (error) {
+                                    console.error('Error completing commission:', error);
+                                    Alert.alert('Error', 'Failed to complete commission. Please try again.');
+                                  }
+                                }
+                              }
+                            ]
+                          );
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                        <Text style={styles.detailCompleteButtonText}>Complete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* View Conversation Button (only show if commission is accepted/in_progress) */}
+                  {selectedCommission.conversation_id && (selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted' || selectedCommission.status === 'completed') && (
+                    <TouchableOpacity
+                      style={styles.detailMessageButton}
+                      onPress={() => {
+                        setShowCommissionModal(false);
+                        router.push(`/messages/${selectedCommission.conversation_id}`);
+                      }}
+                    >
+                      <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
+                      <Text style={styles.detailMessageButtonText}>View Conversation</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -1274,7 +1630,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
+    minHeight: height * 0.6,
   },
   loadingText: {
     ...typography.body,
@@ -1600,86 +1956,102 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   commissionsListContent: {
-    padding: spacing.lg,
+    padding: spacing.md + spacing.xs,
     paddingBottom: spacing.xxl,
+    flexGrow: 1,
   },
   commissionCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md + spacing.xs,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '25',
     ...shadows.small,
+    overflow: 'hidden',
   },
   pendingCommissionCard: {
+    backgroundColor: colors.surfaceLight,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
     borderColor: colors.primary + '40',
-    borderWidth: 2,
-    backgroundColor: colors.primary + '08',
   },
   commissionCardContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: spacing.md - 2,
   },
   commissionAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: borderRadius.full,
     position: 'relative',
-    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
+    flexShrink: 0,
   },
   tapIndicatorOverlay: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: colors.surface,
+    bottom: -1,
+    right: -1,
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
-    padding: 2,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: colors.surface,
   },
   commissionInfo: {
     flex: 1,
-    gap: spacing.xs,
+    minWidth: 0,
+    justifyContent: 'space-between',
   },
   commissionTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: spacing.xs,
+    gap: spacing.xs,
+    minHeight: 22,
   },
   commissionUsername: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 16,
-    flex: 1,
-    marginRight: spacing.sm,
+    fontWeight: '600',
+    flexShrink: 1,
+    minWidth: 0,
   },
   tappableName: {
-    flex: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.sm,
+    minWidth: 0,
+    gap: 4,
+    maxWidth: '62%',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 5,
+    gap: 4,
+    paddingHorizontal: spacing.sm - 2,
+    paddingVertical: 4,
     borderRadius: borderRadius.full,
+    flexShrink: 0,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   statusText: {
     ...typography.caption,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   commissionDetails: {
     ...typography.body,
@@ -1687,40 +2059,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+    paddingLeft: spacing.xs,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border + '30',
   },
   commissionFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: spacing.sm,
-    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '20',
+  },
+  commissionFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  priceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
   },
   budgetChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: spacing.sm - 2,
     paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    alignSelf: 'flex-start',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border + '30',
   },
   budgetText: {
     ...typography.caption,
-    color: colors.primary,
+    color: colors.text.secondary,
     fontWeight: '600',
     fontSize: 12,
   },
   commissionPrice: {
-    ...typography.h3,
+    ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   commissionDate: {
     ...typography.caption,
     color: colors.text.disabled,
-    fontSize: 12,
+    fontSize: 11,
   },
   // Trending styles for artists
   trendingHeader: {
@@ -1852,6 +2247,304 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.xxl * 2,
+    paddingVertical: spacing.xxl,
+    minHeight: height * 0.6,
+    paddingHorizontal: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  commissionsEmptyText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  // Commission Detail Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  commissionDetailModal: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '92%',
+    width: '100%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  modalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commissionDetailContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  detailSection: {
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 0,
+  },
+  detailUserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surfaceLight,
+    marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+  },
+  detailUserHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: spacing.xs,
+  },
+  detailAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.full,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+    flexShrink: 0,
+  },
+  detailUserInfo: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: spacing.xs,
+  },
+  detailUsername: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 2,
+    letterSpacing: -0.2,
+  },
+  detailRoleBadge: {
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm - 2,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  detailUserRole: {
+    ...typography.caption,
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm - 2,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    flexShrink: 0,
+  },
+  detailStatusText: {
+    ...typography.caption,
+    fontWeight: '700',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  detailSectionTitle: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.2,
+  },
+  detailText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  detailArtwork: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+  },
+  detailArtworkImage: {
+    width: '100%',
+    height: 260,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  detailArtworkTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.surfaceLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+  },
+  detailItem: {
+    flex: 1,
+  },
+  detailLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+    opacity: 0.8,
+  },
+  detailValue: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  detailMessageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  detailMessageButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  detailActions: {
+    flexDirection: 'row',
+    gap: spacing.md - spacing.xs,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  detailDeclineButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceLight,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+    borderWidth: 1.5,
+    borderColor: '#F44336',
+  },
+  detailDeclineButtonText: {
+    ...typography.bodyBold,
+    color: '#F44336',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailAcceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  detailAcceptButtonText: {
+    ...typography.bodyBold,
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceLight,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+    borderWidth: 1.5,
+    borderColor: '#F44336',
+  },
+  detailCancelButtonText: {
+    ...typography.bodyBold,
+    color: '#F44336',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailCompleteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  detailCompleteButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailNoteBox: {
+    backgroundColor: colors.surfaceLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border + '25',
   },
 });

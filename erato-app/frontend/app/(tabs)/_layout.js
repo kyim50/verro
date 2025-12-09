@@ -61,7 +61,8 @@ function MessagesTabIcon({ color }) {
 
 export default function TabsLayout() {
   const { user } = useAuthStore();
-  const isArtist = user?.user_type === 'artist' || !!user?.artists;
+  const isArtist = user?.user_type === 'artist' || 
+                   (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
   return (
     <Tabs
@@ -86,9 +87,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: isArtist ? 'Feed' : 'Explore',
+          title: isArtist ? 'Commissions' : 'Explore',
           tabBarIcon: ({ color }) => (
-            <Ionicons name={isArtist ? 'trending-up' : 'search'} size={22} color={color} />
+            <Ionicons name={isArtist ? 'briefcase' : 'search'} size={22} color={color} />
           ),
         }}
         listeners={{

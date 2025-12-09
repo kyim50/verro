@@ -18,7 +18,6 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
-import ReviewModal from '../../components/ReviewModal';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -38,8 +37,6 @@ export default function BoardsScreen() {
   const [likedSortOrder, setLikedSortOrder] = useState('newest'); // 'newest' or 'oldest'
   const [selectedCommission, setSelectedCommission] = useState(null);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [pendingReviewCommission, setPendingReviewCommission] = useState(null);
 
   useEffect(() => {
     loadBoards();
@@ -113,25 +110,12 @@ export default function BoardsScreen() {
             try {
               await axios.patch(
                 `${API_URL}/commissions/${commissionId}/status`,
-                { status: 'completed', skip_message: true },
+                { status: 'completed' },
                 { headers: { Authorization: `Bearer ${token}` } }
               );
-              
-              // Get the updated commission
-              const commissionResponse = await axios.get(
-                `${API_URL}/commissions/${commissionId}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              
               setShowCommissionModal(false);
               await loadCommissions();
               Alert.alert('Success', 'Commission has been completed!');
-              
-              // Prompt for review after completion
-              setTimeout(() => {
-                setPendingReviewCommission(commissionResponse.data);
-                setShowReviewModal(true);
-              }, 1500);
             } catch (error) {
               console.error('Error completing commission:', error);
               Alert.alert('Error', 'Failed to complete commission. Please try again.');
@@ -140,27 +124,6 @@ export default function BoardsScreen() {
         }
       ]
     );
-  };
-
-  const handleSubmitReview = async (rating, comment) => {
-    if (!pendingReviewCommission) return;
-
-    const reviewType = pendingReviewCommission.client_id === user?.id 
-      ? 'client_to_artist' 
-      : 'artist_to_client';
-
-    await axios.post(
-      `${API_URL}/reviews`,
-      {
-        commission_id: pendingReviewCommission.id,
-        rating,
-        comment,
-        review_type: reviewType,
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    Alert.alert('Thank you!', 'Your review has been submitted.');
   };
 
   const onRefresh = useCallback(async () => {
@@ -241,27 +204,6 @@ export default function BoardsScreen() {
       case 'completed': return 'trophy-outline';
       case 'cancelled': return 'ban-outline';
       default: return 'help-circle-outline';
-    }
-  };
-
-  const formatStatus = (status) => {
-    switch (status) {
-      case 'pending':
-        return 'Pending';
-      case 'accepted':
-        return 'Accepted';
-      case 'declined':
-        return 'Declined';
-      case 'in_progress':
-        return 'In Progress';
-      case 'completed':
-        return 'Completed';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return status
-          ? status.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-          : 'Status';
     }
   };
 
@@ -389,16 +331,15 @@ export default function BoardsScreen() {
 
   const renderCommission = ({ item }) => {
     const isClient = item.client_id === user?.id;
-    const isArtist = !!user?.artists;
     const otherUser = isClient ? item.artist?.users : item.client;
     const statusColor = getStatusColor(item.status);
-    const otherUserName = isClient
-      ? (item.artist?.users?.full_name || item.artist?.users?.username || 'Unknown Artist')
+    const artistName = isClient
+      ? (item.artist?.users?.full_name || item.artist?.users?.username || 'Unknown')
       : (item.client?.full_name || item.client?.username || 'Unknown Client');
 
     return (
       <TouchableOpacity
-        style={[styles.commissionCard, item.status === 'pending' && isArtist && styles.pendingCommissionCard]}
+        style={styles.commissionCard}
         onPress={() => {
           setSelectedCommission(item);
           setShowCommissionModal(true);
@@ -406,78 +347,30 @@ export default function BoardsScreen() {
         activeOpacity={0.7}
       >
         <View style={styles.commissionCardContent}>
-          {/* Profile Picture - tappable for artists viewing pending requests */}
-          {isArtist && item.status === 'pending' ? (
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                if (item.client?.id || item.client_id) {
-                  router.push(`/client/${item.client?.id || item.client_id}`);
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <Image
-                source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-                style={styles.commissionAvatar}
-                contentFit="cover"
-              />
-              <View style={styles.tapIndicatorOverlay}>
-                <Ionicons name="person-circle-outline" size={16} color={colors.primary} />
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <Image
-              source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-              style={styles.commissionAvatar}
-              contentFit="cover"
-            />
-          )}
+          <Image
+            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+            style={styles.commissionAvatar}
+            contentFit="cover"
+          />
 
           <View style={styles.commissionInfo}>
             <View style={styles.commissionTopRow}>
-              {/* Name - tappable for artists viewing pending requests */}
-              {isArtist && item.status === 'pending' ? (
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    if (item.client?.id || item.client_id) {
-                      router.push(`/client/${item.client?.id || item.client_id}`);
-                    }
-                  }}
-                  activeOpacity={0.8}
-                  style={styles.tappableName}
-                >
-                  <Text style={styles.commissionUsername} numberOfLines={1}>{otherUserName}</Text>
-                  <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
-                  <Text style={styles.tapToViewText}>Tap to view profile</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.commissionUsername} numberOfLines={1}>{otherUserName}</Text>
-              )}
+              <Text style={styles.commissionUsername} numberOfLines={1}>{artistName}</Text>
               <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
-                  {formatStatus(item.status)}
+                  {item.status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                 </Text>
               </View>
             </View>
 
             <Text style={styles.commissionDetails} numberOfLines={2}>
-              {item.client_note || item.details}
+              {item.details}
             </Text>
 
-            <View style={styles.commissionFooter}>
-              {item.budget && !item.price && (
-                <View style={styles.budgetChip}>
-                  <Ionicons name="cash-outline" size={14} color={colors.primary} />
-                  <Text style={styles.budgetText}>Budget: ${item.budget}</Text>
-                </View>
-              )}
-              {item.price && (
-                <Text style={styles.commissionPrice}>${item.price}</Text>
-              )}
-            </View>
+            {item.price && (
+              <Text style={styles.commissionPrice}>${item.price}</Text>
+            )}
           </View>
 
           <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} style={styles.commissionChevron} />
@@ -504,14 +397,13 @@ export default function BoardsScreen() {
         </View>
       );
     } else if (activeTab === 'commissions') {
-      const isArtist = !!user?.artists;
       return (
         <View style={styles.emptyState}>
           <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
           <Text style={styles.emptyTitle}>No Commissions</Text>
           <Text style={styles.emptyText}>
-            {isArtist
-              ? 'You haven\'t received any commission requests yet. They will appear here when clients request your work.'
+            {user?.user_type === 'artist' || user?.user_type === 'both'
+              ? 'You haven\'t received any commission requests yet.'
               : 'You haven\'t requested any commissions yet.'}
           </Text>
         </View>
@@ -551,26 +443,22 @@ export default function BoardsScreen() {
     } else if (activeTab === 'commissions') {
       // Check if user is an artist
       const isArtist = !!user?.artists;
+      console.log('Is artist?', isArtist, 'User has artists:', user?.artists);
 
       // Filter commissions based on user type
-      // Artists: show ALL commissions (including pending requests - they're now in Library)
+      // Artists: only show in_progress and completed commissions (pending requests are in messages)
       // Clients: show all commissions
-      const filteredCommissions = commissions;
+      const filteredCommissions = isArtist
+        ? commissions.filter(c => c.status === 'in_progress' || c.status === 'completed')
+        : commissions;
 
-      // Sort: pending requests first for artists, then by date
-      const sortedCommissions = [...filteredCommissions].sort((a, b) => {
-        if (isArtist) {
-          // For artists: pending first, then by date (newest first)
-          if (a.status === 'pending' && b.status !== 'pending') return -1;
-          if (a.status !== 'pending' && b.status === 'pending') return 1;
-        }
-        return new Date(b.created_at) - new Date(a.created_at);
-      });
+      console.log('Filtered commissions:', filteredCommissions.length, 'out of', commissions.length);
+      console.log('Filtered statuses:', filteredCommissions.map(c => c.status));
 
       return (
         <FlatList
           key="commissions-list"
-          data={sortedCommissions}
+          data={filteredCommissions}
           renderItem={renderCommission}
           keyExtractor={(item) => item.id}
           refreshControl={
@@ -839,7 +727,7 @@ export default function BoardsScreen() {
                       <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedCommission.status) + '20' }]}>
                         <Ionicons name={getStatusIcon(selectedCommission.status)} size={16} color={getStatusColor(selectedCommission.status)} />
                         <Text style={[styles.detailStatusText, { color: getStatusColor(selectedCommission.status) }]}>
-                          {formatStatus(selectedCommission.status)}
+                          {selectedCommission.status.replace('_', ' ').charAt(0).toUpperCase() + selectedCommission.status.replace('_', ' ').slice(1)}
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} style={{ marginLeft: 8 }} />
@@ -884,110 +772,26 @@ export default function BoardsScreen() {
                   </View>
                 )}
 
-                {/* Budget/Price & Deadline */}
+                {/* Price & Date */}
                 <View style={styles.detailSection}>
                   <View style={styles.detailRow}>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>
-                        {selectedCommission.price ? 'Price' : 'Budget'}
-                      </Text>
+                      <Text style={styles.detailLabel}>Price</Text>
                       <Text style={styles.detailValue}>
-                        {selectedCommission.price
-                          ? `$${selectedCommission.price}`
-                          : selectedCommission.budget
-                          ? `$${selectedCommission.budget}`
-                          : 'Not specified'}
+                        {selectedCommission.price ? `$${selectedCommission.price}` : 'Not set'}
                       </Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>
-                        {selectedCommission.deadline_text ? 'Deadline' : 'Created'}
-                      </Text>
+                      <Text style={styles.detailLabel}>Created</Text>
                       <Text style={styles.detailValue}>
-                        {selectedCommission.deadline_text
-                          ? selectedCommission.deadline_text
-                          : new Date(selectedCommission.created_at).toLocaleDateString()}
+                        {new Date(selectedCommission.created_at).toLocaleDateString()}
                       </Text>
                     </View>
                   </View>
                 </View>
 
-                {/* Action Buttons for Pending Requests (Artist Only) */}
-                {selectedCommission.status === 'pending' && user?.artists && (selectedCommission.artist_id === user?.artists?.id || selectedCommission.artist_id === user?.id) && (
-                  <View style={styles.detailActions}>
-                    <TouchableOpacity
-                      style={styles.detailDeclineButton}
-                      onPress={() => {
-                        Alert.alert(
-                          'Decline Commission',
-                          'Are you sure you want to decline this commission request? This action cannot be undone.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Decline',
-                              style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  await axios.patch(
-                                    `${API_URL}/commissions/${selectedCommission.id}/status`,
-                                    { status: 'declined' },
-                                    { headers: { Authorization: `Bearer ${token}` } }
-                                  );
-                                  setShowCommissionModal(false);
-                                  await loadCommissions();
-                                  Alert.alert('Declined', 'Commission request has been declined');
-                                } catch (error) {
-                                  console.error('Error declining commission:', error);
-                                  Alert.alert('Error', 'Failed to decline commission. Please try again.');
-                                }
-                              }
-                            }
-                          ]
-                        );
-                      }}
-                    >
-                      <Ionicons name="close-circle-outline" size={20} color="#F44336" />
-                      <Text style={styles.detailDeclineButtonText}>Decline</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.detailAcceptButton}
-                      onPress={() => {
-                        Alert.alert(
-                          'Accept Commission',
-                          'Accept this commission request? You can start working on it right away.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Accept',
-                              onPress: async () => {
-                                try {
-                                  await axios.patch(
-                                    `${API_URL}/commissions/${selectedCommission.id}/status`,
-                                    { status: 'accepted' },
-                                    { headers: { Authorization: `Bearer ${token}` } }
-                                  );
-                                  setShowCommissionModal(false);
-                                  await loadCommissions();
-                                  Alert.alert('Accepted!', 'Commission request has been accepted. You can now message the client.');
-                                } catch (error) {
-                                  console.error('Error accepting commission:', error);
-                                  Alert.alert('Error', 'Failed to accept commission. Please try again.');
-                                }
-                              }
-                            }
-                          ]
-                        );
-                      }}
-                    >
-                      <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-                      <Text style={styles.detailAcceptButtonText}>Accept</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* Action Buttons for In Progress Commissions */}
-                {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && user?.artists && (selectedCommission.artist_id === user?.artists?.id || selectedCommission.artist_id === user?.id) && (
+                {/* Action Buttons */}
+                {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && selectedCommission.artist_id === user?.artists?.id && (
                   <View style={styles.detailActions}>
                     <TouchableOpacity
                       style={styles.detailCancelButton}
@@ -1034,8 +838,7 @@ export default function BoardsScreen() {
                   </View>
                 )}
 
-                {/* View Conversation Button (only show if commission is accepted/in_progress) */}
-                {selectedCommission.conversation_id && (selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted' || selectedCommission.status === 'completed') && (
+                {selectedCommission.conversation_id && (
                   <TouchableOpacity
                     style={styles.detailMessageButton}
                     onPress={() => {
@@ -1052,39 +855,6 @@ export default function BoardsScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Review Modal */}
-      <ReviewModal
-        visible={showReviewModal}
-        onClose={() => {
-          setShowReviewModal(false);
-          setPendingReviewCommission(null);
-        }}
-        onSubmit={handleSubmitReview}
-        userName={
-          pendingReviewCommission
-            ? (user?.id === pendingReviewCommission.client_id
-                ? (pendingReviewCommission.artist?.users?.full_name || 
-                   pendingReviewCommission.artist?.users?.username || 
-                   'Artist')
-                : (pendingReviewCommission.client?.full_name || 
-                   pendingReviewCommission.client?.username || 
-                   'Client'))
-            : ''
-        }
-        userAvatar={
-          pendingReviewCommission
-            ? (user?.id === pendingReviewCommission.client_id
-                ? (pendingReviewCommission.artist?.users?.avatar_url || DEFAULT_AVATAR)
-                : (pendingReviewCommission.client?.avatar_url || DEFAULT_AVATAR))
-            : DEFAULT_AVATAR
-        }
-        reviewType={
-          pendingReviewCommission && user?.id === pendingReviewCommission.client_id
-            ? 'client_to_artist'
-            : 'artist_to_client'
-        }
-      />
     </View>
   );
 }
@@ -1258,12 +1028,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  pendingCommissionCard: {
-    borderColor: colors.primary + '40',
-    borderWidth: 2,
-    backgroundColor: colors.primary + '08',
   },
   completeCommissionButton: {
     flexDirection: 'row',
@@ -1292,17 +1056,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    position: 'relative',
-  },
-  tapIndicatorOverlay: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    padding: 2,
-    borderWidth: 2,
-    borderColor: colors.primary,
   },
   commissionInfo: {
     flex: 1,
@@ -1319,12 +1072,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 16,
     flex: 1,
-    marginRight: spacing.sm,
-  },
-  tappableName: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     marginRight: spacing.sm,
   },
   statusBadge: {
@@ -1395,31 +1142,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  budgetChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    alignSelf: 'flex-start',
-  },
-  budgetText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '600',
-    fontSize: 12,
+    marginTop: spacing.md,
   },
   tapToViewText: {
     ...typography.caption,
     color: colors.primary,
     fontWeight: '600',
-    fontSize: 11,
-    marginLeft: 4,
+    fontSize: 13,
   },
   commissionDate: {
     ...typography.caption,
@@ -1745,40 +1474,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
     marginBottom: spacing.md,
-  },
-  detailDeclineButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    gap: spacing.xs,
-    borderWidth: 1.5,
-    borderColor: '#F44336',
-  },
-  detailDeclineButtonText: {
-    ...typography.bodyBold,
-    color: '#F44336',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  detailAcceptButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    gap: spacing.xs,
-  },
-  detailAcceptButtonText: {
-    ...typography.bodyBold,
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
   },
   detailCancelButton: {
     flex: 1,

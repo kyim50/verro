@@ -10,19 +10,34 @@ export default function RootLayout() {
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
   useEffect(() => {
+    let mounted = true;
     const initializeApp = async () => {
-      const token = await loadToken();
-      // Fetch user data with artists relationship if token exists
-      if (token) {
-        try {
-          await fetchUser();
-        } catch (error) {
-          // fetchUser will handle clearing invalid tokens
-          console.log('Failed to fetch user, token may be invalid');
+      try {
+        if (!mounted) return;
+        const token = await loadToken();
+        // Fetch user data with artists relationship if token exists
+        if (token && mounted) {
+          try {
+            await fetchUser();
+          } catch (error) {
+            // fetchUser will handle clearing invalid tokens
+            console.log('Failed to fetch user, token may be invalid:', error);
+          }
         }
+      } catch (error) {
+        console.error('Error initializing app:', error);
       }
     };
-    initializeApp();
+    // Delay initialization slightly to ensure everything is mounted
+    setTimeout(() => {
+      if (mounted) {
+        initializeApp();
+      }
+    }, 100);
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (

@@ -72,6 +72,8 @@ export const useAuthStore = create((set) => ({
       const { token, user } = response.data;
       await useAuthStore.getState().setToken(token);
       set({ user, isAuthenticated: true });
+      // Fetch full user data including artists array
+      await useAuthStore.getState().fetchUser();
       return { success: true };
     } catch (error) {
       return {
