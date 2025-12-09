@@ -14,11 +14,12 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store';
+import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function EditProfileScreen() {
-  const { user, token, fetchUser } = useAuthStore();
+  const { user, token, fetchUser, setUser } = useAuthStore();
+  const { fetchProfile } = useProfileStore();
   const [loading, setLoading] = useState(false);
 
   // User fields
@@ -102,6 +103,15 @@ export default function EditProfileScreen() {
         throw new Error('Failed to update profile');
       }
 
+      const updatedUser = await userResponse.json();
+      
+      // Immediately update the user in auth store with new avatar
+      if (updatedUser) {
+        setUser({ ...user, ...updatedUser, avatar_url: finalAvatarUrl });
+        // Update local state immediately
+        setAvatarUrl(finalAvatarUrl);
+      }
+
       // Update artist social media links if user is an artist
       if (user?.artists) {
         const artistData = {};
@@ -128,12 +138,24 @@ export default function EditProfileScreen() {
         }
       }
 
+      // Fetch updated user data (this will update auth store)
       await fetchUser();
-      // Update local state with the uploaded avatar URL
-      setAvatarUrl(finalAvatarUrl);
+      
+      // Also refresh profile store if user is viewing their own profile
+      if (user?.id) {
+        await fetchProfile(user.id, token);
+      }
 
       Alert.alert('Success!', 'Profile updated successfully', [
-        { text: 'OK', onPress: () => router.back() }
+        { 
+          text: 'OK', 
+          onPress: () => {
+            // Force a small delay to ensure stores are updated before navigation
+            setTimeout(() => {
+              router.back();
+            }, 100);
+          }
+        }
       ]);
     } catch (error) {
       console.error('Error updating profile:', error);

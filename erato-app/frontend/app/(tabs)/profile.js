@@ -28,17 +28,16 @@ export default function ProfileScreen() {
   const { profile, fetchProfile, isLoading, reset } = useProfileStore();
   const feedStore = useFeedStore();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [avatarKey, setAvatarKey] = useState(0);
 
-  // Auto-refresh when screen comes into focus (but keep existing data)
+  // Auto-refresh when screen comes into focus to get latest profile data
   useFocusEffect(
     useCallback(() => {
       if (user?.id) {
-        // Only refresh if we don't have profile data or user changed
-        if (!profile || profile.id !== user.id) {
-          loadProfile();
-        }
+        // Always refresh profile when screen comes into focus to catch updates
+        loadProfile();
       }
-    }, [user?.id, profile])
+    }, [user?.id])
   );
 
   useEffect(() => {
@@ -61,13 +60,26 @@ export default function ProfileScreen() {
   const loadProfile = async () => {
     try {
       if (!user?.id) return;
+      const prevAvatarUrl = profile?.avatar_url || user?.avatar_url;
       await fetchProfile(user.id, token);
+      // Check if avatar changed and update key to force image refresh
+      const newAvatarUrl = profile?.avatar_url || user?.avatar_url;
+      if (prevAvatarUrl !== newAvatarUrl) {
+        setAvatarKey(prev => prev + 1);
+      }
       setIsInitialLoad(false);
     } catch (error) {
       console.error('Error loading profile:', error);
       setIsInitialLoad(false);
     }
   };
+  
+  // Watch for avatar URL changes in user or profile to update key
+  useEffect(() => {
+    if (profile?.avatar_url || user?.avatar_url) {
+      setAvatarKey(prev => prev + 1);
+    }
+  }, [profile?.avatar_url, user?.avatar_url]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -205,8 +217,21 @@ export default function ProfileScreen() {
         {/* Profile Info */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            {(profile?.avatar_url || user?.avatar_url) ? (
+              <Image 
+                source={{ 
+                  uri: (() => {
+                    const url = profile?.avatar_url || user?.avatar_url;
+                    // Add cache-busting parameter that changes when avatar updates
+                    const separator = url?.includes('?') ? '&' : '?';
+                    return `${url}${separator}_v=${avatarKey}`;
+                  })()
+                }} 
+                style={styles.avatar}
+                contentFit="cover"
+                cachePolicy="none"
+                key={`${profile?.avatar_url || user?.avatar_url}-${avatarKey}`}
+              />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Ionicons name="person" size={60} color={colors.text.disabled} />

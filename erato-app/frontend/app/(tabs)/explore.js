@@ -25,7 +25,7 @@ import { useSwipeStore, useAuthStore, useBoardStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.20;
+const SWIPE_THRESHOLD = width * 0.25; // Increased threshold for better swipe detection
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function ExploreScreen() {
@@ -236,7 +236,11 @@ export default function ExploreScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        // Only respond to horizontal swipes, ignore vertical scrolls
+        return Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 10;
+      },
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         position.setOffset({
           x: position.x._value,
@@ -244,19 +248,30 @@ export default function ExploreScreen() {
         });
       },
       onPanResponderMove: (_, gesture) => {
-        position.setValue({ x: gesture.dx, y: gesture.dy });
+        // Only move horizontally, clamp vertical movement
+        position.setValue({ 
+          x: gesture.dx, 
+          y: gesture.dy * 0.3 // Reduce vertical movement
+        });
       },
       onPanResponderRelease: (_, gesture) => {
         position.flattenOffset();
 
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          swipeRight();
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          swipeLeft();
+        const swipeVelocity = Math.abs(gesture.vx);
+        const swipeDistance = Math.abs(gesture.dx);
+
+        // Check if swipe is significant (either distance or velocity)
+        if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
+          if (gesture.dx > 0) {
+            swipeRight();
+          } else {
+            swipeLeft();
+          }
         } else {
+          // Spring back to center
           Animated.spring(position, {
             toValue: { x: 0, y: 0 },
-            friction: 7,
+            friction: 8,
             tension: 40,
             useNativeDriver: false,
           }).start();
@@ -268,7 +283,7 @@ export default function ExploreScreen() {
   const swipeRight = () => {
     Animated.timing(position, {
       toValue: { x: width + 100, y: 0 },
-      duration: 250,
+      duration: 300,
       useNativeDriver: false,
     }).start(() => {
       if (currentArtist) {
@@ -282,7 +297,7 @@ export default function ExploreScreen() {
   const swipeLeft = () => {
     Animated.timing(position, {
       toValue: { x: -width - 100, y: 0 },
-      duration: 250,
+      duration: 300,
       useNativeDriver: false,
     }).start(() => {
       if (currentArtist) {
@@ -515,14 +530,29 @@ export default function ExploreScreen() {
           style={styles.gradient}
         >
           {/* Artist Info */}
-          <TouchableOpacity
-            style={styles.infoContainer}
-            onPress={() => setShowPortfolioModal(true)}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.artistName}>
-              {currentArtist.users?.full_name || currentArtist.users?.username}
-            </Text>
+          <View style={styles.infoContainer}>
+            <TouchableOpacity
+              onPress={() => router.push(`/artist/${currentArtist.id}`)}
+              activeOpacity={0.7}
+              style={styles.profileLinkContainer}
+            >
+              {currentArtist.users?.avatar_url && (
+                <Image
+                  source={{ uri: currentArtist.users.avatar_url }}
+                  style={styles.artistAvatarSmall}
+                  contentFit="cover"
+                />
+              )}
+              <View style={styles.profileLinkText}>
+                <Text style={styles.artistName}>
+                  {currentArtist.users?.full_name || currentArtist.users?.username}
+                </Text>
+                <View style={styles.tapToProfileIndicator}>
+                  <Ionicons name="person-circle-outline" size={14} color={colors.primary} />
+                  <Text style={styles.tapToProfileText}>Tap to view profile</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
             <Text style={styles.bio} numberOfLines={2}>
               {currentArtist.users?.bio || 'Artist on Verro'}
             </Text>
@@ -549,11 +579,15 @@ export default function ExploreScreen() {
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.viewPortfolioButton}>
+            <TouchableOpacity 
+              style={styles.viewPortfolioButton}
+              onPress={() => setShowPortfolioModal(true)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.viewPortfolioText}>Tap to view full portfolio</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         </LinearGradient>
       </Animated.View>
 
@@ -729,21 +763,32 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
 
         {/* Artist Info Footer */}
         <View style={styles.modalFooter}>
-          <View style={styles.artistInfo}>
-            <Image
-              source={{ uri: artist?.users?.avatar_url }}
-              style={styles.artistAvatar}
-              contentFit="cover"
-            />
+          <TouchableOpacity
+            style={styles.artistInfo}
+            onPress={() => {
+              onClose();
+              router.push(`/artist/${artist?.id}`);
+            }}
+            activeOpacity={0.7}
+          >
+            {artist?.users?.avatar_url && (
+              <Image
+                source={{ uri: artist.users.avatar_url }}
+                style={styles.artistAvatar}
+                contentFit="cover"
+              />
+            )}
             <View style={styles.artistDetails}>
               <Text style={styles.artistNameModal}>
                 {artist?.users?.full_name || artist?.users?.username}
               </Text>
-              <Text style={styles.artistBioModal} numberOfLines={1}>
-                {artist?.users?.bio || 'Artist on Verro'}
-              </Text>
+              <View style={styles.tapToProfileIndicatorModal}>
+                <Ionicons name="person-circle-outline" size={12} color={colors.primary} />
+                <Text style={styles.tapToProfileTextModal}>Tap to view profile</Text>
+              </View>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -1042,10 +1087,50 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
   },
-  cardImageContainer: {
-    width: '100%',
-    height: '100%',
-  },
+      cardImageContainer: {
+        width: '100%',
+        height: '100%',
+      },
+      profileLinkContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        marginBottom: spacing.sm,
+      },
+      artistAvatarSmall: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: colors.primary,
+      },
+      profileLinkText: {
+        flex: 1,
+      },
+      tapToProfileIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 2,
+      },
+      tapToProfileText: {
+        ...typography.small,
+        color: colors.primary,
+        fontSize: 11,
+        fontWeight: '600',
+      },
+      tapToProfileIndicatorModal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+      },
+      tapToProfileTextModal: {
+        ...typography.small,
+        color: colors.primary,
+        fontSize: 11,
+        fontWeight: '600',
+      },
   viewPortfolioButton: {
     flexDirection: 'row',
     alignItems: 'center',

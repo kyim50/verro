@@ -61,6 +61,7 @@ export default function HomeScreen() {
   const heartScaleAnims = useRef({});
   const heartOpacityAnims = useRef({});
   const [heartAnimations, setHeartAnimations] = useState({});
+  const [avatarKey, setAvatarKey] = useState(0);
 
   // Load liked artworks
   const loadLikedArtworks = useCallback(async () => {
@@ -187,10 +188,34 @@ export default function HomeScreen() {
 
   // Load current user profile for header avatar
   useEffect(() => {
-    if (currentUser?.id && token && !userProfile) {
-      useProfileStore.getState().fetchProfile(currentUser.id, token);
+    if (currentUser?.id && token) {
+      const prevAvatarUrl = userProfile?.avatar_url || currentUser?.avatar_url;
+      useProfileStore.getState().fetchProfile(currentUser.id, token).then(() => {
+        // Check if avatar changed
+        const newProfile = useProfileStore.getState().profile;
+        const newAvatarUrl = newProfile?.avatar_url || currentUser?.avatar_url;
+        if (prevAvatarUrl !== newAvatarUrl) {
+          setAvatarKey(prev => prev + 1);
+        }
+      });
     }
-  }, [currentUser?.id, token, userProfile]);
+  }, [currentUser?.id, token, currentUser?.avatar_url]); // Refresh when avatar changes
+  
+  // Watch for avatar URL changes to update key
+  useEffect(() => {
+    if (userProfile?.avatar_url || currentUser?.avatar_url) {
+      setAvatarKey(prev => prev + 1);
+    }
+  }, [userProfile?.avatar_url, currentUser?.avatar_url]);
+  
+  // Also refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser?.id && token) {
+        useProfileStore.getState().fetchProfile(currentUser.id, token);
+      }
+    }, [currentUser?.id, token])
+  );
 
   // Organize artworks into balanced columns (Pinterest masonry style)
   useEffect(() => {
@@ -706,12 +731,20 @@ export default function HomeScreen() {
             style={styles.profileButton}
             onPress={() => router.push('/(tabs)/profile')}
           >
-            {userProfile?.avatar_url ? (
+            {(userProfile?.avatar_url || currentUser?.avatar_url) ? (
               <Image
-                source={{ uri: userProfile.avatar_url }}
+                source={{ 
+                  uri: (() => {
+                    const url = userProfile?.avatar_url || currentUser?.avatar_url;
+                    // Add cache-busting parameter that changes when avatar updates
+                    const separator = url?.includes('?') ? '&' : '?';
+                    return `${url}${separator}_v=${avatarKey}`;
+                  })()
+                }}
                 style={styles.profileAvatar}
                 contentFit="cover"
-                cachePolicy="memory-disk"
+                cachePolicy="none"
+                key={`${userProfile?.avatar_url || currentUser?.avatar_url}-${avatarKey}`}
               />
             ) : (
               <Ionicons name="person-circle" size={22} color={colors.text.primary} />
