@@ -88,15 +88,39 @@ export const useAuthStore = create((set) => ({
 
   register: async (userData) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/register`, userData);
+      // Map frontend field names to backend expected field names
+      const backendData = {
+        email: userData.email,
+        username: userData.username,
+        password: userData.password,
+        fullName: userData.fullName || '',
+        userType: userData.userType || 'client',
+        avatar_url: userData.avatar_url || '',
+      };
+
+      console.log('Registering user with data:', { ...backendData, password: '***' });
+      
+      const response = await axios.post(`${API_URL}/auth/register`, backendData);
       const { token, user } = response.data;
       await useAuthStore.getState().setToken(token);
       set({ user, isAuthenticated: true });
       return { success: true };
     } catch (error) {
+      console.error('Registration error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      
+      const errorMessage = error.response?.data?.error 
+        || error.response?.data?.errors?.[0]?.msg 
+        || error.response?.data?.message
+        || error.message 
+        || 'Registration failed';
+        
       return {
         success: false,
-        error: error.response?.data?.error || 'Registration failed',
+        error: errorMessage,
       };
     }
   },
@@ -267,7 +291,10 @@ export const useSwipeStore = create((set, get) => ({
   fetchArtists: async () => {
     set({ isLoading: true });
     try {
-      const response = await axios.get(`${API_URL}/artists`);
+      // Get token from auth store to exclude swiped artists
+      const token = useAuthStore.getState().token;
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${API_URL}/artists`, { headers });
       set({ artists: response.data.artists, currentIndex: 0, isLoading: false });
     } catch (error) {
       console.error('Error fetching artists:', error);
@@ -275,20 +302,85 @@ export const useSwipeStore = create((set, get) => ({
     }
   },
 
-  swipe: async (artistId, direction) => {
-    // Update index IMMEDIATELY (optimistic update)
-    set({ currentIndex: get().currentIndex + 1 });
+  swipe: async (artistId, direction, updateIndex = true) => {
+    // Update index ONLY if requested (default true for backward compatibility)
+    // When called from animation callback, updateIndex should be false to prevent re-render
+    if (updateIndex) {
+      const newIndex = get().currentIndex + 1;
+      set({ currentIndex: newIndex });
+    }
     
-    // Then record swipe in background (don't wait for it)
+    // Record swipe in background - ensure it completes
     try {
+      const token = useAuthStore.getState().token;
+      if (!token) {
+        console.error('[SWIPE] No auth token for swipe');
+        return { success: false, error: 'No token' };
+      }
+      
+      // Validate artistId is not null/undefined
+      if (!artistId) {
+        console.error('[SWIPE] artistId is null or undefined:', artistId);
+        return { success: false, error: 'artistId is required' };
+      }
+      
+      // Backend now accepts UUIDs (updated to handle both UUIDs and numbers)
+      // currentArtist.id is a UUID (user_id), which is what the artists table uses as primary key
+      // Send it directly - backend will handle it correctly
+      const finalArtistId = artistId;
+      
+      console.log('[SWIPE] Recording swipe:', { 
+        artistId: finalArtistId, 
+        direction, 
+        originalType: typeof artistId,
+        originalValue: artistId,
+        token: token.substring(0, 20) + '...' 
+      });
+      
       const response = await axios.post(`${API_URL}/swipes`, {
+        artistId: finalArtistId,
+        direction,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000, // 10 second timeout
+      });
+      
+      console.log('[SWIPE] Response received:', response.data);
+      
+      // Verify the response
+      if (response.data && response.data.success) {
+        console.log('[SWIPE] ✓ Swipe recorded successfully:', {
+          artistId: finalArtistId,
+          direction,
+          swipeData: response.data.swipe
+        });
+        
+        // If it's a right swipe (like), log it prominently
+        if (direction === 'right') {
+          console.log('[SWIPE] ✓✓✓ ARTIST LIKED VIA SWIPE:', finalArtistId);
+        }
+        
+        return { success: true, artistId: finalArtistId, direction, data: response.data };
+      } else {
+        console.error('[SWIPE] Unexpected response format:', response.data);
+        return { success: false, error: 'Invalid response' };
+      }
+    } catch (error) {
+      console.error('[SWIPE] Error recording swipe:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
         artistId,
         direction,
+        config: error.config ? {
+          url: error.config.url,
+          method: error.config.method,
+          data: error.config.data,
+        } : null,
       });
-      console.log('Swipe recorded successfully:', response.data);
-    } catch (error) {
-      console.error('Error recording swipe:', error.response?.data || error.message);
-      // Optionally revert index on error, but for UX we'll keep it
+      // Don't revert index on error - keep optimistic update for smooth UX
+      return { success: false, error: error.message };
     }
   },
 

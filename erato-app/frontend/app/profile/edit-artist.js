@@ -173,7 +173,6 @@ export default function EditArtistProfileScreen() {
           <View style={styles.statusButtons}>
             {[
               { key: 'open', label: 'Open', icon: 'checkmark-circle' },
-              { key: 'limited', label: 'Limited', icon: 'time' },
               { key: 'closed', label: 'Closed', icon: 'close-circle' },
             ].map((opt) => {
               const active = commissionStatus === opt.key;

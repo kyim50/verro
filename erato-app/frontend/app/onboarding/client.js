@@ -7,13 +7,16 @@ import {
   Dimensions,
   FlatList,
   Alert,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+const IS_SMALL_SCREEN = height < 700;
 
 const STEPS = [
   {
@@ -69,6 +72,7 @@ const STEPS = [
 export default function ClientOnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   const handleNext = () => {
     if (currentIndex < STEPS.length - 1) {
@@ -109,9 +113,13 @@ export default function ClientOnboardingScreen() {
 
   const renderStep = ({ item }) => (
     <View style={styles.slide}>
-      <View style={styles.slideContent}>
+      <ScrollView 
+        contentContainerStyle={styles.slideContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <View style={[styles.iconContainer, { backgroundColor: `${item.color}20` }]}>
-          <Ionicons name={item.icon} size={80} color={item.color} />
+          <Ionicons name={item.icon} size={IS_SMALL_SCREEN ? 70 : 80} color={item.color} />
         </View>
 
         <Text style={styles.title}>{item.title}</Text>
@@ -121,12 +129,12 @@ export default function ClientOnboardingScreen() {
           <Text style={styles.tipsTitle}>Quick Tips:</Text>
           {item.tips.map((tip, index) => (
             <View key={index} style={styles.tipRow}>
-              <Ionicons name="checkmark-circle" size={20} color={item.color} />
+              <Ionicons name="checkmark-circle" size={18} color={item.color} />
               <Text style={styles.tipText}>{tip}</Text>
             </View>
           ))}
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 
@@ -136,7 +144,7 @@ export default function ClientOnboardingScreen() {
       style={styles.container}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <Text style={styles.headerTitle}>Welcome to Verro</Text>
         <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
           <Text style={styles.skipText}>Skip</Text>
@@ -174,7 +182,7 @@ export default function ClientOnboardingScreen() {
       />
 
       {/* Bottom Section */}
-      <View style={styles.bottomSection}>
+      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + spacing.lg }]}>
         {/* Pagination Dots */}
         <View style={styles.pagination}>
           {STEPS.map((_, index) => (
@@ -213,7 +221,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
   },
   headerTitle: {
@@ -254,44 +261,44 @@ const styles = StyleSheet.create({
   },
   slide: {
     width,
-    justifyContent: 'center',
     flex: 1,
-    paddingVertical: spacing.md,
   },
   slideContent: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
+    flexGrow: 1,
+    justifyContent: 'center',
+    minHeight: height * 0.6,
   },
   iconContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: IS_SMALL_SCREEN ? 120 : 140,
+    height: IS_SMALL_SCREEN ? 120 : 140,
+    borderRadius: IS_SMALL_SCREEN ? 60 : 70,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
   },
   title: {
     ...typography.h1,
     color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing.md,
-    fontSize: 28,
+    fontSize: IS_SMALL_SCREEN ? 24 : 28,
   },
   description: {
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: spacing.xl,
-    flexShrink: 1,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.sm,
   },
   tipsContainer: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
-    marginTop: spacing.md,
-    maxHeight: 200,
+    marginTop: spacing.sm,
   },
   tipsTitle: {
     ...typography.bodyBold,
@@ -301,8 +308,7 @@ const styles = StyleSheet.create({
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-    paddingLeft: spacing.xs,
+    marginBottom: spacing.xs,
   },
   tipText: {
     ...typography.body,
@@ -310,10 +316,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: spacing.sm,
     lineHeight: 20,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
   },
   bottomSection: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
+    paddingTop: spacing.md,
   },
   pagination: {
     flexDirection: 'row',

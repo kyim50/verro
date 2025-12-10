@@ -23,13 +23,24 @@ This guide will help you set up automated deployments and CI checks using GitHub
 On your local machine, generate a dedicated SSH key for GitHub Actions:
 
 ```bash
-# Generate new SSH key (don't use your existing one)
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_deploy
+# Generate new SSH key WITHOUT a passphrase (CRITICAL for CI/CD)
+# Use -N "" to ensure no passphrase is set
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_deploy -N ""
+
+# OR if prompted for passphrase, just press ENTER (leave it empty)
+# DO NOT set a passphrase - GitHub Actions cannot handle interactive prompts
 
 # This creates:
 # ~/.ssh/github_actions_deploy (private key - goes to GitHub Secrets)
 # ~/.ssh/github_actions_deploy.pub (public key - goes to EC2)
 ```
+
+**⚠️ CRITICAL: The SSH key MUST NOT have a passphrase!**
+- GitHub Actions cannot handle interactive passphrase prompts
+- If you already added a key with a passphrase to GitHub Secrets, you need to:
+  1. Generate a new key without a passphrase (command above)
+  2. Update the `EC2_SSH_PRIVATE_KEY` secret with the new private key
+  3. Add the new public key to EC2's `~/.ssh/authorized_keys`
 
 ### Step 2: Add Public Key to EC2
 

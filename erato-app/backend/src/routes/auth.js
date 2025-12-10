@@ -37,27 +37,53 @@ router.post(
 
       const { email, username, password, fullName, userType, avatar_url } = req.body;
 
-      // Check if user exists using admin client
-      const { data: existingUser } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .or(`email.eq.${email},username.eq.${username}`)
-        .single();
+      console.log('Registration attempt:', { email, username, userType, hasPassword: !!password });
 
-      if (existingUser) {
+      // Check if user exists using admin client
+      const { data: existingUsers, error: checkError } = await supabaseAdmin
+        .from('users')
+        .select('id, email, username')
+        .or(`email.eq.${email},username.eq.${username}`);
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing users:', checkError);
+        throw checkError;
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        const existingEmail = existingUsers.find(u => u.email === email);
+        const existingUsername = existingUsers.find(u => u.username === username);
+        
+        if (existingEmail) {
+          console.log('Registration failed: Email already exists', email);
+          throw new AppError('Email already exists', 409);
+        }
+        if (existingUsername) {
+          console.log('Registration failed: Username already exists', username);
+          throw new AppError('Username already exists', 409);
+        }
+        console.log('Registration failed: Email or username already exists');
         throw new AppError('Email or username already exists', 409);
       }
 
+      console.log('No existing user found, proceeding with registration...');
+
       // Create user in Supabase Auth
+      console.log('Creating user in Supabase Auth...');
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true, // Auto-confirm email for development
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Supabase Auth error:', authError);
+        throw authError;
+      }
+      console.log('User created in Supabase Auth:', authData.user.id);
 
       // Create user in database using ADMIN client to bypass RLS
+      console.log('Creating user in database...');
       const { data: user, error: dbError } = await supabaseAdmin
         .from('users')
         .insert({
@@ -72,10 +98,16 @@ router.post(
         .single();
 
       if (dbError) {
+        console.error('Database error creating user:', dbError);
         // If user creation fails, delete the auth user
-        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        } catch (deleteError) {
+          console.error('Error cleaning up auth user:', deleteError);
+        }
         throw dbError;
       }
+      console.log('User created in database:', user.id);
 
       // If user is an artist, create artist profile
       if (userType === 'artist' || userType === 'both') {
