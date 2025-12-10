@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
 import LoadingScreen from './auth/loading';
 
@@ -12,6 +13,13 @@ export default function RootLayout() {
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
   useEffect(() => {
+    // Debug: Log API URLs being used
+    const apiURL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+    const socketURL = Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL || process.env.EXPO_PUBLIC_SOCKET_URL;
+    console.log('🔍 API URL:', apiURL);
+    console.log('🔍 Socket URL:', socketURL);
+    console.log('🔍 Constants.expoConfig.extra:', Constants.expoConfig?.extra);
+
     let mounted = true;
     const initializeApp = async () => {
       try {

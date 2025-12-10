@@ -107,11 +107,24 @@ router.get('/', authenticate, async (req, res) => {
 // Get single board with details
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    // Try to get from cache
     const cacheKey = cacheKeys.board(req.params.id);
-    const cached = await cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
+    
+    // For "Liked" boards, always fetch fresh (skip cache) to ensure we have latest data
+    // Other boards can use cache
+    const { data: boardCheck } = await supabaseAdmin
+      .from('boards')
+      .select('name')
+      .eq('id', req.params.id)
+      .single();
+    
+    const isLikedBoard = boardCheck?.name === 'Liked';
+    
+    if (!isLikedBoard) {
+      // Try to get from cache for non-Liked boards
+      const cached = await cache.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
     }
 
     const { data: board, error: boardError } = await supabaseAdmin
@@ -210,8 +223,10 @@ router.get('/:id', authenticate, async (req, res) => {
       board_artworks: artworksWithDetails
     };
 
-    // Cache for 5 minutes
-    await cache.set(cacheKey, response, 300);
+    // Cache for shorter time for Liked boards (30 seconds) to ensure freshness
+    // Other boards cache for 5 minutes
+    const cacheTTL = isLikedBoard ? 30 : 300;
+    await cache.set(cacheKey, response, cacheTTL);
 
     res.json(response);
   } catch (error) {

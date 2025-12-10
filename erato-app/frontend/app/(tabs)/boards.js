@@ -11,6 +11,7 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import ReviewModal from '../../components/ReviewModal';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -37,6 +39,8 @@ export default function BoardsScreen() {
   const [likedSortOrder, setLikedSortOrder] = useState('newest'); // 'newest' or 'oldest'
   const [selectedCommission, setSelectedCommission] = useState(null);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState(null); // { userId, userName, userAvatar, commissionId, reviewType }
 
   const isArtistUser = user?.user_type === 'artist' || 
                        (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
@@ -115,6 +119,9 @@ export default function BoardsScreen() {
   };
 
   const handleCompleteCommission = async (commissionId) => {
+    const commission = commissions.find(c => c.id === commissionId);
+    if (!commission) return;
+
     Alert.alert(
       'Complete Commission',
       'Mark this commission as completed?',
@@ -131,7 +138,36 @@ export default function BoardsScreen() {
               );
               setShowCommissionModal(false);
               await loadCommissions();
-              Alert.alert('Success', 'Commission has been completed!');
+              
+              // Determine review target based on user type
+              if (isArtistUser) {
+                // Artist completed - they review the client
+                const client = commission.client;
+                if (client) {
+                  setReviewTarget({
+                    userId: client.id,
+                    userName: client.username || client.full_name,
+                    userAvatar: client.avatar_url,
+                    commissionId: commissionId,
+                    reviewType: 'artist_to_client'
+                  });
+                  setShowReviewModal(true);
+                }
+              } else {
+                // Client completed - they review the artist
+                // Note: artistCache not defined in this file - using commission.artist?.users directly
+                const artist = commission.artist?.users;
+                if (artist) {
+                  setReviewTarget({
+                    userId: artist.id,
+                    userName: artist.username || artist.full_name,
+                    userAvatar: artist.avatar_url,
+                    commissionId: commissionId,
+                    reviewType: 'client_to_artist'
+                  });
+                  setShowReviewModal(true);
+                }
+              }
             } catch (error) {
               console.error('Error completing commission:', error);
               Alert.alert('Error', 'Failed to complete commission. Please try again.');
@@ -140,6 +176,36 @@ export default function BoardsScreen() {
         }
       ]
     );
+  };
+
+  const handleSubmitReview = async (rating, comment) => {
+    if (!reviewTarget || !token) return;
+    
+    try {
+      await axios.post(
+        `${API_URL}/reviews`,
+        {
+          commission_id: reviewTarget.commissionId,
+          reviewee_id: reviewTarget.userId,
+          rating,
+          comment,
+          review_type: reviewTarget.reviewType
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setShowReviewModal(false);
+      setReviewTarget(null);
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Review submitted successfully!',
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      throw new Error(error.response?.data?.error || 'Failed to submit review');
+    }
   };
 
   const onRefresh = useCallback(async () => {
@@ -169,7 +235,12 @@ export default function BoardsScreen() {
       setNewBoardDescription('');
       setIsPublic(false);
 
-      Alert.alert('Success', 'Board created!');
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Board created!',
+        visibilityTime: 2000,
+      });
     } catch (error) {
       Alert.alert('Error', error.response?.data?.error || 'Failed to create board');
     }
@@ -856,7 +927,12 @@ export default function BoardsScreen() {
                                   );
                                   setShowCommissionModal(false);
                                   await loadCommissions();
-                                  Alert.alert('Success', 'Commission has been cancelled');
+                                  Toast.show({
+                                    type: 'success',
+                                    text1: 'Success',
+                                    text2: 'Commission has been cancelled',
+                                    visibilityTime: 2000,
+                                  });
                                 } catch (error) {
                                   console.error('Error cancelling commission:', error);
                                   Alert.alert('Error', 'Failed to cancel commission. Please try again.');
@@ -898,6 +974,19 @@ export default function BoardsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Review Modal */}
+      <ReviewModal
+        visible={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false);
+          setReviewTarget(null);
+        }}
+        onSubmit={handleSubmitReview}
+        userName={reviewTarget?.userName || ''}
+        userAvatar={reviewTarget?.userAvatar}
+        reviewType={reviewTarget?.reviewType || 'client_to_artist'}
+      />
     </View>
   );
 }

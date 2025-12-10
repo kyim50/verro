@@ -14,6 +14,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -23,6 +24,7 @@ import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useSwipeStore, useAuthStore, useBoardStore } from '../../store';
+import ReviewModal from '../../components/ReviewModal';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -86,6 +88,8 @@ export default function ExploreScreen() {
   const [selectedCommission, setSelectedCommission] = useState(null);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [artistCache, setArtistCache] = useState({}); // Cache for artist user data when backend doesn't provide it
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState(null); // { userId, userName, userAvatar, commissionId, reviewType }
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
@@ -284,6 +288,12 @@ export default function ExploreScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // The backend returns: { message: 'Artwork liked' or 'Artwork unliked', likeCount: number }
+      const message = response.data.message || '';
+      const newLikeCount = response.data.likeCount ?? previousLikeCount;
+      // Message is either "Artwork liked" or "Artwork unliked"
+      const isNowLiked = message === 'Artwork liked';
+      
       if (response.data.likeCount !== undefined) {
         setTrendingArtworks(prev => prev.map(item => 
           item.id === artwork.id
@@ -292,14 +302,15 @@ export default function ExploreScreen() {
         ));
       }
       
-      // Refresh liked artworks from boards to sync state
-      const likedBoard = boards.find(b => b.name === 'Liked');
-      if (likedBoard) {
-        const boardResponse = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
+      // Update liked state based on message (most reliable)
+      if (isNowLiked) {
+        setLikedArtworks(prev => new Set([...prev, artworkId]));
+      } else {
+        setLikedArtworks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(artworkId);
+          return newSet;
         });
-        const artworkIds = boardResponse.data.board_artworks?.map(ba => String(ba.artwork_id)) || [];
-        setLikedArtworks(new Set(artworkIds));
       }
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -1026,7 +1037,12 @@ export default function ExploreScreen() {
                                     );
                                     setShowCommissionModal(false);
                                     await loadCommissions();
-                                    Alert.alert('Success', 'Commission has been cancelled');
+                                    Toast.show({
+                                      type: 'success',
+                                      text1: 'Success',
+                                      text2: 'Commission has been cancelled',
+                                      visibilityTime: 2000,
+                                    });
                                   } catch (error) {
                                     console.error('Error cancelling commission:', error);
                                     Alert.alert('Error', 'Failed to cancel commission. Please try again.');
@@ -1060,7 +1076,37 @@ export default function ExploreScreen() {
                                     );
                                     setShowCommissionModal(false);
                                     await loadCommissions();
-                                    Alert.alert('Success', 'Commission has been completed!');
+                                    
+                                    // Determine review target based on user type
+                                    const currentIsArtist = user?.user_type === 'artist' || 
+                                                           (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+                                    if (currentIsArtist) {
+                                      // Artist completed - they review the client
+                                      const client = selectedCommission.client;
+                                      if (client) {
+                                        setReviewTarget({
+                                          userId: client.id,
+                                          userName: client.username || client.full_name,
+                                          userAvatar: client.avatar_url,
+                                          commissionId: selectedCommission.id,
+                                          reviewType: 'artist_to_client'
+                                        });
+                                        setShowReviewModal(true);
+                                      }
+                                    } else {
+                                      // Client completed - they review the artist
+                                      const artist = selectedCommission.artist?.users || artistCache[selectedCommission.artist_id];
+                                      if (artist) {
+                                        setReviewTarget({
+                                          userId: artist.id,
+                                          userName: artist.username || artist.full_name,
+                                          userAvatar: artist.avatar_url,
+                                          commissionId: selectedCommission.id,
+                                          reviewType: 'client_to_artist'
+                                        });
+                                        setShowReviewModal(true);
+                                      }
+                                    }
                                   } catch (error) {
                                     console.error('Error completing commission:', error);
                                     Alert.alert('Error', 'Failed to complete commission. Please try again.');
@@ -1094,9 +1140,50 @@ export default function ExploreScreen() {
               )}
             </View>
           </View>
-        </Modal>
-      </View>
-    );
+      </Modal>
+
+      {/* Review Modal */}
+      <ReviewModal
+        visible={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false);
+          setReviewTarget(null);
+        }}
+        onSubmit={async (rating, comment) => {
+          if (!reviewTarget || !token) return;
+          
+          try {
+            await axios.post(
+              `${API_URL}/reviews`,
+              {
+                commission_id: reviewTarget.commissionId,
+                reviewee_id: reviewTarget.userId,
+                rating,
+                comment,
+                review_type: reviewTarget.reviewType
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            setShowReviewModal(false);
+            setReviewTarget(null);
+            Toast.show({
+              type: 'success',
+              text1: 'Success',
+              text2: 'Review submitted successfully!',
+              visibilityTime: 2000,
+            });
+          } catch (error) {
+            console.error('Error submitting review:', error);
+            throw new Error(error.response?.data?.error || 'Failed to submit review');
+          }
+        }}
+        userName={reviewTarget?.userName || ''}
+        userAvatar={reviewTarget?.userAvatar}
+        reviewType={reviewTarget?.reviewType || 'client_to_artist'}
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

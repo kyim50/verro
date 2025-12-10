@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -31,30 +31,53 @@ export default function ArtworkDetailScreen() {
   const { id } = useLocalSearchParams();
   const { user, token } = useAuthStore();
   const { saveArtworkToBoard, boards, fetchBoards, createBoard } = useBoardStore();
-  const feedStore = useFeedStore();
+  const { likedArtworks, setLikedArtwork, loadLikedArtworks } = useFeedStore();
 
   const [artwork, setArtwork] = useState(null);
   const [similarArtworks, setSimilarArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const isLikingRef = useRef(false); // Prevent useEffect from interfering during like operation
+  
+  // Get liked state from shared store
+  const isLiked = likedArtworks.has(String(id));
 
   useEffect(() => {
     const loadData = async () => {
       await fetchArtworkDetails();
       await fetchSimilarArtworks();
       if (token) {
-        await fetchBoards();
+        const fetchedBoards = await fetchBoards();
+        // Load liked artworks from shared store using fetched boards
+        if (fetchedBoards && fetchedBoards.length > 0) {
+          await loadLikedArtworks(fetchedBoards, token, false);
+        }
       }
     };
     loadData();
   }, [id]);
 
   useEffect(() => {
-    if (token && boards.length > 0) {
-      checkIfLiked();
+    // Load liked artworks when boards are loaded, but don't reload during like operation
+    // Only load if not already loaded to avoid overwriting current state
+    if (token && boards.length > 0 && !isLikingRef.current) {
+      // Use a longer timeout to ensure any like operation has completed
+      // This prevents reloading from overwriting our optimistic updates
+      const timer = setTimeout(() => {
+        if (!isLikingRef.current) {
+          const { likedArtworksLoaded } = useFeedStore.getState();
+          // Only load if not already loaded to avoid overwriting
+          if (!likedArtworksLoaded) {
+            console.log('Loading liked artworks from useEffect');
+            loadLikedArtworks(boards, token, false).catch(() => {});
+          } else {
+            console.log('Skipping load - already loaded');
+          }
+        }
+      }, 2000);
+      return () => clearTimeout(timer);
     }
-  }, [boards, id, token]);
+  }, [boards, token]);
 
   const fetchArtworkDetails = async () => {
     try {
@@ -71,24 +94,6 @@ export default function ArtworkDetailScreen() {
     }
   };
 
-  const checkIfLiked = async () => {
-    try {
-      const likedBoard = boards.find(b => b.name === 'Liked');
-      if (likedBoard) {
-        const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        // The API returns board_artworks array, each with artwork_id
-        const artworkIds = response.data.board_artworks?.map(ba => String(ba.artwork_id)) || [];
-        setIsLiked(artworkIds.includes(String(id)));
-      } else {
-        setIsLiked(false);
-      }
-    } catch (error) {
-      console.error('Error checking like status:', error);
-      setIsLiked(false);
-    }
-  };
 
   const handleLike = async () => {
     if (!token) {
@@ -96,17 +101,23 @@ export default function ArtworkDetailScreen() {
       return;
     }
 
+    // Prevent multiple simultaneous like operations
+    if (isLikingRef.current) return;
+    isLikingRef.current = true;
+
     // Store previous state for rollback
     const previousLikedState = isLiked;
     const previousLikeCount = artwork?.like_count || 0;
 
     try {
-      // Optimistically update UI
-      setIsLiked(!isLiked);
+      // Optimistically update UI - update shared store immediately
+      const newLikedState = !isLiked;
+      setLikedArtwork(id, newLikedState);
+      
       if (artwork) {
         setArtwork({
           ...artwork,
-          like_count: isLiked ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1
+          like_count: newLikedState ? previousLikeCount + 1 : Math.max(0, previousLikeCount - 1)
         });
       }
 
@@ -115,28 +126,48 @@ export default function ArtworkDetailScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      console.log('Like API Response:', response.data);
+      
+      // The backend returns: { message: 'Artwork liked' or 'Artwork unliked', likeCount: number }
+      const message = response.data.message || '';
+      const newLikeCount = response.data.likeCount ?? previousLikeCount;
+      
+      // Determine final state from message (most reliable)
+      // Message is either "Artwork liked" or "Artwork unliked"
+      const isNowLiked = message === 'Artwork liked';
+      
+      console.log('Setting liked state:', { id, isNowLiked, message, newLikeCount });
+      
+      // Update shared store with authoritative backend response
+      setLikedArtwork(id, isNowLiked);
+      
+      // Verify the update worked
+      setTimeout(() => {
+        const currentState = useFeedStore.getState().likedArtworks;
+        console.log('Current liked artworks after update:', Array.from(currentState));
+        console.log('Is artwork liked?', currentState.has(String(id)));
+      }, 100);
+
       // Update like count from response
-      if (artwork && response.data.likeCount !== undefined) {
-        setArtwork({ ...artwork, like_count: response.data.likeCount });
+      if (artwork) {
+        setArtwork({ ...artwork, like_count: newLikeCount });
       }
 
-      // Update isLiked based on response - if likeCount decreased, it was unliked
-      if (response.data.likeCount !== undefined) {
-        const newLikedState = response.data.likeCount > previousLikeCount || 
-                              (response.data.likeCount === previousLikeCount && !isLiked);
-        setIsLiked(newLikedState);
-      }
-
-      // Refresh boards to ensure state is in sync
-      await fetchBoards();
-      // Re-check like status from boards
-      await checkIfLiked();
+      // DON'T refresh boards immediately - it causes reloading which resets state
+      // The backend has already updated the board, so we trust our local state
+      // We manually add to the store, so we don't need to reload from server
+      // Only reset the flag after a longer delay to prevent any reloads from interfering
+      setTimeout(() => {
+        isLikingRef.current = false;
+        // Optionally refresh boards much later, but don't do it immediately
+        // The merge strategy in loadLikedArtworks will preserve our local state
+      }, 5000); // Long delay to ensure no reloads interfere
     } catch (error) {
       console.error('Error toggling like:', error);
       console.error('Error details:', error.response?.data || error.message);
 
-      // Rollback optimistic update on error
-      setIsLiked(previousLikedState);
+      // Rollback optimistic update on error - restore shared store state
+      setLikedArtwork(id, previousLikedState);
       if (artwork) {
         setArtwork({ ...artwork, like_count: previousLikeCount });
       }
@@ -144,6 +175,9 @@ export default function ArtworkDetailScreen() {
       // Show user-friendly error message
       const errorMessage = error.response?.data?.error || 'Failed to update like status';
       Alert.alert('Error', errorMessage);
+      
+      // Reset the ref on error
+      isLikingRef.current = false;
     }
   };
 

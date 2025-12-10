@@ -746,7 +746,12 @@ export default function ConversationScreen() {
                               );
                               setShowDetailsModal(false);
                               await Promise.all([fetchMessages(), fetchConversationDetails()]);
-                              Alert.alert('Success', 'Commission has been cancelled');
+                              Toast.show({
+                                type: 'success',
+                                text1: 'Success',
+                                text2: 'Commission has been cancelled',
+                                visibilityTime: 2000,
+                              });
                               router.back();
                             } catch (error) {
                               console.error('Error cancelling commission:', error);

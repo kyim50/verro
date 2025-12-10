@@ -3,7 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import Constants from 'expo-constants';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+// Temporarily hardcoded for EC2 testing - remove this after confirming it works
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || 
+                process.env.EXPO_PUBLIC_API_URL || 
+                'http://3.18.213.189:3000/api';
 
 // Axios interceptor to handle 401 errors globally
 // This will be set up after the store is created to avoid circular imports
@@ -141,6 +144,66 @@ export const useFeedStore = create((set, get) => ({
   hasMore: true,
   isLoading: false,
   removedIds: [],
+  likedArtworks: new Set(), // Shared liked artworks state
+  likedArtworksLoaded: false,
+
+  // Update liked artworks state
+  setLikedArtwork: (artworkId, isLiked) => {
+    const id = String(artworkId);
+    console.log('Store: setLikedArtwork called', { artworkId: id, isLiked, currentState: Array.from(get().likedArtworks) });
+    set((state) => {
+      const newSet = new Set(state.likedArtworks);
+      if (isLiked) {
+        newSet.add(id);
+        console.log('Store: Added artwork to liked set', id);
+      } else {
+        newSet.delete(id);
+        console.log('Store: Removed artwork from liked set', id);
+      }
+      // Always create a new Set instance to ensure Zustand detects the change
+      const updatedSet = new Set(newSet);
+      console.log('Store: Updated liked artworks:', Array.from(updatedSet));
+      return { likedArtworks: updatedSet };
+    });
+  },
+
+  // Load liked artworks from board
+  loadLikedArtworks: async (boards, token, forceReload = false) => {
+    if (get().likedArtworksLoaded && !forceReload) {
+      console.log('Skipping loadLikedArtworks - already loaded and not forcing reload');
+      return;
+    }
+    
+    try {
+      const likedBoard = boards.find(b => b.name === 'Liked');
+      if (likedBoard) {
+        console.log('Loading liked artworks from board:', likedBoard.id);
+        const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const artworkIds = response.data.board_artworks?.map(ba => String(ba.artwork_id)) || [];
+        console.log('Loaded liked artworks from server:', artworkIds);
+        
+        // Merge with existing liked artworks instead of replacing
+        // This prevents overwriting artworks that were just liked but aren't in server response yet
+        const currentLiked = get().likedArtworks;
+        const mergedSet = new Set([...currentLiked, ...artworkIds]);
+        console.log('Merged liked artworks (current + server):', Array.from(mergedSet));
+        
+        set({ 
+          likedArtworks: mergedSet,
+          likedArtworksLoaded: true 
+        });
+        console.log('Store state after loading:', Array.from(get().likedArtworks));
+      } else {
+        console.log('No Liked board found');
+        set({ likedArtworksLoaded: true });
+      }
+    } catch (error) {
+      console.error('Error loading liked artworks:', error);
+      set({ likedArtworksLoaded: true });
+    }
+  },
 
   fetchArtworks: async (reset = false) => {
     if (get().isLoading || (!reset && !get().hasMore)) return;
@@ -192,7 +255,7 @@ export const useFeedStore = create((set, get) => ({
       ),
     })),
 
-  reset: () => set({ artworks: [], page: 1, hasMore: true, isLoading: false }),
+  reset: () => set({ artworks: [], page: 1, hasMore: true, isLoading: false, likedArtworks: new Set(), likedArtworksLoaded: false }),
 }));
 
 // Swipe store for Tinder-style feature

@@ -15,6 +15,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../store';
 import { uploadImage, validateImage } from '../../utils/imageUpload';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
@@ -94,7 +96,7 @@ export default function UploadArtworkScreen() {
 
       // Create artwork in database
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/artworks`,
+        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/artworks`,
         {
           method: 'POST',
           headers: {
