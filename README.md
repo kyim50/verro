@@ -1,4 +1,4 @@
-# Verro (Erato) - Art Commission Platform
+# Verro - Art Commission Platform
 
 A modern mobile-first platform connecting artists and clients for custom art commissions. Built with React Native (Expo) and Node.js/Express.
 
