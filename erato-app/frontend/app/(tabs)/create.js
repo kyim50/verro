@@ -20,7 +20,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../consta
 import { useAuthStore, useSwipeStore } from '../../store';
 
 const { width, height } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.25;
+const SWIPE_THRESHOLD = width * 0.2; // Lower threshold for easier swiping
 
 export default function CreateScreen() {
   const { user } = useAuthStore();
@@ -33,12 +33,156 @@ export default function CreateScreen() {
   const [showInstructions, setShowInstructions] = useState(false);
   
   const position = useRef(new Animated.ValueXY()).current;
+  const isAnimating = useRef(false); // Track if animation is in progress
 
+  // Initialize panResponder unconditionally (hooks must be called before returns)
+  const currentArtist = artists[currentIndex];
+  const portfolioImages = currentArtist?.portfolio_images || [];
+  
+  // Reset portfolio image index when artist changes
+  useEffect(() => {
+    if (currentArtist) {
+      setCurrentPortfolioImage(0);
+    }
+  }, [currentIndex, currentArtist?.id]);
+  
+  // No useEffect for position reset - handled in animation callbacks only
+  
+  const currentImage = portfolioImages[currentPortfolioImage] || portfolioImages[0];
+
+  // Define swipe functions - SIMPLIFIED, no complex animations
+  const swipeRight = useCallback(() => {
+    if (currentArtist && !isAnimating.current) {
+      isAnimating.current = true;
+      const artistId = currentArtist.id;
+      
+      // Get current position BEFORE any changes
+      const startX = position.x._value;
+      
+      // Update index IMMEDIATELY
+      swipe(artistId, 'right');
+      
+      // Simple horizontal animation from current position to off-screen right
+      Animated.timing(position, {
+        toValue: { x: width + 100, y: 0 },
+        duration: 200,
+        useNativeDriver: false,
+      }).start(() => {
+        // Reset immediately after animation completes
+        position.setValue({ x: 0, y: 0 });
+        position.setOffset({ x: 0, y: 0 });
+        isAnimating.current = false;
+      });
+    }
+  }, [currentArtist, swipe, position]);
+
+  const swipeLeft = useCallback(() => {
+    if (currentArtist && !isAnimating.current) {
+      isAnimating.current = true;
+      const artistId = currentArtist.id;
+      
+      // Get current position BEFORE any changes
+      const startX = position.x._value;
+      
+      // Update index IMMEDIATELY
+      swipe(artistId, 'left');
+      
+      // Simple horizontal animation from current position to off-screen left
+      Animated.timing(position, {
+        toValue: { x: -width - 100, y: 0 },
+        duration: 200,
+        useNativeDriver: false,
+      }).start(() => {
+        // Reset immediately after animation completes
+        position.setValue({ x: 0, y: 0 });
+        position.setOffset({ x: 0, y: 0 });
+        isAnimating.current = false;
+      });
+    }
+  }, [currentArtist, swipe, position]);
+
+  // Removed rotation - keeping it simple
+
+  const likeOpacity = position.x.interpolate({
+    inputRange: [0, SWIPE_THRESHOLD],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const nopeOpacity = position.x.interpolate({
+    inputRange: [-SWIPE_THRESHOLD, 0],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Create panResponder after swipe functions are defined (but before any returns)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        return Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 10;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        position.setOffset({
+          x: position.x._value,
+          y: position.y._value,
+        });
+      },
+      onPanResponderMove: (_, gesture) => {
+        // Simple horizontal movement only
+        position.setValue({ 
+          x: gesture.dx, 
+          y: 0
+        });
+      },
+      onPanResponderRelease: (_, gesture) => {
+        // Don't process if already animating
+        if (isAnimating.current) return;
+        
+        // Flatten offset to get absolute position
+        position.flattenOffset();
+        
+        const swipeVelocity = Math.abs(gesture.vx);
+        const swipeDistance = Math.abs(gesture.dx);
+        const currentX = position.x._value;
+
+        // Check if swipe threshold is met OR if card is already far enough off screen
+        // Also check velocity - even small distances with high velocity should trigger
+        if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.3 || Math.abs(currentX) > SWIPE_THRESHOLD) {
+          // Determine swipe direction based on gesture or current position
+          if (gesture.dx > 0 || currentX > 0) {
+            swipeRight();
+          } else if (gesture.dx < 0 || currentX < 0) {
+            swipeLeft();
+          }
+        } else {
+          // If it's a tap (small movement), open portfolio
+          if (swipeDistance < 5 && Math.abs(gesture.dy) < 5) {
+            setShowPortfolioModal(true);
+          }
+          // Spring back to center and reset offset
+          Animated.spring(position, {
+            toValue: { x: 0, y: 0 },
+            friction: 7,
+            tension: 50,
+            useNativeDriver: false,
+          }).start(() => {
+            // Ensure offset is reset after spring
+            position.setOffset({ x: 0, y: 0 });
+            position.setValue({ x: 0, y: 0 });
+          });
+        }
+      },
+    })
+  ).current;
+
+  // All hooks must be called before any conditional returns
   useEffect(() => {
     if (!isArtist && artists.length === 0) {
       fetchArtists();
     }
-  }, [isArtist]);
+  }, [isArtist, artists.length, fetchArtists]);
 
   useEffect(() => {
     if (!isArtist) {
@@ -56,15 +200,6 @@ export default function CreateScreen() {
     }
   }, [isArtist]);
 
-  const handleCloseInstructions = async () => {
-    setShowInstructions(false);
-    try {
-      await AsyncStorage.setItem('hasSeenExploreInstructions', 'true');
-    } catch (error) {
-      console.error('Error saving instructions flag:', error);
-    }
-  };
-
   useFocusEffect(
     useCallback(() => {
       // For artists: navigate to upload screen
@@ -77,7 +212,16 @@ export default function CreateScreen() {
     }, [isArtist])
   );
 
-  // For artists: show loading and redirect to upload
+  const handleCloseInstructions = useCallback(async () => {
+    setShowInstructions(false);
+    try {
+      await AsyncStorage.setItem('hasSeenExploreInstructions', 'true');
+    } catch (error) {
+      console.error('Error saving instructions flag:', error);
+    }
+  }, []);
+
+  // For artists: show loading and redirect to upload (after all hooks)
   if (isArtist) {
     return (
       <View style={styles.container}>
@@ -85,101 +229,6 @@ export default function CreateScreen() {
       </View>
     );
   }
-
-  // For clients: show Tinder swipe view
-  const currentArtist = artists[currentIndex];
-  const portfolioImages = currentArtist?.portfolio_images || [];
-  const currentImage = portfolioImages[currentPortfolioImage] || portfolioImages[0];
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => {
-        return Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 10;
-      },
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => {
-        position.setOffset({
-          x: position.x._value,
-          y: position.y._value,
-        });
-      },
-      onPanResponderMove: (_, gesture) => {
-        position.setValue({ 
-          x: gesture.dx, 
-          y: gesture.dy * 0.3
-        });
-      },
-      onPanResponderRelease: (_, gesture) => {
-        position.flattenOffset();
-        const swipeVelocity = Math.abs(gesture.vx);
-        const swipeDistance = Math.abs(gesture.dx);
-
-        if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
-          if (gesture.dx > 0) {
-            swipeRight();
-          } else {
-            swipeLeft();
-          }
-        } else {
-          // If it's a tap (small movement), open portfolio
-          if (swipeDistance < 5 && Math.abs(gesture.dy) < 5) {
-            setShowPortfolioModal(true);
-          }
-          Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
-            friction: 7,
-            tension: 50,
-            useNativeDriver: false,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  const swipeRight = () => {
-    Animated.timing(position, {
-      toValue: { x: width + 100, y: 0 },
-      duration: 200,
-      useNativeDriver: false,
-    }).start(() => {
-      if (currentArtist) {
-        swipe(currentArtist.id, 'right');
-      }
-      position.setValue({ x: 0, y: 0 });
-    });
-  };
-
-  const swipeLeft = () => {
-    Animated.timing(position, {
-      toValue: { x: -width - 100, y: 0 },
-      duration: 200,
-      useNativeDriver: false,
-    }).start(() => {
-      if (currentArtist) {
-        swipe(currentArtist.id, 'left');
-      }
-      position.setValue({ x: 0, y: 0 });
-    });
-  };
-
-  const rotate = position.x.interpolate({
-    inputRange: [-width / 2, 0, width / 2],
-    outputRange: ['-10deg', '0deg', '10deg'],
-    extrapolate: 'clamp',
-  });
-
-  const likeOpacity = position.x.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const nopeOpacity = position.x.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
 
   if (!currentArtist) {
     return (
@@ -198,7 +247,27 @@ export default function CreateScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <Animated.View 
+        style={[
+          styles.header,
+          {
+            opacity: position.x.interpolate({
+              inputRange: [-width, -SWIPE_THRESHOLD / 2, 0, SWIPE_THRESHOLD / 2, width],
+              outputRange: [0, 0.5, 1, 0.5, 0],
+              extrapolate: 'clamp',
+            }),
+            transform: [
+              {
+                translateY: position.x.interpolate({
+                  inputRange: [-width, 0, width],
+                  outputRange: [-20, 0, -20],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ],
+          },
+        ]}
+      >
         <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>
           {currentArtist.users?.username || 'Artist'}
@@ -206,37 +275,45 @@ export default function CreateScreen() {
         <TouchableOpacity style={styles.moreButton} onPress={() => setShowInstructions(true)}>
           <Ionicons name="help-circle-outline" size={28} color={colors.text.primary} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      {/* Card */}
-      <Animated.View
-        style={[
-          styles.card,
-          {
-            transform: [
-              { translateX: position.x },
-              { translateY: position.y },
-              { rotate },
-            ],
-          },
-        ]}
-        {...panResponder.panHandlers}
-      >
+      {/* Card Container */}
+      <View style={styles.cardContainer}>
+        {/* Current Card - SIMPLIFIED: Only horizontal movement, no rotation */}
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [
+                { translateX: position.x },
+              ],
+            },
+          ]}
+          {...panResponder.panHandlers}
+        >
           {/* Like/Nope Overlays */}
-          <Animated.View style={[styles.likeOverlay, { opacity: likeOpacity }]}>
+          <Animated.View style={[styles.likeOverlay, { opacity: likeOpacity }]} pointerEvents="none">
             <Text style={styles.likeText}>LIKE</Text>
           </Animated.View>
-          <Animated.View style={[styles.nopeOverlay, { opacity: nopeOpacity }]}>
+          <Animated.View style={[styles.nopeOverlay, { opacity: nopeOpacity }]} pointerEvents="none">
             <Text style={styles.nopeText}>NOPE</Text>
           </Animated.View>
 
           {/* Portfolio Image */}
           <View style={styles.cardImageContainer}>
-            <Image
-              source={{ uri: currentImage }}
-              style={styles.cardImage}
-              contentFit="cover"
-            />
+            {currentImage ? (
+              <Image
+                key={`artist-${currentArtist?.id}-img-${currentPortfolioImage}`}
+                source={{ uri: currentImage }}
+                style={styles.cardImage}
+                contentFit="cover"
+                cachePolicy="none"
+              />
+            ) : (
+              <View style={styles.cardImagePlaceholder}>
+                <Text style={styles.placeholderText}>No portfolio images</Text>
+              </View>
+            )}
           </View>
 
         {/* Portfolio Counter */}
@@ -318,6 +395,7 @@ export default function CreateScreen() {
           </View>
         </LinearGradient>
       </Animated.View>
+      </View>
 
       {/* Action Buttons */}
       <View style={styles.actionsContainer}>
@@ -571,13 +649,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  cardContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: spacing.xxl * 3 + spacing.xl, // Much more space from header (moved down a lot)
+    paddingBottom: 180, // More space for action buttons
+  },
   card: {
     width: width - spacing.xl * 2,
     height: height * 0.65,
-    alignSelf: 'center',
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surface,
+    position: 'absolute',
+    zIndex: 1,
+  },
+  nextCard: {
+    zIndex: 0,
   },
   cardImageContainer: {
     width: '100%',
@@ -586,6 +675,18 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
+  },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
+  placeholderText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 18,
   },
   likeOverlay: {
     position: 'absolute',
@@ -738,10 +839,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.lg,
+    gap: spacing.xl, // More space between buttons
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl + spacing.xl,
-    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm + spacing.xs, // Even closer to nav bar (lowered more)
+    marginBottom: spacing.xs,
+    marginTop: spacing.md,
+    zIndex: 10, // Ensure buttons are above card
+    position: 'relative',
   },
   actionButton: {
     width: 64,

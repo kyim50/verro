@@ -5,11 +5,11 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
@@ -92,7 +92,10 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            router.replace('/auth/login');
+            // Use setTimeout to ensure navigation happens after component is mounted
+            setTimeout(() => {
+              router.replace('/auth/login');
+            }, 100);
           },
         },
       ]
@@ -229,7 +232,9 @@ export default function ProfileScreen() {
                 }} 
                 style={styles.avatar}
                 contentFit="cover"
-                cachePolicy="none"
+                cachePolicy="memory-disk"
+                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                transition={200}
                 key={`${profile?.avatar_url || user?.avatar_url}-${avatarKey}`}
               />
             ) : (
@@ -638,6 +643,7 @@ const styles = StyleSheet.create({
     width: IS_SMALL_SCREEN ? 90 : 100,
     height: IS_SMALL_SCREEN ? 90 : 100,
     borderRadius: IS_SMALL_SCREEN ? 45 : 50,
+    backgroundColor: colors.surface, // Show background while loading
   },
   avatarPlaceholder: {
     width: IS_SMALL_SCREEN ? 90 : 100,

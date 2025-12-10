@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,12 +11,13 @@ import {
   Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { initSocket, getSocket } from '../../lib/socket';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
@@ -28,13 +29,9 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  useEffect(() => {
-    if (user && token) {
-      fetchConversations();
-    }
-  }, [user, token]);
+  const socketRef = useRef(null);
 
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/messages/conversations`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -56,7 +53,82 @@ export default function MessagesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [token]);
+
+  // Initialize Socket.io for real-time conversation updates
+  useEffect(() => {
+    if (!token) return;
+
+    const socket = initSocket(token);
+    socketRef.current = socket;
+
+    // Join all conversation rooms when socket connects
+    socket.on('connect', () => {
+      console.log('Socket connected in conversations list');
+    });
+
+    // Listen for new messages to update conversation list
+    socket.on('new-message', (message) => {
+      setConversations(prev => {
+        // Find if this conversation exists in the list
+        const conversationIndex = prev.findIndex(conv => conv.id === message.conversation_id);
+        
+        if (conversationIndex === -1) {
+          // Conversation doesn't exist yet, fetch full list
+          setTimeout(() => {
+            fetchConversations();
+          }, 0);
+          return prev;
+        }
+
+        const conversation = prev[conversationIndex];
+        const isFromCurrentUser = message.sender_id === user?.id;
+        
+        // Create updated conversation
+        const updatedConversation = {
+          ...conversation,
+          latest_message: {
+            ...message,
+            content: message.message_type === 'image' ? 'Sent an image' : message.content,
+          },
+          // Update unread count if message is from other user
+          unread_count: isFromCurrentUser 
+            ? conversation.unread_count 
+            : (conversation.unread_count || 0) + 1,
+        };
+
+        // Move conversation to top and update it
+        const newConversations = [...prev];
+        newConversations.splice(conversationIndex, 1);
+        newConversations.unshift(updatedConversation);
+
+        return newConversations;
+      });
+    });
+
+    // Cleanup
+    return () => {
+      if (socket) {
+        socket.off('new-message');
+        socket.off('connect');
+      }
+    };
+  }, [token, user, fetchConversations]);
+
+  // Refresh conversations when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (user && token) {
+        fetchConversations();
+      }
+    }, [user, token, fetchConversations])
+  );
+
+  useEffect(() => {
+    if (user && token) {
+      fetchConversations();
+    }
+  }, [user, token, fetchConversations]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -204,29 +276,36 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      {conversations.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="chatbubbles-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>No messages yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Start a conversation by messaging an artist or client
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={conversations}
-          renderItem={renderConversation}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-        />
-      )}
+      <FlatList
+        data={conversations}
+        renderItem={renderConversation}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.listContent,
+          conversations.length === 0 && styles.emptyStateContainer
+        ]}
+        ListEmptyComponent={
+          conversations.length === 0 && !loading ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubbles-outline" size={64} color={colors.text.disabled} />
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Start a conversation by messaging an artist or client
+              </Text>
+            </View>
+          ) : null
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.surface}
+            enabled={true}
+          />
+        }
+      />
     </View>
   );
 }
@@ -346,11 +425,15 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: '500',
   },
+  emptyStateContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   emptyState: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl * 2,
   },
   emptyTitle: {
     ...typography.h3,

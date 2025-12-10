@@ -1,11 +1,13 @@
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../store';
+import LoadingScreen from './auth/loading';
 
 export default function RootLayout() {
+  const [isLoading, setIsLoading] = useState(true);
   const loadToken = useAuthStore((state) => state.loadToken);
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
@@ -26,6 +28,15 @@ export default function RootLayout() {
         }
       } catch (error) {
         console.error('Error initializing app:', error);
+      } finally {
+        if (mounted) {
+          // Show loading screen for at least 1.5 seconds
+          setTimeout(() => {
+            if (mounted) {
+              setIsLoading(false);
+            }
+          }, 1500);
+        }
       }
     };
     // Delay initialization slightly to ensure everything is mounted
@@ -40,6 +51,10 @@ export default function RootLayout() {
     };
   }, []);
 
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
@@ -48,6 +63,10 @@ export default function RootLayout() {
           headerShown: false,
           contentStyle: { backgroundColor: '#000000' },
           animation: 'fade',
+          gestureEnabled: true,
+          gestureDirection: 'horizontal',
+          animationDuration: 200,
+          fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
         }}
       />
       <Toast />

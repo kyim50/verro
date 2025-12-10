@@ -118,22 +118,8 @@ export default function UploadArtworkScreen() {
         throw new Error(errorData.error || 'Failed to upload artwork');
       }
 
-      Alert.alert('Success!', 'Artwork uploaded successfully', [
-        {
-          text: 'Upload Another',
-          onPress: () => {
-            setImageUri('');
-            setTitle('');
-            setDescription('');
-            setTags('');
-            setIsFeatured(false);
-          },
-        },
-        {
-          text: 'Go to Profile',
-          onPress: () => router.replace('/(tabs)/profile'),
-        },
-      ]);
+      // Navigate directly to home screen without alert
+      router.replace('/(tabs)/home');
     } catch (error) {
       console.error('Error uploading artwork:', error);
       Alert.alert('Error', error.message || 'Failed to upload artwork. Please try again.');

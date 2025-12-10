@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
@@ -53,6 +53,15 @@ export default function BoardsScreen() {
       loadLikedArtists();
     }
   }, [activeTab, isArtistUser]);
+
+  // Refresh liked artists when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === 'liked' && !isArtistUser && token) {
+        loadLikedArtists();
+      }
+    }, [activeTab, isArtistUser, token])
+  );
 
   const loadBoards = async () => {
     try {
