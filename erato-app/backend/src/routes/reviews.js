@@ -24,11 +24,12 @@ router.post('/', authenticate, async (req, res) => {
     // Get commission details
     const { data: commission, error: commissionError } = await supabaseAdmin
       .from('commissions')
-      .select('*, artists(user_id)')
+      .select('id, client_id, artist_id, status')
       .eq('id', commission_id)
       .single();
 
     if (commissionError || !commission) {
+      console.error('Commission fetch error:', commissionError);
       return res.status(404).json({ error: 'Commission not found' });
     }
 
@@ -37,9 +38,16 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Can only review completed commissions' });
     }
 
+    // Get artist to find user_id
+    const { data: artist } = await supabaseAdmin
+      .from('artists')
+      .select('user_id')
+      .eq('id', commission.artist_id)
+      .single();
+
     // Check if user is client or artist
     const isClient = commission.client_id === req.user.id;
-    const isArtist = commission.artists.user_id === req.user.id;
+    const isArtist = artist?.user_id === req.user.id;
 
     if (!isClient && !isArtist) {
       return res.status(403).json({ error: 'You must be part of this commission to review' });

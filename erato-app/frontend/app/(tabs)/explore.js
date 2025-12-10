@@ -1069,11 +1069,15 @@ export default function ExploreScreen() {
                                 text: 'Complete',
                                 onPress: async () => {
                                   try {
-                                    await axios.patch(
+                                    const response = await axios.patch(
                                       `${API_URL}/commissions/${selectedCommission.id}/status`,
                                       { status: 'completed', skip_message: true },
                                       { headers: { Authorization: `Bearer ${token}` } }
                                     );
+                                    
+                                    // Use the commission from response or reload to get updated data
+                                    const updatedCommission = response.data.commission || selectedCommission;
+                                    
                                     setShowCommissionModal(false);
                                     await loadCommissions();
                                     
@@ -1082,7 +1086,7 @@ export default function ExploreScreen() {
                                                            (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
                                     if (currentIsArtist) {
                                       // Artist completed - they review the client
-                                      const client = selectedCommission.client;
+                                      const client = updatedCommission.client || selectedCommission.client;
                                       if (client) {
                                         setReviewTarget({
                                           userId: client.id,
@@ -1095,7 +1099,7 @@ export default function ExploreScreen() {
                                       }
                                     } else {
                                       // Client completed - they review the artist
-                                      const artist = selectedCommission.artist?.users || artistCache[selectedCommission.artist_id];
+                                      const artist = updatedCommission.artist?.users || selectedCommission.artist?.users || artistCache[selectedCommission.artist_id];
                                       if (artist) {
                                         setReviewTarget({
                                           userId: artist.id,
@@ -1157,7 +1161,6 @@ export default function ExploreScreen() {
               `${API_URL}/reviews`,
               {
                 commission_id: reviewTarget.commissionId,
-                reviewee_id: reviewTarget.userId,
                 rating,
                 comment,
                 review_type: reviewTarget.reviewType

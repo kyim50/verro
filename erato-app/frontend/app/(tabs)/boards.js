@@ -136,13 +136,17 @@ export default function BoardsScreen() {
                 { status: 'completed' },
                 { headers: { Authorization: `Bearer ${token}` } }
               );
+              
               setShowCommissionModal(false);
               await loadCommissions();
               
-              // Determine review target based on user type
+              // Use the existing commission object since we know the IDs
+              const updatedCommission = commission;
+              
+              // Determine review target based on user type - use updated commission
               if (isArtistUser) {
                 // Artist completed - they review the client
-                const client = commission.client;
+                const client = updatedCommission.client || commission.client;
                 if (client) {
                   setReviewTarget({
                     userId: client.id,
@@ -155,8 +159,7 @@ export default function BoardsScreen() {
                 }
               } else {
                 // Client completed - they review the artist
-                // Note: artistCache not defined in this file - using commission.artist?.users directly
-                const artist = commission.artist?.users;
+                const artist = updatedCommission.artist?.users || commission.artist?.users;
                 if (artist) {
                   setReviewTarget({
                     userId: artist.id,
