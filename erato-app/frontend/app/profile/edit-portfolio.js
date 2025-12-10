@@ -15,6 +15,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore } from '../../store';
+
+// Get store reference for direct state updates
+const useProfileStoreRef = useProfileStore;
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function EditPortfolioScreen() {
@@ -129,14 +132,36 @@ export default function EditPortfolioScreen() {
         throw new Error('Failed to update portfolio');
       }
 
-      await fetchProfile(user.id, token);
+      const responseData = await response.json();
+      
+      // Optimistically update profile store immediately with new portfolio
+      useProfileStoreRef.setState((state) => {
+        if (state.profile && state.profile.artist) {
+          return {
+            profile: {
+              ...state.profile,
+              artist: {
+                ...state.profile.artist,
+                portfolio_images: responseData.portfolio_images || filledImages,
+              },
+            },
+          };
+        }
+        return state;
+      });
+
+      // Force refresh to bypass cache and get fresh data
+      await fetchProfile(user.id, token, true);
+      
       Toast.show({
         type: 'success',
         text1: 'Success!',
         text2: 'Portfolio updated successfully',
         visibilityTime: 2000,
       });
-      setTimeout(() => router.back(), 1000);
+      
+      // Navigate back immediately - profile screen will refresh on focus
+      router.back();
     } catch (error) {
       console.error('Error updating portfolio:', error);
       Alert.alert('Error', 'Failed to update portfolio. Please try again.');

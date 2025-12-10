@@ -35,10 +35,28 @@ export default function ProfileScreen() {
     useCallback(() => {
       if (user?.id) {
         // Always refresh profile when screen comes into focus to catch updates
-        loadProfile();
+        // Force refresh to bypass cache for immediate updates
+        loadProfile(true);
       }
-    }, [user?.id])
+    }, [user?.id, loadProfile])
   );
+  
+  // Also watch for changes in the user object from auth store to refresh immediately
+  useEffect(() => {
+    if (user?.id && (user?.username || user?.full_name || user?.bio || user?.avatar_url)) {
+      // User data changed, refresh profile
+      loadProfile();
+    }
+  }, [user?.username, user?.full_name, user?.bio, user?.avatar_url]);
+
+  // Watch for profile store changes (from portfolio/commission updates) to refresh UI
+  useEffect(() => {
+    if (profile?.artist?.portfolio_images) {
+      // Profile artist data changed, update avatar key if needed
+      const newAvatarUrl = profile?.avatar_url || user?.avatar_url;
+      setAvatarKey(prev => prev + 1);
+    }
+  }, [profile?.artist?.portfolio_images, profile?.artist?.commission_status, profile?.artist?.min_price, profile?.artist?.max_price]);
 
   useEffect(() => {
     // Only reset if user actually changed (not on every mount)
@@ -57,13 +75,14 @@ export default function ProfileScreen() {
     }
   }, [user?.id]); // Use user.id to ensure it triggers on user change
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async (forceRefresh = false) => {
     try {
       if (!user?.id) return;
       const prevAvatarUrl = profile?.avatar_url || user?.avatar_url;
-      await fetchProfile(user.id, token);
+      await fetchProfile(user.id, token, forceRefresh);
       // Check if avatar changed and update key to force image refresh
-      const newAvatarUrl = profile?.avatar_url || user?.avatar_url;
+      const updatedProfile = useProfileStore.getState().profile;
+      const newAvatarUrl = updatedProfile?.avatar_url || user?.avatar_url;
       if (prevAvatarUrl !== newAvatarUrl) {
         setAvatarKey(prev => prev + 1);
       }
@@ -72,7 +91,7 @@ export default function ProfileScreen() {
       console.error('Error loading profile:', error);
       setIsInitialLoad(false);
     }
-  };
+  }, [user?.id, token, fetchProfile, profile?.avatar_url]);
   
   // Watch for avatar URL changes in user or profile to update key
   useEffect(() => {
@@ -187,7 +206,53 @@ export default function ProfileScreen() {
               onPress: async () => {
             try {
               // Filter out any empty/blank images before sending
-              const cleanedImages = updated.filter(img => img && img.trim() !== '');
+              const cleanedImages = updated.filter(img => {
+                if (!img || typeof img !== 'string') return false;
+                const trimmed = img.trim();
+                return trimmed && (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
+              });
+              await axios.put(
+                `${API_URL}/users/me/artist`,
+                { portfolio_images: cleanedImages },
+                { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+              );
+              await fetchProfile(user.id, token);
+            } catch (error) {
+              console.error('Error removing portfolio image:', error);
+              const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeletePortfolioImageByUrl = async (urlToDelete) => {
+    if (!token || !isOwnProfile) return;
+    const currentImages = profile?.artist?.portfolio_images || [];
+    // Filter out the image by URL (more reliable than index)
+    const updated = currentImages.filter(img => {
+      if (!img || typeof img !== 'string') return false;
+      return img.trim() !== urlToDelete.trim();
+    });
+
+    Alert.alert(
+      'Remove Portfolio Image',
+      'Remove this portfolio image?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+              onPress: async () => {
+            try {
+              // Filter out any empty/blank images before sending
+              const cleanedImages = updated.filter(img => {
+                if (!img || typeof img !== 'string') return false;
+                const trimmed = img.trim();
+                return trimmed && (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
+              });
               await axios.put(
                 `${API_URL}/users/me/artist`,
                 { portfolio_images: cleanedImages },
@@ -389,30 +454,54 @@ export default function ProfileScreen() {
                   const portfolioImages = profile.artist.portfolio_images || [];
                   const imagesWithIndices = portfolioImages
                     .map((img, index) => ({ url: img, originalIndex: index }))
-                    .filter(item => item.url && item.url.trim() !== '');
+                    .filter(item => {
+                      // More strict filtering: must be a string, non-empty after trim, and look like a valid URL
+                      if (!item.url || typeof item.url !== 'string') return false;
+                      const trimmed = item.url.trim();
+                      if (!trimmed) return false;
+                      // Check if it looks like a valid URL (starts with http:// or https://)
+                      return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+                    });
                   
                   if (imagesWithIndices.length > 0) {
-                    return (
-                      <View style={styles.portfolioGrid}>
-                        {imagesWithIndices.map((item, displayIndex) => (
-                          <TouchableOpacity
-                            key={`portfolio-${item.originalIndex}-${item.url}`}
-                            style={styles.portfolioItem}
-                            activeOpacity={0.85}
-                            onLongPress={() => {
-                              if (isOwnProfile) {
-                                handleDeletePortfolioImage(item.originalIndex);
-                              }
-                            }}
-                          >
-                            <Image
-                              source={{ uri: item.url }}
-                              style={styles.portfolioImage}
-                            />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    );
+                    // Filter out any items with invalid URLs one more time before rendering
+                    const validImages = imagesWithIndices.filter(item => {
+                      const imageUrl = item.url?.trim();
+                      return imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
+                    });
+                    
+                    if (validImages.length > 0) {
+                      return (
+                        <View style={styles.portfolioGrid}>
+                          {validImages.map((item, displayIndex) => {
+                            const imageUrl = item.url.trim();
+                            return (
+                              <TouchableOpacity
+                                key={`portfolio-${imageUrl}-${displayIndex}`}
+                                style={styles.portfolioItem}
+                                activeOpacity={0.85}
+                                onLongPress={() => {
+                                  if (isOwnProfile) {
+                                    // Find the actual URL in the original array to delete by URL, not index
+                                    handleDeletePortfolioImageByUrl(imageUrl);
+                                  }
+                                }}
+                              >
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  style={styles.portfolioImage}
+                                  contentFit="cover"
+                                  transition={200}
+                                  onError={(error) => {
+                                    console.warn('Portfolio image failed to load:', imageUrl, error);
+                                  }}
+                                />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      );
+                    }
                   } else {
                     return (
                       <TouchableOpacity

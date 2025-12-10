@@ -73,7 +73,7 @@ export default function EditArtistProfileScreen() {
       if (turnaroundDays) updateData.turnaroundDays = parseInt(turnaroundDays);
       if (specialtiesArray.length > 0) updateData.specialties = specialtiesArray;
 
-      await axios.put(
+      const response = await axios.put(
         `${API_URL}/artists/${user.id}`,
         updateData,
         {
@@ -81,8 +81,25 @@ export default function EditArtistProfileScreen() {
         }
       );
 
-      // Refresh profile and update store
-      await fetchProfile(user.id, token);
+      // Optimistically update profile store immediately
+      const { reset } = useProfileStore.getState();
+      useProfileStore.setState((state) => {
+        if (state.profile && state.profile.artist) {
+          return {
+            profile: {
+              ...state.profile,
+              artist: {
+                ...state.profile.artist,
+                ...response.data,
+              },
+            },
+          };
+        }
+        return state;
+      });
+
+      // Force refresh to bypass cache and get fresh data
+      await fetchProfile(user.id, token, true);
       
       // Also update auth store user data if artist info is nested there
       const { fetchUser } = useAuthStore.getState();
@@ -96,7 +113,9 @@ export default function EditArtistProfileScreen() {
         text2: 'Artist profile updated successfully',
         visibilityTime: 2000,
       });
-      setTimeout(() => router.back(), 1000);
+      
+      // Navigate back immediately - profile screen will refresh on focus
+      router.back();
     } catch (error) {
       console.error('Error updating artist profile:', error);
       Alert.alert('Error', error.response?.data?.error || 'Failed to update artist profile');

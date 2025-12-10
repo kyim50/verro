@@ -26,6 +26,7 @@ export default function EditProfileScreen() {
 
   // User fields
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
 
@@ -53,6 +54,7 @@ export default function EditProfileScreen() {
   useEffect(() => {
     if (user) {
       setAvatarUrl(user.avatar_url || '');
+      setUsername(user.username || '');
       setFullName(user.full_name || '');
       setBio(user.bio || '');
 
@@ -89,6 +91,19 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
+    // Validate username if provided
+    if (username && username.trim() !== '') {
+      const trimmedUsername = username.trim();
+      if (trimmedUsername.length < 3) {
+        Alert.alert('Error', 'Username must be at least 3 characters long');
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
+        Alert.alert('Error', 'Username can only contain letters, numbers, and underscores');
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -100,6 +115,18 @@ export default function EditProfileScreen() {
         finalAvatarUrl = await uploadImage(avatarUrl, 'profiles', '', token);
       }
 
+      // Prepare update payload - only include fields that have values
+      const updatePayload = {
+        avatar_url: finalAvatarUrl || user?.avatar_url,
+        full_name: fullName || '',
+        bio: bio || '',
+      };
+
+      // Only include username if it's different from current username
+      if (username && username.trim() !== '' && username.trim() !== user?.username) {
+        updatePayload.username = username.trim();
+      }
+
       // Update user profile
       const userResponse = await fetch(
         `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me`,
@@ -109,23 +136,29 @@ export default function EditProfileScreen() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            avatar_url: finalAvatarUrl,
-            full_name: fullName,
-            bio: bio,
-          }),
+          body: JSON.stringify(updatePayload),
         }
       );
 
       if (!userResponse.ok) {
-        throw new Error('Failed to update profile');
+        const errorData = await userResponse.json().catch(() => ({}));
+        const errorMessage = errorData.error || `Failed to update profile (${userResponse.status})`;
+        throw new Error(errorMessage);
       }
 
       const updatedUser = await userResponse.json();
       
-      // Immediately update the user in auth store with new avatar
+      // Immediately update the user in auth store with all updated fields
       if (updatedUser) {
-        setUser({ ...user, ...updatedUser, avatar_url: finalAvatarUrl });
+        const newUserData = { 
+          ...user, 
+          ...updatedUser, 
+          avatar_url: finalAvatarUrl,
+          username: username.trim(),
+          full_name: fullName,
+          bio: bio,
+        };
+        setUser(newUserData);
         // Update local state immediately
         setAvatarUrl(finalAvatarUrl);
       }
@@ -159,8 +192,10 @@ export default function EditProfileScreen() {
       // Fetch updated user data (this will update auth store)
       await fetchUser();
       
-      // Also refresh profile store if user is viewing their own profile
+      // Also refresh profile store if user is viewing their own profile - do this immediately
       if (user?.id) {
+        // Force immediate update by clearing cache and re-fetching
+        useProfileStore.getState().reset();
         await fetchProfile(user.id, token);
       }
 
@@ -170,10 +205,13 @@ export default function EditProfileScreen() {
         text2: 'Profile updated successfully',
         visibilityTime: 2000,
       });
-      setTimeout(() => router.back(), 1000);
+      
+      // Navigate back immediately - profile screen will refresh on focus
+      router.back();
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      const errorMessage = error.message || 'Failed to update profile. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -226,14 +264,27 @@ export default function EditProfileScreen() {
             </TouchableOpacity>
           </View>
           
-          {user?.username && (
-            <Text style={styles.username}>@{user.username}</Text>
-          )}
         </View>
 
         {/* Basic Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Username</Text>
+            <TextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="username"
+              placeholderTextColor={colors.text.disabled}
+              autoCapitalize="none"
+              maxLength={30}
+            />
+            {username && (
+              <Text style={styles.hintText}>@{username.trim()}</Text>
+            )}
+          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Full Name</Text>
@@ -423,6 +474,13 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 16,
     fontWeight: '500',
+  },
+  hintText: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 12,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
   },
   inputGroup: {
     marginBottom: spacing.lg,
