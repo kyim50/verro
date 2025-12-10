@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   ActivityIndicator,
@@ -32,11 +32,34 @@ export default function CreateScreen() {
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   
+  // TINDER-LIKE APPROACH: Use queue system
+  // Maintain a local queue of artists to display
+  const [artistQueue, setArtistQueue] = useState([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+  
   const position = useRef(new Animated.ValueXY()).current;
-  const isAnimating = useRef(false); // Track if animation is in progress
 
-  // Initialize panResponder unconditionally (hooks must be called before returns)
-  const currentArtist = artists[currentIndex];
+  // Initialize queue from artists array
+  useEffect(() => {
+    if (artists.length > 0 && artistQueue.length === 0) {
+      setArtistQueue(artists);
+      setQueueIndex(0);
+    }
+  }, [artists]);
+
+  // Sync queue when artists change (for new data)
+  useEffect(() => {
+    if (artists.length > 0 && currentIndex === 0) {
+      // Reset queue when starting fresh
+      setArtistQueue(artists);
+      setQueueIndex(0);
+      position.setValue({ x: 0, y: 0 });
+      position.setOffset({ x: 0, y: 0 });
+    }
+  }, [artists, currentIndex]);
+
+  // Get current artist from queue
+  const currentArtist = artistQueue[queueIndex];
   // Filter out any empty/blank portfolio images
   const portfolioImages = (currentArtist?.portfolio_images || []).filter(img => img && img.trim() !== '');
   
@@ -45,62 +68,60 @@ export default function CreateScreen() {
     if (currentArtist) {
       setCurrentPortfolioImage(0);
     }
-  }, [currentIndex, currentArtist?.id]);
-  
-  // No useEffect for position reset - handled in animation callbacks only
+  }, [queueIndex, currentArtist?.id]);
   
   const currentImage = portfolioImages[currentPortfolioImage] || portfolioImages[0];
 
-  // Define swipe functions - SIMPLIFIED, no complex animations
+  // SIMPLE APPROACH: No animations, just instant updates
   const swipeRight = useCallback(() => {
-    if (currentArtist && !isAnimating.current) {
-      isAnimating.current = true;
-      const artistId = currentArtist.id;
-      
-      // Get current position BEFORE any changes
-      const startX = position.x._value;
-      
-      // Update index IMMEDIATELY
-      swipe(artistId, 'right');
-      
-      // Simple horizontal animation from current position to off-screen right
-      Animated.timing(position, {
-        toValue: { x: width + 100, y: 0 },
-        duration: 200,
-        useNativeDriver: false,
-      }).start(() => {
-        // Reset immediately after animation completes
-        position.setValue({ x: 0, y: 0 });
-        position.setOffset({ x: 0, y: 0 });
-        isAnimating.current = false;
-      });
+    if (!currentArtist) {
+      return;
     }
-  }, [currentArtist, swipe, position]);
+    
+    // Capture artist ID
+    const artistId = currentArtist.id;
+    
+    // Immediately update to next card (no animation)
+    setQueueIndex(prev => prev + 1);
+    
+    // Update store index
+    const nextStoreIndex = currentIndex + 1;
+    useSwipeStore.setState({ currentIndex: nextStoreIndex });
+    
+    // Reset position immediately
+    position.setValue({ x: 0, y: 0 });
+    position.setOffset({ x: 0, y: 0 });
+    
+    // Record swipe in background
+    swipe(artistId, 'right', false).catch(error => {
+      console.error('Error recording swipe:', error);
+    });
+  }, [queueIndex, currentArtist, currentIndex, swipe, position]);
 
   const swipeLeft = useCallback(() => {
-    if (currentArtist && !isAnimating.current) {
-      isAnimating.current = true;
-      const artistId = currentArtist.id;
-      
-      // Get current position BEFORE any changes
-      const startX = position.x._value;
-      
-      // Update index IMMEDIATELY
-      swipe(artistId, 'left');
-      
-      // Simple horizontal animation from current position to off-screen left
-      Animated.timing(position, {
-        toValue: { x: -width - 100, y: 0 },
-        duration: 200,
-        useNativeDriver: false,
-      }).start(() => {
-        // Reset immediately after animation completes
-        position.setValue({ x: 0, y: 0 });
-        position.setOffset({ x: 0, y: 0 });
-        isAnimating.current = false;
-      });
+    if (!currentArtist) {
+      return;
     }
-  }, [currentArtist, swipe, position]);
+    
+    // Capture artist ID
+    const artistId = currentArtist.id;
+    
+    // Immediately update to next card (no animation)
+    setQueueIndex(prev => prev + 1);
+    
+    // Update store index
+    const nextStoreIndex = currentIndex + 1;
+    useSwipeStore.setState({ currentIndex: nextStoreIndex });
+    
+    // Reset position immediately
+    position.setValue({ x: 0, y: 0 });
+    position.setOffset({ x: 0, y: 0 });
+    
+    // Record swipe in background
+    swipe(artistId, 'left', false).catch(error => {
+      console.error('Error recording swipe:', error);
+    });
+  }, [queueIndex, currentArtist, currentIndex, swipe, position]);
 
   // Removed rotation - keeping it simple
 
@@ -116,67 +137,79 @@ export default function CreateScreen() {
     extrapolate: 'clamp',
   });
 
-  // Create panResponder after swipe functions are defined (but before any returns)
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+  // Store latest functions in refs for panResponder access
+  const swipeRightRef = useRef(swipeRight);
+  const swipeLeftRef = useRef(swipeLeft);
+  
+  // Update refs when functions change
+  useEffect(() => {
+    swipeRightRef.current = swipeRight;
+    swipeLeftRef.current = swipeLeft;
+  }, [swipeRight, swipeLeft]);
+
+  // Create panResponder - recreate when dependencies change
+  const panResponder = useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => {
+        // ALWAYS allow gestures - never block them
+        // If animation is stuck, we'll reset it in onPanResponderGrant
+        return true;
+      },
       onMoveShouldSetPanResponder: (_, gesture) => {
+        // Allow gesture if horizontal movement is significant
         return Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 10;
       },
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
-        position.setOffset({
-          x: position.x._value,
-          y: position.y._value,
+        // Stop any running animations and capture current position
+        position.stopAnimation((value) => {
+          position.setOffset({ x: value.x, y: value.y });
+          position.setValue({ x: 0, y: 0 });
         });
       },
       onPanResponderMove: (_, gesture) => {
-        // Simple horizontal movement only
+        // Simple horizontal movement for visual feedback (no animation on release)
         position.setValue({ 
           x: gesture.dx, 
           y: 0
         });
       },
       onPanResponderRelease: (_, gesture) => {
-        // Don't process if already animating
-        if (isAnimating.current) return;
-        
-        // Flatten offset to get absolute position
+        // Get final position
         position.flattenOffset();
+        const currentX = position.x._value;
         
         const swipeVelocity = Math.abs(gesture.vx);
         const swipeDistance = Math.abs(gesture.dx);
-        const currentX = position.x._value;
 
-        // Check if swipe threshold is met OR if card is already far enough off screen
-        // Also check velocity - even small distances with high velocity should trigger
-        if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.3 || Math.abs(currentX) > SWIPE_THRESHOLD) {
-          // Determine swipe direction based on gesture or current position
-          if (gesture.dx > 0 || currentX > 0) {
-            swipeRight();
-          } else if (gesture.dx < 0 || currentX < 0) {
-            swipeLeft();
+        // Determine if should swipe based on distance or velocity
+        const shouldSwipe = swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.3;
+
+        if (shouldSwipe) {
+          // Determine direction
+          if (gesture.dx > 5 || currentX > 5) {
+            swipeRightRef.current();
+          } else if (gesture.dx < -5 || currentX < -5) {
+            swipeLeftRef.current();
+          } else {
+            // Not enough direction - just reset
+            position.setValue({ x: 0, y: 0 });
+            position.setOffset({ x: 0, y: 0 });
           }
         } else {
-          // If it's a tap (small movement), open portfolio
+          // Small movement - check if it's a tap
           if (swipeDistance < 5 && Math.abs(gesture.dy) < 5) {
             setShowPortfolioModal(true);
           }
-          // Spring back to center and reset offset
-          Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
-            friction: 7,
-            tension: 50,
-            useNativeDriver: false,
-          }).start(() => {
-            // Ensure offset is reset after spring
-            position.setOffset({ x: 0, y: 0 });
-            position.setValue({ x: 0, y: 0 });
-          });
+          
+          // Reset position for small movements (no animation)
+          position.setValue({ x: 0, y: 0 });
+          position.setOffset({ x: 0, y: 0 });
         }
       },
-    })
-  ).current;
+    }),
+    [swipeRight, swipeLeft]
+  );
 
   // All hooks must be called before any conditional returns
   useEffect(() => {
@@ -281,6 +314,7 @@ export default function CreateScreen() {
       {/* Card Container */}
       <View style={styles.cardContainer}>
         {/* Current Card - SIMPLIFIED: Only horizontal movement, no rotation */}
+        {/* CRITICAL: No key prop - key causes remounting which resets animation */}
         <Animated.View
           style={[
             styles.card,

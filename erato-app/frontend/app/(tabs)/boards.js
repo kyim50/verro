@@ -52,11 +52,12 @@ export default function BoardsScreen() {
     }
   }, []);
 
+  // Refresh liked artists when tab changes or screen comes into focus
   useEffect(() => {
-    if (activeTab === 'liked' && !isArtistUser) {
+    if (activeTab === 'liked' && !isArtistUser && token) {
       loadLikedArtists();
     }
-  }, [activeTab, isArtistUser]);
+  }, [activeTab, isArtistUser, token]);
 
   // Refresh liked artists when screen comes into focus
   useFocusEffect(
@@ -232,6 +233,9 @@ export default function BoardsScreen() {
         is_public: isPublic,
       });
 
+      // Refresh boards list after creation
+      await loadBoards();
+
       setShowCreateModal(false);
       setNewBoardName('');
       setNewBoardDescription('');
@@ -260,8 +264,17 @@ export default function BoardsScreen() {
           onPress: async () => {
             try {
               await deleteBoard(board.id);
+              // Refresh boards list after deletion
+              await loadBoards();
+              Toast.show({
+                type: 'success',
+                text1: 'Success',
+                text2: 'Board deleted!',
+                visibilityTime: 2000,
+              });
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete board');
+              const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
+              Alert.alert('Error', errorMessage);
             }
           },
         },

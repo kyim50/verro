@@ -9,20 +9,59 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const { artistId, direction } = req.body;
 
+    console.log('[SWIPES API] Received swipe request:', {
+      userId: req.user.id,
+      artistId,
+      direction,
+      artistIdType: typeof artistId,
+    });
+
     if (!artistId || !direction) {
+      console.error('[SWIPES API] Missing required fields:', { artistId, direction });
       return res.status(400).json({ error: 'artistId and direction are required' });
     }
 
     if (!['left', 'right'].includes(direction)) {
+      console.error('[SWIPES API] Invalid direction:', direction);
       return res.status(400).json({ error: 'direction must be "left" or "right"' });
     }
+
+    // artistId can be either a UUID (user_id) or a number (artist_id)
+    // The artists table uses user_id as the primary key, so we accept UUIDs
+    let finalArtistId;
+    if (typeof artistId === 'string') {
+      // Check if it's a UUID (contains hyphens) or a numeric string
+      if (artistId.includes('-')) {
+        // It's a UUID - use it directly (artists.id is user_id)
+        finalArtistId = artistId;
+      } else {
+        // It's a numeric string - parse it
+        const parsed = parseInt(artistId, 10);
+        if (isNaN(parsed)) {
+          console.error('[SWIPES API] Invalid artistId format:', artistId);
+          return res.status(400).json({ error: 'artistId must be a valid UUID or number' });
+        }
+        finalArtistId = parsed;
+      }
+    } else if (typeof artistId === 'number') {
+      finalArtistId = artistId;
+    } else {
+      console.error('[SWIPES API] Invalid artistId type:', typeof artistId, artistId);
+      return res.status(400).json({ error: 'artistId must be a valid UUID or number' });
+    }
+
+    console.log('[SWIPES API] Recording swipe:', {
+      userId: req.user.id,
+      artistId: finalArtistId,
+      direction,
+    });
 
     // Record the swipe (upsert to handle duplicate attempts)
     const { data, error } = await supabaseAdmin
       .from('swipes')
       .upsert({
         user_id: req.user.id,
-        artist_id: artistId,
+        artist_id: finalArtistId,
         direction,
       }, {
         onConflict: 'user_id,artist_id'
@@ -31,13 +70,25 @@ router.post('/', authenticate, async (req, res) => {
       .single();
 
     if (error) {
-      console.error('Swipe insert error:', error);
+      console.error('[SWIPES API] Swipe insert error:', error);
       throw error;
     }
 
+    console.log('[SWIPES API] Swipe recorded successfully:', {
+      userId: req.user.id,
+      artistId: finalArtistId,
+      direction,
+      swipeId: data?.id,
+    });
+
     res.json({ success: true, swipe: data });
   } catch (error) {
-    console.error('Error recording swipe:', error);
+    console.error('[SWIPES API] Error recording swipe:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
     res.status(500).json({ error: error.message });
   }
 });

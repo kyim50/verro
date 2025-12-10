@@ -45,6 +45,7 @@ export default function ExploreScreen() {
 
   const position = useRef(new Animated.ValueXY()).current;
   const swipeAnimation = useRef(new Animated.Value(0)).current;
+  const isAnimating = useRef(false); // Track if animation is in progress
 
   useEffect(() => {
     if (artists.length === 0) {
@@ -350,75 +351,105 @@ export default function ExploreScreen() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gesture) => {
+        // Don't process if already animating
+        if (isAnimating.current) return false;
         // Only respond to horizontal swipes, ignore vertical scrolls
         return Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 10;
       },
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
+        if (isAnimating.current) return;
         position.setOffset({
           x: position.x._value,
           y: position.y._value,
         });
       },
       onPanResponderMove: (_, gesture) => {
+        // Don't process if already animating
+        if (isAnimating.current) return;
         // Only move horizontally, clamp vertical movement
         position.setValue({ 
           x: gesture.dx, 
-          y: gesture.dy * 0.3 // Reduce vertical movement
+          y: 0 // No vertical movement to keep it simple
         });
       },
       onPanResponderRelease: (_, gesture) => {
+        // Don't process if already animating
+        if (isAnimating.current) return;
+        
         position.flattenOffset();
 
         const swipeVelocity = Math.abs(gesture.vx);
         const swipeDistance = Math.abs(gesture.dx);
+        const currentX = position.x._value;
 
         // Check if swipe is significant (either distance or velocity)
         if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
-          if (gesture.dx > 0) {
+          if (currentX > 0 || gesture.dx > 0) {
             swipeRight();
-          } else {
+          } else if (currentX < 0 || gesture.dx < 0) {
             swipeLeft();
           }
         } else {
           // Spring back to center
           Animated.spring(position, {
             toValue: { x: 0, y: 0 },
-            friction: 8,
-            tension: 40,
+            friction: 7,
+            tension: 50,
             useNativeDriver: false,
-          }).start();
+          }).start(() => {
+            // Ensure offset is reset after spring
+            position.setOffset({ x: 0, y: 0 });
+            position.setValue({ x: 0, y: 0 });
+          });
         }
       },
     })
   ).current;
 
-  const swipeRight = () => {
-    Animated.timing(position, {
-      toValue: { x: width + 100, y: 0 },
-      duration: 300,
-      useNativeDriver: false,
-    }).start(() => {
-      if (currentArtist) {
-        swipe(currentArtist.id, 'right');
-        // Artist is now saved to "Liked" - user can view in Library > Liked tab
-      }
-      position.setValue({ x: 0, y: 0 });
-    });
-  };
+  const swipeRight = useCallback(() => {
+    if (currentArtist && !isAnimating.current) {
+      isAnimating.current = true;
+      const artistId = currentArtist.id;
+      
+      // Update index IMMEDIATELY (optimistic update)
+      swipe(artistId, 'right');
+      
+      // Simple horizontal animation from current position to off-screen right
+      Animated.timing(position, {
+        toValue: { x: width + 100, y: 0 },
+        duration: 200,
+        useNativeDriver: false,
+      }).start(() => {
+        // Reset immediately after animation completes
+        position.setValue({ x: 0, y: 0 });
+        position.setOffset({ x: 0, y: 0 });
+        isAnimating.current = false;
+      });
+    }
+  }, [currentArtist, swipe, position]);
 
-  const swipeLeft = () => {
-    Animated.timing(position, {
-      toValue: { x: -width - 100, y: 0 },
-      duration: 300,
-      useNativeDriver: false,
-    }).start(() => {
-      if (currentArtist) {
-        swipe(currentArtist.id, 'left');
-      }
-      position.setValue({ x: 0, y: 0 });
-    });
-  };
+  const swipeLeft = useCallback(() => {
+    if (currentArtist && !isAnimating.current) {
+      isAnimating.current = true;
+      const artistId = currentArtist.id;
+      
+      // Update index IMMEDIATELY (optimistic update)
+      swipe(artistId, 'left');
+      
+      // Simple horizontal animation from current position to off-screen left
+      Animated.timing(position, {
+        toValue: { x: -width - 100, y: 0 },
+        duration: 200,
+        useNativeDriver: false,
+      }).start(() => {
+        // Reset immediately after animation completes
+        position.setValue({ x: 0, y: 0 });
+        position.setOffset({ x: 0, y: 0 });
+        isAnimating.current = false;
+      });
+    }
+  }, [currentArtist, swipe, position]);
 
   const rotate = position.x.interpolate({
     inputRange: [-width / 2, 0, width / 2],

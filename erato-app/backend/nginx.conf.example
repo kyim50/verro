@@ -5,6 +5,23 @@ server {
     # Increase body size for file uploads
     client_max_body_size 10M;
 
+    # Block common bot/scanner paths before they hit the backend
+    # These paths are commonly probed by bots looking for vulnerabilities
+    location ~ ^/(SDK|admin|wp-admin|phpmyadmin|\.env|config|debug|test|api/v1|v1/api) {
+        return 444; # Close connection without response
+        access_log off; # Don't log these requests
+    }
+
+    # Block requests with suspicious query parameters
+    if ($query_string ~* "(union.*select|insert.*into|delete.*from|drop.*table)") {
+        return 444;
+    }
+
+    # Block requests with suspicious user agents (common bots)
+    if ($http_user_agent ~* "(bot|crawler|spider|scanner|hack|exploit)") {
+        return 444;
+    }
+
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -19,9 +36,15 @@ server {
         # WebSocket support for Socket.io
         proxy_set_header X-Forwarded-Host $server_name;
         proxy_read_timeout 86400;
+
+        # Rate limiting at Nginx level (optional, but recommended)
+        limit_req zone=api_limit burst=20 nodelay;
     }
 }
 
+# Rate limiting zone definition (add this outside server blocks)
+# Add this to your main nginx.conf or http block
+# limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+
 # HTTPS configuration (automatically added by Certbot)
 # After running certbot, it will add SSL configuration here
-
