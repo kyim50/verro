@@ -53,3 +53,9 @@ yarn-error.log*
 .cache/
 tmp/
 temp/
+
+# EC2/Deployment artifacts
+*ubuntu@*
+*@3.18.213.189*
+*.pem
+*.ppk
