@@ -54,10 +54,17 @@
       <true/>
       <key>NSExceptionDomains</key>
       <dict>
-        <key>3.18.213.189</key>
+        <key>verrocio.com</key>
         <dict>
           <key>NSExceptionAllowsInsecureHTTPLoads</key>
+          <false/>
+          <key>NSIncludesSubdomains</key>
           <true/>
+        </dict>
+        <key>api.verrocio.com</key>
+        <dict>
+          <key>NSExceptionAllowsInsecureHTTPLoads</key>
+          <false/>
           <key>NSIncludesSubdomains</key>
           <true/>
         </dict>
