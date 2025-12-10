@@ -162,9 +162,15 @@ export default function MessagesScreen() {
                 {getConversationTitle(item)}
               </Text>
               {item.latest_message && (
-                <Text style={[styles.time, hasUnread && styles.timeUnread]}>
-                  {formatTime(item.latest_message.created_at)}
-                </Text>
+                <View style={styles.timeContainer}>
+                  <Text style={[styles.time, hasUnread && styles.timeUnread]}>
+                    {formatTime(item.latest_message.created_at)}
+                  </Text>
+                  {hasUnread && <View style={styles.unreadDot} />}
+                </View>
+              )}
+              {!item.latest_message && hasUnread && (
+                <View style={styles.unreadDot} />
               )}
             </View>
 
@@ -175,12 +181,6 @@ export default function MessagesScreen() {
               {getMessagePreview(item)}
             </Text>
           </View>
-
-          {hasUnread && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unread_count}</Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -313,6 +313,11 @@ const styles = StyleSheet.create({
   nameUnread: {
     fontWeight: '700',
   },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   time: {
     ...typography.caption,
     color: colors.text.secondary,
@@ -321,6 +326,14 @@ const styles = StyleSheet.create({
   timeUnread: {
     color: colors.primary,
     fontWeight: '600',
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#e60023',
+    marginLeft: spacing.xs,
+    borderWidth: 0,
   },
   messagePreview: {
     ...typography.body,
@@ -332,25 +345,6 @@ const styles = StyleSheet.create({
   messagePreviewUnread: {
     color: colors.text.primary,
     fontWeight: '500',
-  },
-  unreadBadge: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
-    minWidth: 22,
-    height: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    position: 'absolute',
-    right: spacing.md,
-    top: '50%',
-    transform: [{ translateY: -11 }],
-  },
-  unreadText: {
-    ...typography.small,
-    color: colors.text.primary,
-    fontWeight: '700',
-    fontSize: 12,
   },
   emptyState: {
     flex: 1,

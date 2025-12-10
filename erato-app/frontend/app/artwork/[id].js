@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -36,6 +37,7 @@ export default function ArtworkDetailScreen() {
   const [similarArtworks, setSimilarArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -238,13 +240,8 @@ export default function ArtworkDetailScreen() {
           <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerActions}>
-          {isOwnArtwork && (
-            <TouchableOpacity style={styles.headerButton} onPress={handleDeleteArtwork}>
-              <Ionicons name="trash-outline" size={20} color="#fff" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="share-outline" size={20} color="#fff" />
+          <TouchableOpacity style={styles.headerButton} onPress={() => setShowMenu(true)}>
+            <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -366,6 +363,48 @@ export default function ArtworkDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Menu Modal */}
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.menuOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuContainer}>
+            {isOwnArtwork && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowMenu(false);
+                  handleDeleteArtwork();
+                }}
+              >
+                <Ionicons name="trash-outline" size={22} color={colors.status.error} />
+                <Text style={[styles.menuItemText, { color: colors.status.error }]}>
+                  Delete Artwork
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                // TODO: Implement share functionality
+                Alert.alert('Share', 'Share functionality coming soon');
+              }}
+            >
+              <Ionicons name="share-outline" size={22} color={colors.text.primary} />
+              <Text style={styles.menuItemText}>Share</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -616,5 +655,29 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.text.secondary,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContainer: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    paddingBottom: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  menuItemText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 16,
   },
 });

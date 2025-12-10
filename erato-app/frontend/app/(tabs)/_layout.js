@@ -49,12 +49,10 @@ function MessagesTabIcon({ color }) {
   }, [token]);
 
   return (
-    <View>
+    <View style={{ position: 'relative' }}>
       <Ionicons name="chatbubbles" size={22} color={color} />
       {unreadCount > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-        </View>
+        <View style={styles.unreadDot} />
       )}
     </View>
   );
@@ -200,21 +198,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     elevation: 8,
   },
-  badge: {
+  unreadDot: {
     position: 'absolute',
-    top: -6,
-    right: -10,
-    backgroundColor: colors.error,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
+    top: -3,
+    right: -6,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#e60023',
+    borderWidth: 2.5,
+    borderColor: colors.surface,
+    zIndex: 10,
   },
 });

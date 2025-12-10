@@ -74,9 +74,26 @@ export default function ArtistProfileScreen() {
       const boardsResponse = await axios.get(`${API_URL}/users/${artistResponse.data.user_id}/boards`, { headers });
       const allBoards = boardsResponse.data;
 
+      // Fetch board details with artworks for each board to get thumbnails
+      const boardsWithArtworks = await Promise.all(
+        allBoards.map(async (board) => {
+          try {
+            const boardDetailResponse = await axios.get(`${API_URL}/boards/${board.id}`, { headers });
+            return {
+              ...board,
+              artwork_count: board.artwork_count || (boardDetailResponse.data.board_artworks?.length || 0),
+              board_artworks: boardDetailResponse.data.board_artworks || [],
+            };
+          } catch (err) {
+            console.error(`Error fetching board ${board.id}:`, err);
+            return { ...board, board_artworks: [] };
+          }
+        })
+      );
+
       // Separate "Created" board from other boards
-      const created = allBoards.find(b => b.board_type === 'created');
-      const others = allBoards.filter(b => b.board_type !== 'created');
+      const created = boardsWithArtworks.find(b => b.board_type === 'created');
+      const others = boardsWithArtworks.filter(b => b.board_type !== 'created');
 
       setCreatedBoard(created);
       setBoards(others);
@@ -293,8 +310,8 @@ export default function ArtistProfileScreen() {
   };
 
   const renderBoard = ({ item }) => {
-    const artworksToShow = item.board_artworks?.slice(0, 3) || [];
-    const remainingCount = (item.artwork_count || 0) - artworksToShow.length;
+    const artworkCount = item.artwork_count || 0;
+    const firstArtworks = item.board_artworks?.slice(0, 4) || [];
 
     return (
       <TouchableOpacity
@@ -302,36 +319,47 @@ export default function ArtistProfileScreen() {
         onPress={() => router.push(`/board/${item.id}`)}
         activeOpacity={0.9}
       >
-        <View style={styles.boardPreview}>
-          {artworksToShow.length > 0 ? (
-            <>
-              {artworksToShow.map((artwork, idx) => (
+        {/* Cover Grid - show first 4 artworks */}
+        <View style={styles.coverGrid}>
+          {firstArtworks.length > 0 ? (
+            firstArtworks.map((ba, index) => (
+              <View key={index} style={styles.gridItem}>
                 <Image
-                  key={artwork.artworks?.id || idx}
-                  source={{ uri: artwork.artworks?.thumbnail_url || artwork.artworks?.image_url }}
-                  style={[
-                    styles.boardPreviewImage,
-                    idx === 0 && styles.boardPreviewMain,
-                    idx > 0 && styles.boardPreviewSmall,
-                  ]}
+                  source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                  style={styles.gridImage}
                   contentFit="cover"
                 />
-              ))}
-            </>
+              </View>
+            ))
           ) : (
-            <View style={styles.emptyBoardPreview}>
+            <View style={styles.emptyGrid}>
               <Ionicons name="images-outline" size={40} color={colors.text.disabled} />
             </View>
           )}
         </View>
 
+        {/* Board Info */}
         <View style={styles.boardInfo}>
-          <Text style={styles.boardName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.boardCount}>
-            {item.artwork_count || 0} {item.artwork_count === 1 ? 'artwork' : 'artworks'}
-          </Text>
+          <View style={styles.boardHeader}>
+            <Text style={styles.boardName} numberOfLines={1}>
+              {item.name}
+            </Text>
+          </View>
+
+          {item.description && (
+            <Text style={styles.boardDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          )}
+
+          <View style={styles.boardFooter}>
+            <Text style={styles.artworkCount}>
+              {artworkCount} {artworkCount === 1 ? 'Pin' : 'Pins'}
+            </Text>
+            {!item.is_public && (
+              <Ionicons name="lock-closed" size={14} color={colors.text.secondary} />
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -1157,27 +1185,28 @@ const styles = StyleSheet.create({
     width: ITEM_WIDTH,
     marginBottom: spacing.md,
   },
-  boardPreview: {
+  coverGrid: {
     width: '100%',
-    height: ITEM_WIDTH * 1.3,
+    height: ITEM_WIDTH,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceLight,
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  boardPreviewImage: {
-    backgroundColor: colors.surface,
-  },
-  boardPreviewMain: {
-    width: '100%',
-    height: '70%',
-  },
-  boardPreviewSmall: {
+  gridItem: {
     width: '50%',
-    height: '30%',
+    height: '50%',
+    borderWidth: 0.5,
+    borderColor: colors.background,
+    overflow: 'hidden',
   },
-  emptyBoardPreview: {
+  gridImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.surfaceLight,
+  },
+  emptyGrid: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
@@ -1186,15 +1215,36 @@ const styles = StyleSheet.create({
   },
   boardInfo: {
     marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  boardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
   },
   boardName: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    flex: 1,
   },
-  boardCount: {
+  boardDescription: {
     ...typography.caption,
     color: colors.text.secondary,
-    marginTop: 2,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    marginBottom: spacing.xs,
+  },
+  boardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
+  artworkCount: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
   },
   portfolioList: {
     paddingHorizontal: spacing.lg,

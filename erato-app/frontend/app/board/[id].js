@@ -4,7 +4,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   ActivityIndicator,
   Dimensions,
   Modal,
@@ -19,7 +19,7 @@ import { colors, spacing, typography, borderRadius } from '../../constants/theme
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
-const SPACING = 4;
+const SPACING = width < 400 ? 3 : 4;
 const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - spacing.md * 2) / NUM_COLUMNS;
 
@@ -31,6 +31,7 @@ export default function BoardDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedArtwork, setSelectedArtwork] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [columns, setColumns] = useState([[], []]);
 
   useEffect(() => {
     fetchBoardDetails();
@@ -44,7 +45,7 @@ export default function BoardDetailScreen() {
       setBoard(response.data);
 
       // Extract artworks from board_artworks relationship
-      const artworkList = response.data.board_artworks?.map(ba => ba.artworks) || [];
+      const artworkList = response.data.board_artworks?.map(ba => ba.artworks).filter(Boolean) || [];
       setArtworks(artworkList);
     } catch (error) {
       console.error('Error fetching board details:', error);
@@ -53,20 +54,56 @@ export default function BoardDetailScreen() {
     }
   };
 
-  const renderArtwork = ({ item, index }) => {
-    // Calculate height based on aspect ratio if available
-    let imageHeight;
-    if (item.aspect_ratio) {
-      const [w, h] = item.aspect_ratio.split(':').map(Number);
-      imageHeight = ITEM_WIDTH * (h / w);
-    } else {
-      const heightMultipliers = [1.2, 1.5, 1.3, 1.6, 1.4];
-      imageHeight = ITEM_WIDTH * heightMultipliers[index % heightMultipliers.length];
-    }
+  // Organize artworks into balanced columns (Pinterest masonry style)
+  useEffect(() => {
+    if (artworks.length > 0) {
+      const newColumns = [[], []];
+      const columnHeights = [0, 0];
 
+      artworks.forEach((item) => {
+        // Calculate image height based on aspect ratio if available
+        let imageHeight;
+        const ratio = item.aspect_ratio || item.aspectRatio;
+
+        if (ratio && typeof ratio === 'string' && ratio.includes(':')) {
+          const parts = ratio.split(':');
+          const w = parseFloat(parts[0]);
+          const h = parseFloat(parts[1]);
+
+          if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+            imageHeight = ITEM_WIDTH * (h / w);
+          } else {
+            imageHeight = ITEM_WIDTH * 1.25;
+          }
+        } else {
+          imageHeight = ITEM_WIDTH * 1.25;
+        }
+
+        const totalHeight = imageHeight;
+
+        // Add to the shorter column
+        const shortestColumnIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+
+        newColumns[shortestColumnIndex].push({
+          ...item,
+          imageHeight,
+          totalHeight,
+        });
+
+        columnHeights[shortestColumnIndex] += totalHeight + SPACING;
+      });
+
+      setColumns(newColumns);
+    } else {
+      setColumns([[], []]);
+    }
+  }, [artworks]);
+
+  const renderArtwork = (item) => {
     return (
       <TouchableOpacity
-        style={[styles.artworkCard, { height: imageHeight }]}
+        key={item.id}
+        style={styles.artworkCard}
         onPress={() => {
           setSelectedArtwork(item);
           setShowModal(true);
@@ -75,7 +112,7 @@ export default function BoardDetailScreen() {
       >
         <Image
           source={{ uri: item.thumbnail_url || item.image_url }}
-          style={styles.artworkImage}
+          style={[styles.artworkImage, { height: item.imageHeight }]}
           contentFit="cover"
         />
       </TouchableOpacity>
@@ -116,15 +153,22 @@ export default function BoardDetailScreen() {
           <Text style={styles.emptyText}>Save artworks to this board to see them here</Text>
         </View>
       ) : (
-        <FlatList
-          data={artworks}
-          renderItem={renderArtwork}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
+        <ScrollView
           contentContainerStyle={styles.gridContent}
           showsVerticalScrollIndicator={false}
-        />
+        >
+          <View style={styles.masonryContainer}>
+            {/* Left Column */}
+            <View style={styles.masonryColumn}>
+              {columns[0].map(item => renderArtwork(item))}
+            </View>
+
+            {/* Right Column */}
+            <View style={styles.masonryColumn}>
+              {columns[1].map(item => renderArtwork(item))}
+            </View>
+          </View>
+        </ScrollView>
       )}
 
       {/* Artwork Modal */}
@@ -226,22 +270,27 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   gridContent: {
-    padding: spacing.md,
     paddingBottom: spacing.xxl,
   },
-  row: {
-    justifyContent: 'space-between',
-    marginBottom: SPACING,
+  masonryContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: SPACING + spacing.md / 2,
+    paddingTop: SPACING,
+  },
+  masonryColumn: {
+    flex: 1,
+    paddingHorizontal: SPACING / 2,
   },
   artworkCard: {
-    width: ITEM_WIDTH,
+    width: '100%',
+    marginBottom: SPACING,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
   artworkImage: {
     width: '100%',
-    height: '100%',
+    borderRadius: borderRadius.md,
   },
   emptyState: {
     flex: 1,
