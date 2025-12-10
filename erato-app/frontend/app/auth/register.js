@@ -9,8 +9,10 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
@@ -22,6 +24,7 @@ export default function RegisterScreen() {
     fullName: '',
     userType: 'client', // 'client' or 'artist'
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,18 +39,22 @@ export default function RegisterScreen() {
     setLoading(true);
     setError('');
 
-    const result = await register(formData);
+    try {
+      // Register without avatar (will be added on next screen)
+      const result = await register({
+        ...formData,
+        avatar_url: '', // Empty string for now
+      });
 
-    if (result.success) {
-      // If user is an artist, redirect to artist onboarding
-      if (formData.userType === 'artist') {
-        router.replace('/onboarding/welcome');
+      if (result.success) {
+        // Navigate to profile picture upload page (required)
+        router.replace(`/auth/profile-picture?userType=${formData.userType}`);
       } else {
-        // Clients get the client onboarding
-        router.replace('/onboarding/client');
+        setError(result.error || 'Registration failed');
       }
-    } else {
-      setError(result.error || 'Registration failed');
+    } catch (err) {
+      console.error('Registration error:', err);
+      setError(err.message || 'Registration failed');
     }
 
     setLoading(false);
@@ -217,6 +224,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: spacing.md,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  eyeButton: {
+    padding: spacing.md,
+    paddingLeft: spacing.sm,
   },
   label: {
     ...typography.bodyBold,

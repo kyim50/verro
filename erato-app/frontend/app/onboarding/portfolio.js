@@ -59,10 +59,10 @@ export default function PortfolioScreen() {
   const handleComplete = async () => {
     const filledImages = portfolioImages.filter((img) => img !== null);
 
-    if (filledImages.length < PORTFOLIO_SIZE) {
+    if (filledImages.length < 1) {
       Alert.alert(
-        'Incomplete Portfolio',
-        `Please upload all ${PORTFOLIO_SIZE} images to complete your portfolio. You have ${filledImages.length}/${PORTFOLIO_SIZE} images.`
+        'Portfolio Required',
+        'Please upload at least one portfolio image to showcase your work.'
       );
       return;
     }
@@ -145,23 +145,15 @@ export default function PortfolioScreen() {
       {/* Bottom Actions */}
       <View style={styles.bottomActions}>
         <TouchableOpacity
-          style={[styles.completeButton, filledCount < PORTFOLIO_SIZE && styles.buttonDisabled]}
+          style={[styles.completeButton, filledCount < 1 && styles.buttonDisabled]}
           onPress={handleComplete}
-          disabled={loading || filledCount < PORTFOLIO_SIZE}
+          disabled={loading || filledCount < 1}
         >
           {loading ? (
             <ActivityIndicator color={colors.text.primary} />
           ) : (
             <Text style={styles.completeButtonText}>Complete Setup</Text>
           )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={() => router.replace('/(tabs)/home')}
-          disabled={loading}
-        >
-          <Text style={styles.skipText}>Skip for now</Text>
         </TouchableOpacity>
       </View>
     </View>

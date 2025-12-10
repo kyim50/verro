@@ -341,26 +341,14 @@ export default function HomeScreen() {
     }
 
     try {
-      if (isLiked) {
-        // Unlike - call unlike endpoint which handles both board and count
-        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/unlike`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        // Update like count from response
-        if (response.data.likeCount !== undefined && updateArtworkLikeCount) {
-          updateArtworkLikeCount(artwork.id, response.data.likeCount);
-        }
-      } else {
-        // Like - call like endpoint which handles both board and count
-        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/like`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        // Update like count from response
-        if (response.data.likeCount !== undefined && updateArtworkLikeCount) {
-          updateArtworkLikeCount(artwork.id, response.data.likeCount);
-        }
+      // Always call /like endpoint - it toggles automatically
+      const response = await axios.post(`${API_URL}/artworks/${artwork.id}/like`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update like count from response
+      if (response.data.likeCount !== undefined && updateArtworkLikeCount) {
+        updateArtworkLikeCount(artwork.id, response.data.likeCount);
       }
       
       // Refresh boards to ensure liked artworks state stays in sync
@@ -373,7 +361,23 @@ export default function HomeScreen() {
           headers: { Authorization: `Bearer ${token}` }
         });
         const artworkIds = boardResponse.data.board_artworks?.map(ba => ba.artwork_id) || [];
-        setLikedArtworks(new Set(artworkIds.map(String)));
+        const newLikedSet = new Set(artworkIds.map(String));
+        setLikedArtworks(newLikedSet);
+        
+        // Update isLiked state based on actual board data
+        const actualLikedState = newLikedSet.has(artworkId);
+        if (actualLikedState !== !previousLikedState) {
+          // State doesn't match - correct it
+          setLikedArtworks(prev => {
+            const correctedSet = new Set(prev);
+            if (actualLikedState) {
+              correctedSet.add(artworkId);
+            } else {
+              correctedSet.delete(artworkId);
+            }
+            return correctedSet;
+          });
+        }
       }
     } catch (error) {
       console.error('Error toggling like:', error);

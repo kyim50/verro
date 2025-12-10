@@ -7,6 +7,14 @@ const router = express.Router();
 // Get user profile (public or own)
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
+    // Try cache first (5 minute TTL for profiles)
+    const { cache, cacheKeys } = await import('../utils/cache.js');
+    const cacheKey = cacheKeys.userProfile(req.params.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data: user, error: userError } = await supabaseAdmin
       .from('users')
       .select('id, username, email, full_name, avatar_url, bio, user_type, created_at')
@@ -70,6 +78,9 @@ router.get('/:id', optionalAuth, async (req, res) => {
       response.boards = boards;
     }
 
+    // Cache response for 5 minutes
+    await cache.set(cacheKey, response, 300);
+    
     res.json(response);
   } catch (error) {
     console.error('Error fetching user profile:', error);

@@ -213,14 +213,19 @@ export const useSwipeStore = create((set, get) => ({
   },
 
   swipe: async (artistId, direction) => {
+    // Update index IMMEDIATELY (optimistic update)
+    set({ currentIndex: get().currentIndex + 1 });
+    
+    // Then record swipe in background (don't wait for it)
     try {
-      await axios.post(`${API_URL}/swipes`, {
+      const response = await axios.post(`${API_URL}/swipes`, {
         artistId,
         direction,
       });
-      set({ currentIndex: get().currentIndex + 1 });
+      console.log('Swipe recorded successfully:', response.data);
     } catch (error) {
-      console.error('Error recording swipe:', error);
+      console.error('Error recording swipe:', error.response?.data || error.message);
+      // Optionally revert index on error, but for UX we'll keep it
     }
   },
 

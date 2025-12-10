@@ -3,6 +3,7 @@ import { body, query, validationResult } from 'express-validator';
 import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { authenticate, optionalAuth, requireArtist } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { cache, cacheKeys } from '../utils/cache.js';
 
 const router = express.Router();
 
@@ -30,6 +31,13 @@ router.get(
       const tags = req.query.tags ? req.query.tags.split(',') : null;
       const artistId = req.query.artistId;
       const searchQuery = req.query.search;
+
+      // Try to get from cache
+      const cacheKey = cacheKeys.artworksList({ page, limit, tags, artistId, search: searchQuery });
+      const cached = await cache.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
 
       let query = supabaseAdmin
         .from('artworks')
@@ -96,7 +104,7 @@ router.get(
         };
       });
 
-      res.json({
+      const response = {
         artworks: enrichedArtworks,
         pagination: {
           page,
@@ -104,7 +112,12 @@ router.get(
           total: count,
           totalPages: Math.ceil(count / limit),
         },
-      });
+      };
+
+      // Cache for 5 minutes
+      await cache.set(cacheKey, response, 300);
+
+      res.json(response);
     } catch (error) {
       next(error);
     }
@@ -114,6 +127,13 @@ router.get(
 // Get single artwork
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
+    // Try to get from cache
+    const cacheKey = cacheKeys.artwork(req.params.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data: artwork, error } = await supabaseAdmin
       .from('artworks')
       .select(`
@@ -172,7 +192,12 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       .update({ view_count: (artwork.view_count || 0) + 1 })
       .eq('id', req.params.id);
 
-    res.json({ artwork });
+    const response = { artwork };
+
+    // Cache for 10 minutes (longer for single artwork)
+    await cache.set(cacheKey, response, 600);
+
+    res.json(response);
   } catch (error) {
     next(error);
   }
@@ -285,6 +310,13 @@ router.post(
         console.error('Error with Created board auto-add:', boardError);
       }
 
+      // Invalidate related caches
+      await Promise.all([
+        cache.delPattern('artworks:list:*'),
+        cache.delPattern(`artist:${req.user.id}:artworks`),
+        cache.delPattern(`feed:*`),
+      ]);
+
       res.status(201).json({
         message: 'Artwork uploaded successfully',
         artwork,
@@ -340,6 +372,13 @@ router.put(
         .single();
 
       if (error) throw error;
+
+      // Invalidate related caches
+      await Promise.all([
+        cache.del(cacheKeys.artwork(req.params.id)),
+        cache.delPattern('artworks:list:*'),
+        cache.delPattern(`artist:${req.user.id}:artworks`),
+      ]);
 
       res.json({ message: 'Artwork updated successfully', artwork });
     } catch (error) {
@@ -402,6 +441,15 @@ router.delete('/:id', authenticate, requireArtist, async (req, res, next) => {
       throw new AppError('Artwork deletion failed - artwork still exists', 500);
     }
 
+    // Invalidate related caches
+    await Promise.all([
+      cache.del(cacheKeys.artwork(artworkId)),
+      cache.delPattern('artworks:list:*'),
+      cache.delPattern(`artist:${req.user.id}:artworks`),
+      cache.delPattern('feed:*'),
+      cache.delPattern('board:*:artworks'),
+    ]);
+
     res.json({ message: 'Artwork deleted successfully', deleted: true });
   } catch (error) {
     console.error('Error in delete artwork endpoint:', error);
@@ -458,8 +506,33 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
       .eq('artwork_id', artworkId)
       .maybeSingle();
 
-    // Only increment if not already liked
-    if (!existing) {
+    // Toggle behavior: if already liked, unlike it; otherwise like it
+    if (existing) {
+      // Already liked - unlike it
+      // Remove from board
+      await supabaseAdmin
+        .from('board_artworks')
+        .delete()
+        .eq('board_id', likedBoard.id)
+        .eq('artwork_id', artworkId);
+
+      // Decrement like_count (don't go below 0)
+      const newCount = Math.max(0, (artwork.like_count || 0) - 1);
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('artworks')
+        .update({ like_count: newCount })
+        .eq('id', artworkId)
+        .select('like_count')
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Invalidate cache
+      await cache.del(cacheKeys.artwork(artworkId));
+
+      res.json({ message: 'Artwork unliked', likeCount: updated.like_count });
+    } else {
+      // Not liked - like it
       // Add to board
       await supabaseAdmin
         .from('board_artworks')
@@ -478,9 +551,10 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
 
       if (updateError) throw updateError;
 
+      // Invalidate cache
+      await cache.del(cacheKeys.artwork(artworkId));
+
       res.json({ message: 'Artwork liked', likeCount: updated.like_count });
-    } else {
-      res.json({ message: 'Already liked', likeCount: artwork.like_count });
     }
   } catch (error) {
     next(error);
@@ -529,6 +603,9 @@ router.post('/:id/unlike', authenticate, async (req, res, next) => {
         .single();
 
       if (updateError) throw updateError;
+
+      // Invalidate cache
+      await cache.del(cacheKeys.artwork(artworkId));
 
       res.json({ message: 'Artwork unliked', likeCount: updated.like_count });
     } else {

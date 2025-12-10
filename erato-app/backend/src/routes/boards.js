@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { authenticate } from '../middleware/auth.js';
+import { cache, cacheKeys } from '../utils/cache.js';
 
 const router = express.Router();
 
@@ -9,6 +10,13 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { type, parent_id } = req.query;
     
+    // Try to get from cache
+    const cacheKey = cacheKeys.userBoards(req.user.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     // Simple query - just get boards
     let query = supabaseAdmin
       .from('boards')
@@ -86,6 +94,9 @@ router.get('/', authenticate, async (req, res) => {
       };
     });
 
+    // Cache for 5 minutes
+    await cache.set(cacheKey, boardsWithData, 300);
+
     res.json(boardsWithData);
   } catch (error) {
     console.error('Error fetching boards:', error);
@@ -96,6 +107,13 @@ router.get('/', authenticate, async (req, res) => {
 // Get single board with details
 router.get('/:id', authenticate, async (req, res) => {
   try {
+    // Try to get from cache
+    const cacheKey = cacheKeys.board(req.params.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const { data: board, error: boardError } = await supabaseAdmin
       .from('boards')
       .select('*')
@@ -186,11 +204,16 @@ router.get('/:id', authenticate, async (req, res) => {
       });
     }
 
-    res.json({
+    const response = {
       ...board,
       users: user,
       board_artworks: artworksWithDetails
-    });
+    };
+
+    // Cache for 5 minutes
+    await cache.set(cacheKey, response, 300);
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching board:', error);
     res.status(500).json({ error: error.message });

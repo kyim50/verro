@@ -12,9 +12,9 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
  * @param {string} token - JWT authentication token
  * @returns {Promise<string>} Public URL of uploaded image
  */
-export async function uploadImage(uri, bucket = 'artworks', folder = '', token) {
+export async function uploadImage(uri, bucket = 'artworks', folder = '', token = null, allowUnauthenticated = false) {
   try {
-    if (!token) {
+    if (!allowUnauthenticated && !token) {
       throw new Error('Authentication token required for upload');
     }
 
@@ -36,14 +36,23 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token) 
       name: `upload.${ext}`,
     });
 
-    // Determine endpoint based on bucket
-    const endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : bucket === 'portfolios' ? 'portfolio' : 'artwork'}`;
+    // Determine endpoint based on bucket and authentication
+    let endpoint;
+    if (allowUnauthenticated && bucket === 'profiles') {
+      endpoint = `${API_URL}/uploads/register-profile`;
+    } else {
+      endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : bucket === 'portfolios' ? 'portfolio' : 'artwork'}`;
+    }
 
     // Upload to backend API
     // Note: Don't set Content-Type header manually - axios will set it with proper boundary
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const response = await axios.post(endpoint, formData, {
       headers: {
-        'Authorization': `Bearer ${token}`,
+        ...headers,
         // Axios will automatically set Content-Type: multipart/form-data with boundary
       },
     });

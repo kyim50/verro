@@ -1,4 +1,18 @@
 import rateLimit from 'express-rate-limit';
+import { RedisRateLimitStore } from '../utils/redisServices.js';
+import redis from '../utils/cache.js';
+
+// Try to use Redis for rate limiting if available, fallback to in-memory
+let rateLimitStore = undefined;
+try {
+  // Test Redis connection
+  if (redis && redis.status === 'ready') {
+    rateLimitStore = new RedisRateLimitStore();
+    console.log('✅ Rate limiting using Redis store');
+  }
+} catch (error) {
+  console.warn('⚠️  Redis not available for rate limiting, using in-memory store');
+}
 
 // Check if rate limiting should be completely disabled
 const isDisabled = process.env.DISABLE_RATE_LIMIT === 'true';
@@ -33,6 +47,7 @@ export const rateLimiter = isDisabled
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
+      store: rateLimitStore,
       skip: (req) => {
         // Skip rate limiting for health checks
         return req.path === '/health';
@@ -44,6 +59,7 @@ export const rateLimiter = isDisabled
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
+      store: rateLimitStore,
       skip: (req) => {
         // Skip rate limiting for health checks
         return req.path === '/health';
@@ -58,10 +74,12 @@ export const authLimiter = isDisabled
       max: 500, // 500 attempts per minute in dev (very lenient)
       message: 'Too many authentication attempts, please try again later.',
       skipSuccessfulRequests: true,
+      store: rateLimitStore,
     })
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 100, // 100 attempts per 15 minutes (very relaxed)
       message: 'Too many authentication attempts, please try again later.',
       skipSuccessfulRequests: true,
+      store: rateLimitStore,
     });

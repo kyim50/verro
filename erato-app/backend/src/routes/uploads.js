@@ -203,4 +203,61 @@ router.post(
   }
 );
 
+/**
+ * POST /api/uploads/register-profile
+ * Upload a profile picture during registration (no authentication required)
+ * Rate limited to prevent abuse
+ */
+router.post(
+  '/register-profile',
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      // Generate temporary filename (will be moved/renamed after user creation)
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(7);
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      const fileName = `temp-${timestamp}-${randomString}.${ext}`;
+
+      // Upload to Supabase Storage in a temp folder
+      const { data, error } = await supabaseAdmin.storage
+        .from('profiles')
+        .upload(`temp/${fileName}`, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Supabase upload error:', error);
+        return res.status(500).json({
+          error: 'Failed to upload file to storage',
+          details: error.message
+        });
+      }
+
+      // Get public URL
+      const { data: publicUrlData } = supabaseAdmin.storage
+        .from('profiles')
+        .getPublicUrl(`temp/${fileName}`);
+
+      res.json({
+        success: true,
+        url: publicUrlData.publicUrl,
+        fileName: fileName,
+        tempPath: `temp/${fileName}`,
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({
+        error: 'Upload failed',
+        message: error.message
+      });
+    }
+  }
+);
+
 export default router;

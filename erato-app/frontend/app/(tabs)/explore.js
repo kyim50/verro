@@ -279,32 +279,27 @@ export default function ExploreScreen() {
     ));
 
     try {
-      if (isLiked) {
-        // Unlike
-        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/unlike`, {}, {
+      // Always call /like endpoint - it toggles automatically
+      const response = await axios.post(`${API_URL}/artworks/${artwork.id}/like`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data.likeCount !== undefined) {
+        setTrendingArtworks(prev => prev.map(item => 
+          item.id === artwork.id
+            ? { ...item, like_count: response.data.likeCount }
+            : item
+        ));
+      }
+      
+      // Refresh liked artworks from boards to sync state
+      const likedBoard = boards.find(b => b.name === 'Liked');
+      if (likedBoard) {
+        const boardResponse = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
-        if (response.data.likeCount !== undefined) {
-          setTrendingArtworks(prev => prev.map(item => 
-            item.id === artwork.id
-              ? { ...item, like_count: response.data.likeCount }
-              : item
-          ));
-        }
-      } else {
-        // Like
-        const response = await axios.post(`${API_URL}/artworks/${artwork.id}/like`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (response.data.likeCount !== undefined) {
-          setTrendingArtworks(prev => prev.map(item => 
-            item.id === artwork.id
-              ? { ...item, like_count: response.data.likeCount }
-              : item
-          ));
-        }
+        const artworkIds = boardResponse.data.board_artworks?.map(ba => String(ba.artwork_id)) || [];
+        setLikedArtworks(new Set(artworkIds));
       }
     } catch (error) {
       console.error('Error toggling like:', error);

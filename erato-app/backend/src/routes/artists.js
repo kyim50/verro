@@ -47,6 +47,7 @@ router.get(
             users(id, username, avatar_url, full_name, bio)
           `)
           .in('id', userIds)
+          .in('commission_status', ['open', 'limited'])
           .order('rating', { ascending: false })
           .limit(limit);
 
@@ -60,14 +61,14 @@ router.get(
         return res.json({ artists });
       }
 
-      // No search query - return all artists
+      // No search query - return all artists (only open/limited for client explore)
       let artistQuery = supabaseAdmin
         .from('artists')
         .select(`
           *,
           users(id, username, avatar_url, full_name, bio)
         `)
-        .eq('commission_status', 'open')
+        .in('commission_status', ['open', 'limited'])
         .order('rating', { ascending: false })
         .limit(limit);
 
@@ -100,6 +101,16 @@ router.get(
 // Get artist profile
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
+    // Import cache utilities
+    const { cache, cacheKeys } = await import('../utils/cache.js');
+
+    // Try to get from cache
+    const cacheKey = cacheKeys.artist(req.params.id);
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     // First try to get the artist record
     const { data: artist, error } = await supabaseAdmin
       .from('artists')
@@ -125,12 +136,17 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    res.json({
+    const response = {
       ...artist,
       user_id: userId,
       users: userData,
       artworks: artworks || []
-    });
+    };
+
+    // Cache for 10 minutes (cache and cacheKey already defined above)
+    await cache.set(cacheKey, response, 600);
+
+    res.json(response);
   } catch (error) {
     next(error);
   }

@@ -10,12 +10,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -33,12 +35,12 @@ export default function LoginScreen() {
     const result = await login(email, password);
 
     if (result.success) {
+      // Navigate directly to home (loading already shown in _layout)
       router.replace('/(tabs)/home');
     } else {
       setError(result.error || 'Login failed');
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -68,15 +70,28 @@ export default function LoginScreen() {
             editable={!loading}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={colors.text.disabled}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!loading}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Password"
+              placeholderTextColor={colors.text.disabled}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowPassword(!showPassword)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color={colors.text.secondary}
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -140,6 +155,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: spacing.md,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  eyeButton: {
+    padding: spacing.md,
+    paddingLeft: spacing.sm,
   },
   button: {
     backgroundColor: colors.primary,

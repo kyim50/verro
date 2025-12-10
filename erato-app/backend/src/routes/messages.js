@@ -1,12 +1,21 @@
 import express from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authenticate } from '../middleware/auth.js';
+import { MessageCountService, NotificationService } from '../utils/redisServices.js';
 
 const router = express.Router();
 
 // Get all conversations for user
 router.get('/conversations', authenticate, async (req, res) => {
   try {
+    // Try cache first (2 minute TTL - conversations change frequently)
+    const { cache, cacheKeys } = await import('../utils/cache.js');
+    const cacheKey = `conversations:${req.user.id}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     // Get conversations where user is a participant
     const { data: participations, error: partError } = await supabaseAdmin
       .from('conversation_participants')
@@ -16,7 +25,9 @@ router.get('/conversations', authenticate, async (req, res) => {
     if (partError) throw partError;
 
     if (!participations || participations.length === 0) {
-      return res.json({ conversations: [] });
+      const emptyResponse = { conversations: [] };
+      await cache.set(cacheKey, emptyResponse, 120); // Cache empty for 2 minutes
+      return res.json(emptyResponse);
     }
 
     const conversationIds = participations.map(p => p.conversation_id);
@@ -43,52 +54,79 @@ router.get('/conversations', authenticate, async (req, res) => {
 
     if (convError) throw convError;
 
-    // Batch fetch all latest messages
-    const latestMessagesPromises = conversations.map(conv => 
-      supabaseAdmin
-        .from('messages')
-        .select('id, content, message_type, created_at, sender_id, conversation_id')
-        .eq('conversation_id', conv.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-    );
-    const latestMessagesResults = await Promise.all(latestMessagesPromises);
+    // OPTIMIZED: Get latest message for each conversation using a subquery approach
+    // Query all messages for these conversations, ordered by created_at DESC
+    // Then group in memory (faster than multiple queries)
+    const { data: allMessages } = await supabaseAdmin
+      .from('messages')
+      .select('id, content, message_type, created_at, sender_id, conversation_id')
+      .in('conversation_id', conversationIds)
+      .order('created_at', { ascending: false })
+      .limit(conversationIds.length * 2); // Limit to reduce data transfer
+    
+    // Group by conversation and get latest for each (most recent first in results)
     const latestMessagesMap = new Map();
-    latestMessagesResults.forEach(({ data }) => {
-      if (data) latestMessagesMap.set(data.conversation_id, data);
+    allMessages?.forEach(msg => {
+      if (!latestMessagesMap.has(msg.conversation_id)) {
+        latestMessagesMap.set(msg.conversation_id, msg);
+      }
     });
 
-    // Batch fetch all other participants
-    const otherParticipantsPromises = conversations.map(conv =>
-      supabaseAdmin
-        .from('conversation_participants')
-        .select('conversation_id, user:users(id, username, full_name, avatar_url)')
-        .eq('conversation_id', conv.id)
-        .neq('user_id', req.user.id)
-        .single()
-    );
-    const otherParticipantsResults = await Promise.all(otherParticipantsPromises);
+    // OPTIMIZED: Get all other participants in a single query
+    const { data: allParticipants } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('conversation_id, user_id, user:users(id, username, full_name, avatar_url)')
+      .in('conversation_id', conversationIds)
+      .neq('user_id', req.user.id);
+    
+    // Group by conversation
     const otherParticipantsMap = new Map();
-    otherParticipantsResults.forEach(({ data }) => {
-      if (data) otherParticipantsMap.set(data.conversation_id, data?.user);
+    allParticipants?.forEach(p => {
+      if (!otherParticipantsMap.has(p.conversation_id)) {
+        otherParticipantsMap.set(p.conversation_id, p.user);
+      }
     });
 
-    // Batch fetch all unread counts
-    const unreadCountPromises = conversations.map(conv => {
-      const userParticipation = participations.find(p => p.conversation_id === conv.id);
-      return supabaseAdmin
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('conversation_id', conv.id)
-        .neq('sender_id', req.user.id)
-        .gt('created_at', userParticipation?.last_read_at || conv.created_at);
-    });
-    const unreadCountResults = await Promise.all(unreadCountPromises);
+    // Get unread counts from Redis (batch) with fallback to database - OPTIMIZED
+    // Reuse conversationIds from above (already declared on line 23)
+    const redisCounts = await MessageCountService.getBatchUnreadCounts(req.user.id, conversationIds);
+    
     const unreadCountMap = new Map();
-    unreadCountResults.forEach(({ count }, index) => {
-      unreadCountMap.set(conversations[index].id, count || 0);
+    const dbFallbacks = [];
+    
+    // Process Redis results and identify which need database fallback
+    conversations.forEach((conv) => {
+      const redisCount = redisCounts.get(conv.id) || 0;
+      if (redisCount > 0) {
+        unreadCountMap.set(conv.id, redisCount);
+      } else {
+        // Queue for database lookup
+        const userParticipation = participations.find(p => p.conversation_id === conv.id);
+        dbFallbacks.push({ 
+          convId: conv.id, 
+          lastReadAt: userParticipation?.last_read_at || conv.created_at 
+        });
+      }
     });
+    
+    // Batch all database fallback queries in parallel (only for missing counts)
+    if (dbFallbacks.length > 0) {
+      const dbCounts = await Promise.all(
+        dbFallbacks.map(async ({ convId, lastReadAt }) => {
+          const { count } = await supabaseAdmin
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', convId)
+            .neq('sender_id', req.user.id)
+            .gt('created_at', lastReadAt);
+          return { convId, count: count || 0 };
+        })
+      );
+      
+      dbCounts.forEach(({ convId, count }) => {
+        unreadCountMap.set(convId, count);
+      });
+    }
 
     // Combine all data
     const conversationsWithMessages = conversations.map(conv => ({
@@ -98,7 +136,12 @@ router.get('/conversations', authenticate, async (req, res) => {
       unread_count: unreadCountMap.get(conv.id) || 0
     }));
 
-    res.json({ conversations: conversationsWithMessages });
+    const response = { conversations: conversationsWithMessages };
+    
+    // Cache response for 2 minutes
+    await cache.set(cacheKey, response, 120);
+    
+    res.json(response);
   } catch (error) {
     console.error('Error fetching conversations:', error);
     res.status(500).json({ error: error.message });
@@ -322,6 +365,13 @@ router.get('/conversations/:id/messages', authenticate, async (req, res) => {
       .eq('conversation_id', req.params.id)
       .eq('user_id', req.user.id);
 
+    // Reset Redis unread count
+    await MessageCountService.resetUnreadCount(req.user.id, req.params.id);
+
+    // Invalidate conversations cache for this user
+    const { cache } = await import('../utils/cache.js');
+    await cache.del(`conversations:${req.user.id}`);
+
     res.json({ messages: messages.reverse() }); // Reverse to show oldest first
   } catch (error) {
     console.error('Error fetching messages:', error);
@@ -332,10 +382,14 @@ router.get('/conversations/:id/messages', authenticate, async (req, res) => {
 // Send a message
 router.post('/conversations/:id/messages', authenticate, async (req, res) => {
   try {
-    const { content, message_type = 'text' } = req.body;
+    const { content, message_type = 'text', image_url } = req.body;
 
-    if (!content) {
-      return res.status(400).json({ error: 'content is required' });
+    // For image messages, image_url is required; for text messages, content is required
+    if (message_type === 'image' && !image_url) {
+      return res.status(400).json({ error: 'image_url is required for image messages' });
+    }
+    if (message_type === 'text' && !content) {
+      return res.status(400).json({ error: 'content is required for text messages' });
     }
 
     // Verify user is part of conversation
@@ -351,14 +405,23 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
     }
 
     // Create message
+    const messageData = {
+      conversation_id: req.params.id,
+      sender_id: req.user.id,
+      message_type
+    };
+    
+    if (message_type === 'image' && image_url) {
+      messageData.image_url = image_url;
+      messageData.content = ''; // Empty string for image messages (content column is NOT NULL)
+    } else {
+      messageData.content = content;
+      messageData.image_url = null;
+    }
+
     const { data: message, error: msgError } = await supabaseAdmin
       .from('messages')
-      .insert({
-        conversation_id: req.params.id,
-        sender_id: req.user.id,
-        content,
-        message_type
-      })
+      .insert(messageData)
       .select(`
         *,
         sender_id
@@ -367,30 +430,89 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
 
     if (msgError) throw msgError;
 
-    // Update conversation updated_at
-    await supabaseAdmin
-      .from('conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', req.params.id);
-
-    // Increment unread_count for all other participants
-    const { data: otherParticipants } = await supabaseAdmin
-      .from('conversation_participants')
-      .select('user_id, unread_count')
-      .eq('conversation_id', req.params.id)
-      .neq('user_id', req.user.id);
-
-    if (otherParticipants && otherParticipants.length > 0) {
-      for (const participant of otherParticipants) {
-        await supabaseAdmin
-          .from('conversation_participants')
-          .update({ unread_count: (participant.unread_count || 0) + 1 })
-          .eq('conversation_id', req.params.id)
-          .eq('user_id', participant.user_id);
-      }
+    // IMPORTANT: Emit via Socket.io IMMEDIATELY for real-time delivery
+    const io = req.app.locals.io;
+    if (io) {
+      io.to(`conversation-${req.params.id}`).emit('new-message', message);
     }
 
+    // Return response immediately (optimistic response)
     res.status(201).json(message);
+
+    // Handle heavy operations asynchronously (don't block response)
+    (async () => {
+      try {
+        // Update conversation updated_at
+        await supabaseAdmin
+          .from('conversations')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', req.params.id);
+
+        // Invalidate conversations cache for all participants
+        const { cache } = await import('../utils/cache.js');
+        const { data: allParticipants } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', req.params.id);
+        
+        if (allParticipants) {
+          await Promise.all(
+            allParticipants.map(p => cache.del(`conversations:${p.user_id}`))
+          );
+        }
+
+        // Get other participants (for notifications)
+        const { data: otherParticipants } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', req.params.id)
+          .neq('user_id', req.user.id);
+
+        // Get sender info for notifications
+        const { data: senderInfo } = await supabaseAdmin
+          .from('users')
+          .select('username, full_name, avatar_url')
+          .eq('id', req.user.id)
+          .single();
+
+        if (otherParticipants && otherParticipants.length > 0) {
+          for (const participant of otherParticipants) {
+            // Get current unread count and increment
+            const { data: current } = await supabaseAdmin
+              .from('conversation_participants')
+              .select('unread_count')
+              .eq('conversation_id', req.params.id)
+              .eq('user_id', participant.user_id)
+              .single();
+            
+            // Update database unread count
+            await supabaseAdmin
+              .from('conversation_participants')
+              .update({ unread_count: (current?.unread_count || 0) + 1 })
+              .eq('conversation_id', req.params.id)
+              .eq('user_id', participant.user_id);
+
+            // Update Redis unread count (for instant access)
+            await MessageCountService.updateUnreadCount(participant.user_id, req.params.id, 1);
+
+            // Send notification
+            const notificationMessage = message_type === 'image' 
+              ? 'Sent an image'
+              : (content || '').substring(0, 100) + ((content || '').length > 100 ? '...' : '');
+            
+            await NotificationService.publish(participant.user_id, {
+              type: 'new_message',
+              title: `New message from ${senderInfo?.username || 'Someone'}`,
+              message: notificationMessage,
+              action: { type: 'view_conversation', id: req.params.id },
+              priority: 'normal',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error in async message processing:', error);
+      }
+    })();
   } catch (error) {
     console.error('Error sending message:', error);
     res.status(500).json({ error: error.message });

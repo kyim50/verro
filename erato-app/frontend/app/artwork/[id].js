@@ -110,30 +110,27 @@ export default function ArtworkDetailScreen() {
         });
       }
 
-      if (isLiked) {
-        // Unlike - call unlike endpoint which handles both board and count
-        const response = await axios.post(`${API_URL}/artworks/${id}/unlike`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        // Update like count from response
-        if (artwork && response.data.likeCount !== undefined) {
-          setArtwork({ ...artwork, like_count: response.data.likeCount });
-        }
-      } else {
-        // Like - call like endpoint which handles both board and count
-        const response = await axios.post(`${API_URL}/artworks/${id}/like`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        // Update like count from response
-        if (artwork && response.data.likeCount !== undefined) {
-          setArtwork({ ...artwork, like_count: response.data.likeCount });
-        }
+      // Always call /like endpoint - it toggles automatically
+      const response = await axios.post(`${API_URL}/artworks/${id}/like`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update like count from response
+      if (artwork && response.data.likeCount !== undefined) {
+        setArtwork({ ...artwork, like_count: response.data.likeCount });
+      }
+
+      // Update isLiked based on response - if likeCount decreased, it was unliked
+      if (response.data.likeCount !== undefined) {
+        const newLikedState = response.data.likeCount > previousLikeCount || 
+                              (response.data.likeCount === previousLikeCount && !isLiked);
+        setIsLiked(newLikedState);
       }
 
       // Refresh boards to ensure state is in sync
       await fetchBoards();
+      // Re-check like status from boards
+      await checkIfLiked();
     } catch (error) {
       console.error('Error toggling like:', error);
       console.error('Error details:', error.response?.data || error.message);

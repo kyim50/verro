@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
@@ -31,6 +31,22 @@ export default function EditProfileScreen() {
   const [instagramUrl, setInstagramUrl] = useState('');
   const [twitterUrl, setTwitterUrl] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
+
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    // Disable swipe back gesture to prevent accidental logout
+    navigation.setOptions({
+      gestureEnabled: false,
+    });
+
+    return () => {
+      // Re-enable gesture when component unmounts
+      navigation.setOptions({
+        gestureEnabled: true,
+      });
+    };
+  }, [navigation]);
 
   useEffect(() => {
     if (user) {

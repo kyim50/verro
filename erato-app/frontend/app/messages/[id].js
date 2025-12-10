@@ -12,37 +12,112 @@ import {
   Alert,
   Dimensions,
   Modal,
+  RefreshControl,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import { uploadImage } from '../../utils/imageUpload';
 import ReviewModal from '../../components/ReviewModal';
+import { initSocket, getSocket, disconnectSocket } from '../../lib/socket';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const STATUS_BAR_HEIGHT = Constants.statusBarHeight || 44;
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams();
   const { user, token } = useAuthStore();
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState(null);
   const [commission, setCommission] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedCommissionDetails, setSelectedCommissionDetails] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [pendingReviewCommission, setPendingReviewCommission] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const flatListRef = useRef(null);
+  const socketRef = useRef(null);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
+
+  // Initialize Socket.io connection for real-time messaging
+  useEffect(() => {
+    if (!token) return;
+
+    // Initialize socket connection
+    const socket = initSocket(token);
+    socketRef.current = socket;
+
+    // Join conversation room
+    if (id && socket.connected) {
+      socket.emit('join-conversation', id);
+    }
+
+    // Handle socket connection
+    socket.on('connect', () => {
+      console.log('Socket connected in conversation');
+      if (id) {
+        socket.emit('join-conversation', id);
+      }
+    });
+
+    // Listen for new messages
+    socket.on('new-message', (message) => {
+      setMessages(prev => {
+        // Check for exact ID match first (most common case)
+        if (prev.some(m => m.id === message.id)) {
+          return prev;
+        }
+        
+        // If this is our own message, find and replace the temp one
+        if (message.sender_id === user?.id) {
+          const tempMessage = prev.find(m => 
+            m.id?.startsWith('temp-') && 
+            m.sender_id === user?.id &&
+            ((m.message_type === 'text' && m.content === message.content) ||
+             (m.message_type === 'image' && m.image_url && message.image_url))
+          );
+          
+          if (tempMessage) {
+            // Replace temp with real message
+            return prev.map(m => m.id === tempMessage.id ? message : m);
+          }
+        }
+        
+        // Otherwise, just add the new message
+        return [...prev, message];
+      });
+      
+      // Scroll to bottom when new message arrives
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (socket) {
+        socket.off('new-message');
+        socket.off('connect');
+      }
+    };
+  }, [id, token]);
 
   useEffect(() => {
     if (id && token) {
@@ -50,6 +125,64 @@ export default function ConversationScreen() {
       fetchConversationDetails();
     }
   }, [id, token]);
+
+  // Screen entrance animation
+  useEffect(() => {
+    // Reset animations
+    fadeAnim.setValue(0);
+    slideAnim.setValue(30);
+    
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 350,
+        easing: (t) => t * (2 - t), // Ease out quadratic for smoother feel
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  // Keyboard animations
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        Animated.timing(keyboardHeight, {
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? (e.duration || 250) : 250,
+          easing: (t) => t * (2 - t), // Smooth ease out
+          useNativeDriver: false,
+        }).start();
+        
+        // Scroll to bottom when keyboard opens
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, Platform.OS === 'ios' ? (e.duration || 250) : 100);
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      (e) => {
+        Animated.timing(keyboardHeight, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? (e.duration || 250) : 250,
+          easing: (t) => t * (2 - t), // Smooth ease out
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -194,7 +327,20 @@ export default function ConversationScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSending(true);
+      // Optimistic update - add placeholder message immediately
+      const tempMessage = {
+        id: `temp-img-${Date.now()}`,
+        image_url: result.assets[0].uri,
+        sender_id: user?.id,
+        conversation_id: id,
+        message_type: 'image',
+        content: '',
+        created_at: new Date().toISOString(),
+        isPending: true,
+      };
+      setMessages(prev => [...prev, tempMessage]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
       try {
         const imageUrl = await uploadImage(result.assets[0].uri, 'messages', '', token);
         if (!imageUrl) throw new Error('Upload failed');
@@ -202,19 +348,28 @@ export default function ConversationScreen() {
         await axios.post(
           `${API_URL}/messages/conversations/${id}/messages`,
           {
-            content: ' ',
             image_url: imageUrl,
             message_type: 'image',
           },
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        await fetchMessages();
+        // Socket.io will emit the real message, which will replace the temp one
+        // Remove temp after a short delay if not replaced
+        setTimeout(() => {
+          setMessages(prev => {
+            const stillHasTemp = prev.some(m => m.id === tempMessage.id);
+            if (stillHasTemp) {
+              return prev.filter(m => m.id !== tempMessage.id);
+            }
+            return prev;
+          });
+        }, 1000);
       } catch (error) {
         console.error('Error sending image:', error);
+        // Remove temp message on error
+        setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
         Alert.alert('Error', 'Failed to send image. Please try again.');
-      } finally {
-        setSending(false);
       }
     }
   };
@@ -224,22 +379,47 @@ export default function ConversationScreen() {
 
     const messageContent = newMessage.trim();
     setNewMessage('');
-    setSending(true);
+
+    // Optimistic update - add message immediately for instant feedback
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage = {
+      id: tempId,
+      content: messageContent,
+      sender_id: user?.id,
+      conversation_id: id,
+      message_type: 'text',
+      created_at: new Date().toISOString(),
+      isPending: true,
+    };
+    setMessages(prev => [...prev, tempMessage]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const response = await axios.post(
+      await axios.post(
         `${API_URL}/messages/conversations/${id}/messages`,
         { content: messageContent },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setMessages(prev => [...prev, response.data]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      // Socket.io will emit the real message, which will replace the temp one
+      // But in case Socket.io doesn't work, remove temp after a short delay
+      setTimeout(() => {
+        setMessages(prev => {
+          // Check if temp message still exists (Socket.io should have replaced it)
+          const stillHasTemp = prev.some(m => m.id === tempId);
+          if (stillHasTemp) {
+            // Remove temp if it wasn't replaced (fallback)
+            return prev.filter(m => m.id !== tempId);
+          }
+          return prev;
+        });
+      }, 1000);
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove temp message on error and restore input
+      setMessages(prev => prev.filter(m => m.id !== tempId));
       setNewMessage(messageContent);
-    } finally {
-      setSending(false);
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
 
@@ -422,50 +602,63 @@ export default function ConversationScreen() {
       (new Date(nextMessage.created_at) - new Date(item.created_at)) > 1000 * 60 * 5;
 
     const isRead = item.is_read && isOwn;
+    const isPending = item.isPending;
+    
+    // Check if this is the most recent message from the current user
+    const isMostRecentOwnMessage = isOwn && (() => {
+      // Find the last message sent by the current user
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].sender_id === user?.id && !messages[i].isPending) {
+          return messages[i].id === item.id;
+        }
+      }
+      return false;
+    })();
 
     return (
       <>
         {shouldShowDayHeader(item, index) && renderDayHeader(item.created_at)}
-        <View style={[styles.messageWrapper, isOwn && styles.messageWrapperOwn]}>
-          {item.image_url ? (
+        {item.image_url ? (
+          <View style={[styles.imageMessageWrapper, isOwn && styles.imageMessageWrapperOwn]}>
             <TouchableOpacity
               onLongPress={() => {
-                if (isOwn) handleDeleteMessage(item.id);
+                if (isOwn && !isPending) handleDeleteMessage(item.id);
               }}
-              activeOpacity={0.7}
-              style={styles.imageMessageContainer}
+              activeOpacity={0.9}
+              style={styles.imageMessageTouchable}
             >
-              <View style={[styles.imageBubble, isOwn && styles.imageBubbleOwn]}>
-                <Image
-                  source={{ uri: item.image_url }}
-                  style={styles.messageImage}
-                  contentFit="cover"
-                />
-              </View>
-              {isOwn && (
-                <View style={styles.messageStatusContainer}>
-                  <Text style={styles.messageStatusText}>
-                    {isRead ? 'Read' : 'Delivered'}
-                  </Text>
-                </View>
-              )}
+              <Image
+                source={{ uri: item.image_url }}
+                style={[styles.messageImage, isPending && styles.pendingMessage]}
+                contentFit="cover"
+              />
             </TouchableOpacity>
-          ) : (
+            {isOwn && !isPending && isMostRecentOwnMessage && (
+              <View style={styles.messageStatusContainer}>
+                <Text style={styles.messageStatusText}>
+                  {isRead ? 'Read' : 'Delivered'}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={[styles.messageWrapper, isOwn && styles.messageWrapperOwn]}>
             <View style={styles.textMessageContainer}>
               <TouchableOpacity
                 onLongPress={() => {
-                  if (isOwn) handleDeleteMessage(item.id);
+                  if (isOwn && !isPending) handleDeleteMessage(item.id);
                 }}
                 activeOpacity={0.7}
                 style={styles.messageTouchable}
+                disabled={isPending}
               >
-                <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}>
+                <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther, isPending && styles.pendingMessage]}>
                   <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
                     {item.content}
                   </Text>
                 </View>
               </TouchableOpacity>
-              {isOwn && (
+              {isOwn && !isPending && isMostRecentOwnMessage && (
                 <View style={styles.messageStatusContainer}>
                   <Text style={styles.messageStatusText}>
                     {isRead ? 'Read' : 'Delivered'}
@@ -473,8 +666,8 @@ export default function ConversationScreen() {
                 </View>
               )}
             </View>
-          )}
-        </View>
+          </View>
+        )}
       </>
     );
   };
@@ -644,11 +837,20 @@ export default function ConversationScreen() {
 
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Header */}
-        <View style={styles.header}>
+        <Animated.View
+          style={[
+            styles.animatedContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
           </TouchableOpacity>
@@ -691,9 +893,22 @@ export default function ConversationScreen() {
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item.id || `msg-${index}`}
           contentContainerStyle={styles.messagesList}
+          style={styles.messagesFlatList}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await fetchMessages();
+                setRefreshing(false);
+              }}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="chatbubbles-outline" size={48} color={colors.text.disabled} />
@@ -704,7 +919,22 @@ export default function ConversationScreen() {
         />
 
         {/* Input */}
-        <View style={styles.inputContainer}>
+        <Animated.View
+          style={[
+            styles.inputContainer,
+            {
+              paddingBottom: keyboardHeight.interpolate({
+                inputRange: [0, 100, 400],
+                outputRange: [
+                  insets.bottom + spacing.sm,
+                  insets.bottom + spacing.xs,
+                  insets.bottom + spacing.xs,
+                ],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]}
+        >
           <TouchableOpacity style={styles.attachButton} onPress={handleImagePick}>
             <Ionicons name="add-circle" size={28} color={colors.primary} />
           </TouchableOpacity>
@@ -723,16 +953,13 @@ export default function ConversationScreen() {
             <TouchableOpacity
               style={styles.sendButton}
               onPress={sendMessage}
-              disabled={sending}
+              activeOpacity={0.7}
             >
-              {sending ? (
-                <ActivityIndicator size="small" color={colors.text.primary} />
-              ) : (
-                <Ionicons name="send" size={20} color={colors.text.primary} />
-              )}
+              <Ionicons name="send" size={18} color={colors.text.primary} />
             </TouchableOpacity>
           )}
-        </View>
+        </Animated.View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </>
   );
@@ -743,6 +970,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  animatedContainer: {
+    flex: 1,
+  },
+  messagesFlatList: {
+    flex: 1,
+  },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -750,9 +983,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: STATUS_BAR_HEIGHT + spacing.sm,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingTop: STATUS_BAR_HEIGHT + (IS_SMALL_SCREEN ? spacing.xs : spacing.sm),
+    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -771,9 +1004,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: IS_SMALL_SCREEN ? 36 : 40,
+    height: IS_SMALL_SCREEN ? 36 : 40,
+    borderRadius: IS_SMALL_SCREEN ? 18 : 20,
   },
   onlineDot: {
     position: 'absolute',
@@ -792,19 +1025,19 @@ const styles = StyleSheet.create({
   headerName: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
   headerStatus: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
   },
   infoButton: {
     padding: spacing.xs,
   },
   messagesList: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -881,18 +1114,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'right',
   },
-  imageBubble: {
+  imageMessageWrapper: {
+    marginBottom: spacing.sm,
+    maxWidth: '80%',
+    alignSelf: 'flex-start',
+  },
+  imageMessageWrapperOwn: {
+    alignSelf: 'flex-end',
+  },
+  imageMessageTouchable: {
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
-    ...shadows.small,
-  },
-  imageBubbleOwn: {
-    backgroundColor: colors.surface,
   },
   messageImage: {
     width: 250,
     height: 200,
+    borderRadius: borderRadius.lg,
   },
   commissionCard: {
     backgroundColor: colors.surface,
@@ -1070,23 +1307,22 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? spacing.lg + spacing.xs : spacing.md,
+    alignItems: 'center',
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: spacing.sm,
   },
   attachButton: {
-    width: 44,
-    height: 44,
+    width: IS_SMALL_SCREEN ? 36 : 40,
+    height: IS_SMALL_SCREEN ? 36 : 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
   inputWrapper: {
     flex: 1,
@@ -1094,7 +1330,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 44,
+    minHeight: 36,
     maxHeight: 100,
     justifyContent: 'center',
   },
@@ -1102,17 +1338,20 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     fontSize: 15,
     lineHeight: 20,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
+    overflow: 'hidden',
+  },
+  pendingMessage: {
+    opacity: 0.5,
   },
 });

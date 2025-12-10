@@ -26,6 +26,7 @@ router.post(
     body('password').isLength({ min: 8 }),
     body('fullName').optional().trim(),
     body('userType').isIn(['artist', 'client', 'both']),
+    body('avatar_url').optional().trim(), // Will be added on profile picture page
   ],
   async (req, res, next) => {
     try {
@@ -34,7 +35,7 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, username, password, fullName, userType } = req.body;
+      const { email, username, password, fullName, userType, avatar_url } = req.body;
 
       // Check if user exists using admin client
       const { data: existingUser } = await supabaseAdmin
@@ -65,6 +66,7 @@ router.post(
           username,
           full_name: fullName,
           user_type: userType,
+          avatar_url: avatar_url || '', // Optional - can be added on profile picture screen
         })
         .select()
         .single();
