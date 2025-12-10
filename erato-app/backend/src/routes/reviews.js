@@ -76,12 +76,10 @@ router.post('/', authenticate, async (req, res) => {
       userId,
       clientId,
       artistUserId,
-      commissionArtistId: commission.artist_id,
       isClient,
       isArtist,
       commissionId: commission.id,
-      reviewType: type,
-      artistFound: !!artist
+      reviewType: type
     });
 
     if (!isClient && !isArtist) {
