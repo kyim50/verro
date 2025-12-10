@@ -91,16 +91,21 @@ export default function ProfileScreen() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
+            // Clear profile immediately to prevent flash
+            useProfileStore.getState().reset();
             await logout();
-            // Use setTimeout to ensure navigation happens after component is mounted
-            setTimeout(() => {
-              router.replace('/auth/login');
-            }, 100);
+            // Navigate immediately without delay
+            router.replace('/auth/login');
           },
         },
       ]
     );
   };
+
+  // Early return if no user (prevents flash during logout)
+  if (!user) {
+    return null;
+  }
 
   const isArtist = profile?.artist !== null && profile?.artist !== undefined;
   const artworks = profile?.artist?.artworks || [];
@@ -379,32 +384,33 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {(() => {
-                  const filledImages = (profile.artist.portfolio_images || []).filter(img => img && img.trim() !== '');
-                  if (filledImages.length > 0) {
+{(() => {
+                  // Filter out empty/null/blank images and create array with original indices
+                  const portfolioImages = profile.artist.portfolio_images || [];
+                  const imagesWithIndices = portfolioImages
+                    .map((img, index) => ({ url: img, originalIndex: index }))
+                    .filter(item => item.url && item.url.trim() !== '');
+                  
+                  if (imagesWithIndices.length > 0) {
                     return (
                       <View style={styles.portfolioGrid}>
-                        {filledImages.map((imageUrl, displayIndex) => {
-                          // Find the original index in the unfiltered array
-                          const originalIndex = profile.artist.portfolio_images.indexOf(imageUrl);
-                          return (
-                            <TouchableOpacity
-                              key={`${imageUrl}-${displayIndex}`}
-                              style={styles.portfolioItem}
-                              activeOpacity={0.85}
-                              onLongPress={() => {
-                                if (isOwnProfile) {
-                                  handleDeletePortfolioImage(originalIndex);
-                                }
-                              }}
-                            >
-                              <Image
-                                source={{ uri: imageUrl }}
-                                style={styles.portfolioImage}
-                              />
-                            </TouchableOpacity>
-                          );
-                        })}
+                        {imagesWithIndices.map((item, displayIndex) => (
+                          <TouchableOpacity
+                            key={`portfolio-${item.originalIndex}-${item.url}`}
+                            style={styles.portfolioItem}
+                            activeOpacity={0.85}
+                            onLongPress={() => {
+                              if (isOwnProfile) {
+                                handleDeletePortfolioImage(item.originalIndex);
+                              }
+                            }}
+                          >
+                            <Image
+                              source={{ uri: item.url }}
+                              style={styles.portfolioImage}
+                            />
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     );
                   } else {

@@ -395,8 +395,16 @@ router.patch('/:id/status', authenticate, async (req, res) => {
     }
 
     // Verify user is the artist or client
-    const isArtist = commission.artist_id === req.user.id;
-    const isClient = commission.client_id === req.user.id;
+    // commission.artist_id is the artists table ID, not the user_id
+    // We need to check if the user is the artist by looking up the artist's user_id
+    const { data: artist } = await supabaseAdmin
+      .from('artists')
+      .select('user_id')
+      .eq('id', commission.artist_id)
+      .maybeSingle();
+
+    const isArtist = artist?.user_id === req.user.id;
+    const isClient = String(commission.client_id) === String(req.user.id);
 
     if (!isArtist && !isClient) {
       return res.status(403).json({ error: 'Access denied' });
