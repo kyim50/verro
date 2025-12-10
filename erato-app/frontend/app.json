@@ -15,7 +15,16 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.kyim50.erato",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "3.18.213.189": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
       }
     },
     "android": {
@@ -49,8 +58,8 @@
       "eas": {
         "projectId": "c28d6897-a427-4bbb-8f35-74abae16eef0"
       },
-      "EXPO_PUBLIC_API_URL": "http://192.168.0.61:3000/api",
-      "EXPO_PUBLIC_SOCKET_URL": "http://192.168.0.61:3000"
+      "EXPO_PUBLIC_API_URL": "http://3.18.213.189:3000/api",
+      "EXPO_PUBLIC_SOCKET_URL": "http://3.18.213.189:3000"
     },
     "owner": "kyim50"
   }

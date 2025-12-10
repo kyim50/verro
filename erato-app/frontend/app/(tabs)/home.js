@@ -13,6 +13,8 @@ import {
   TextInput,
   FlatList,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Link, router, useFocusEffect } from 'expo-router';
@@ -20,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import Constants from 'expo-constants';
+import Toast from 'react-native-toast-message';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
@@ -33,8 +36,18 @@ const IS_SMALL_SCREEN = width < 400;
 const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function HomeScreen() {
-  const feedStore = useFeedStore();
-  const { artworks, fetchArtworks, reset, hasMore, isLoading, updateArtworkLikeCount } = feedStore;
+  const {
+    artworks,
+    fetchArtworks,
+    reset,
+    hasMore,
+    isLoading,
+    updateArtworkLikeCount,
+    likedArtworks,
+    setLikedArtwork,
+    loadLikedArtworks: loadLikedArtworksFromStore,
+    likedArtworksLoaded,
+  } = useFeedStore();
   const { boards, fetchBoards, saveArtworkToBoard, createBoard } = useBoardStore();
   const { token, user: currentUser } = useAuthStore();
   const { profile: userProfile } = useProfileStore();
@@ -47,12 +60,10 @@ export default function HomeScreen() {
   const [newBoardName, setNewBoardName] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
-  const [likedArtworks, setLikedArtworks] = useState(new Set());
   const [forYouArtworks, setForYouArtworks] = useState([]);
   const [forYouPage, setForYouPage] = useState(1);
   const [forYouLoading, setForYouLoading] = useState(false);
   const [forYouHasMore, setForYouHasMore] = useState(true);
-  const [likedArtworksLoaded, setLikedArtworksLoaded] = useState(false);
   const scrollViewRef = useRef(null);
   const loadingRef = useRef(false);
   const lastFocusTimeRef = useRef(0);
@@ -63,32 +74,28 @@ export default function HomeScreen() {
   const [heartAnimations, setHeartAnimations] = useState({});
   const [avatarKey, setAvatarKey] = useState(0);
 
-  // Load liked artworks
-  const loadLikedArtworks = useCallback(async () => {
-    if (likedArtworksLoaded || !token || loadingRef.current) return;
+  // Load liked artworks from shared store
+  const loadLikedArtworks = useCallback(async (forceReload = false) => {
+    if ((likedArtworksLoaded && !forceReload) || !token || loadingRef.current) return;
     
     try {
-      const likedBoard = boards.find(b => b.name === 'Liked');
-      if (likedBoard) {
-        loadingRef.current = true;
-        const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const artworkIds = response.data.board_artworks?.map(ba => ba.artwork_id) || [];
-        setLikedArtworks(new Set(artworkIds.map(String)));
-        setLikedArtworksLoaded(true);
-      } else {
-        setLikedArtworksLoaded(true);
-      }
+      loadingRef.current = true;
+      await loadLikedArtworksFromStore(boards, token, forceReload);
     } catch (error) {
       if (error.response?.status !== 429) {
         console.error('Error loading liked artworks:', error);
       }
-      setLikedArtworksLoaded(true);
     } finally {
       loadingRef.current = false;
     }
-  }, [boards, token, likedArtworksLoaded]);
+  }, [boards, token, likedArtworksLoaded, loadLikedArtworksFromStore]);
+
+  // Load liked artworks when boards are available
+  useEffect(() => {
+    if (token && boards.length > 0) {
+      loadLikedArtworks(false);
+    }
+  }, [token, boards.length]);
 
   // Load For You artworks
   const loadForYouArtworks = useCallback(async (reset = false) => {
@@ -147,15 +154,11 @@ export default function HomeScreen() {
           }
           
           // Reload liked artworks when screen comes into focus to sync with artwork view page
+          // Use merge strategy to avoid losing recently liked artworks
           if (token && boards.length > 0) {
-            const likedBoard = boards.find(b => b.name === 'Liked');
-            if (likedBoard) {
-              const response = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const artworkIds = response.data.board_artworks?.map(ba => ba.artwork_id) || [];
-              setLikedArtworks(new Set(artworkIds.map(String)));
-            }
+            setTimeout(() => {
+              loadLikedArtworksFromStore(boards, token, true).catch(() => {}); // Force reload to sync (but will merge)
+            }, 2000); // Longer delay to ensure backend has committed
           }
         } catch (error) {
           if (error.response?.status !== 429) {
@@ -302,7 +305,12 @@ export default function HomeScreen() {
       setShowCreateBoard(false);
       setShowSaveModal(false);
       setNewBoardName('');
-      Alert.alert('Success!', `Created "${newBoardName}" and saved artwork`);
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: `Created "${newBoardName}" and saved artwork`,
+        visibilityTime: 2000,
+      });
     } catch (error) {
       Alert.alert('Error', 'Failed to create board');
     }
@@ -316,28 +324,16 @@ export default function HomeScreen() {
     }
 
     const artworkId = String(artwork.id);
-    const isLiked = likedArtworksLoaded ? likedArtworks.has(artworkId) : false;
-    const previousLikedState = isLiked;
+    const currentLikedState = likedArtworksLoaded ? likedArtworks.has(artworkId) : false;
+    const previousLikedState = currentLikedState;
+    const previousLikeCount = artwork.like_count || 0;
 
-    if (!likedArtworksLoaded) {
-      setLikedArtworksLoaded(true);
-    }
-
-    // Optimistic update
-    setLikedArtworks(prev => {
-      const newSet = new Set(prev);
-      if (isLiked) {
-        newSet.delete(artworkId);
-      } else {
-        newSet.add(artworkId);
-      }
-      return newSet;
-    });
+    // Optimistic update - use shared store
+    setLikedArtwork(artwork.id, !currentLikedState);
 
     // Update local artwork like count optimistically
-    const previousLikeCount = artwork.like_count || 0;
     if (updateArtworkLikeCount) {
-      updateArtworkLikeCount(artwork.id, isLiked ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1);
+      updateArtworkLikeCount(artwork.id, currentLikedState ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1);
     }
 
     try {
@@ -346,51 +342,34 @@ export default function HomeScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      console.log('Home Like API Response:', response.data);
+      
+      // The backend returns: { message: 'Artwork liked' or 'Artwork unliked', likeCount: number }
+      const message = response.data.message || '';
+      const newLikeCount = response.data.likeCount ?? previousLikeCount;
+      // Message is either "Artwork liked" or "Artwork unliked"
+      const isNowLiked = message === 'Artwork liked';
+      
+      console.log('Home Setting liked state:', { artworkId: artwork.id, isNowLiked, message, newLikeCount });
+      
       // Update like count from response
       if (response.data.likeCount !== undefined && updateArtworkLikeCount) {
         updateArtworkLikeCount(artwork.id, response.data.likeCount);
       }
       
-      // Refresh boards to ensure liked artworks state stays in sync
-      const updatedBoards = await fetchBoards();
+      // Update shared store with authoritative backend response
+      setLikedArtwork(artwork.id, isNowLiked);
       
-      // Refresh liked artworks from the updated board
-      const likedBoard = updatedBoards?.find(b => b.name === 'Liked');
-      if (likedBoard) {
-        const boardResponse = await axios.get(`${API_URL}/boards/${likedBoard.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const artworkIds = boardResponse.data.board_artworks?.map(ba => ba.artwork_id) || [];
-        const newLikedSet = new Set(artworkIds.map(String));
-        setLikedArtworks(newLikedSet);
-        
-        // Update isLiked state based on actual board data
-        const actualLikedState = newLikedSet.has(artworkId);
-        if (actualLikedState !== !previousLikedState) {
-          // State doesn't match - correct it
-          setLikedArtworks(prev => {
-            const correctedSet = new Set(prev);
-            if (actualLikedState) {
-              correctedSet.add(artworkId);
-            } else {
-              correctedSet.delete(artworkId);
-            }
-            return correctedSet;
-          });
-        }
-      }
+      // Verify the update worked
+      setTimeout(() => {
+        const currentState = useFeedStore.getState().likedArtworks;
+        console.log('Home Current liked artworks after update:', Array.from(currentState));
+        console.log('Home Is artwork liked?', currentState.has(String(artwork.id)));
+      }, 100);
     } catch (error) {
       console.error('Error toggling like:', error);
-      // Rollback optimistic update
-      setLikedArtworks(prev => {
-        const newSet = new Set(prev);
-        if (previousLikedState) {
-          newSet.add(artworkId);
-        } else {
-          newSet.delete(artworkId);
-        }
-        return newSet;
-      });
+      // Rollback optimistic update in shared store
+      setLikedArtwork(artwork.id, previousLikedState);
       
       // Rollback like count
       if (updateArtworkLikeCount) {
@@ -856,71 +835,85 @@ export default function HomeScreen() {
         visible={showSaveModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowSaveModal(false)}
+        onRequestClose={() => {
+          setShowSaveModal(false);
+          setShowCreateBoard(false);
+          setNewBoardName('');
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Save to Board</Text>
-              <TouchableOpacity onPress={() => setShowSaveModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {!showCreateBoard ? (
-              <>
-                <ScrollView style={styles.boardList}>
-                  {boards.map((item) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.boardOption}
-                      onPress={() => handleBoardSelect(item)}
-                    >
-                      <Ionicons name="albums" size={24} color={colors.text.secondary} />
-                      <Text style={styles.boardOptionText}>{item.name}</Text>
-                      <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                
-                <TouchableOpacity
-                  style={styles.createBoardButton}
-                  onPress={() => setShowCreateBoard(true)}
-                >
-                  <Ionicons name="add-circle" size={24} color={colors.primary} />
-                  <Text style={styles.createBoardText}>Create New Board</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Save to Board</Text>
+                <TouchableOpacity onPress={() => {
+                  setShowSaveModal(false);
+                  setShowCreateBoard(false);
+                  setNewBoardName('');
+                }}>
+                  <Ionicons name="close" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-              </>
-            ) : (
-              <View style={styles.createBoardForm}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Board name"
-                  placeholderTextColor={colors.text.disabled}
-                  value={newBoardName}
-                  onChangeText={setNewBoardName}
-                  autoFocus
-                />
-                <View style={styles.createBoardActions}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => {
-                      setShowCreateBoard(false);
-                      setNewBoardName('');
-                    }}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.createButton}
-                    onPress={handleCreateAndSave}
-                  >
-                    <Text style={styles.createButtonText}>Create</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
-            )}
-          </View>
+
+              {!showCreateBoard ? (
+                <>
+                  <ScrollView style={styles.boardList}>
+                    {boards.map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={styles.boardOption}
+                        onPress={() => handleBoardSelect(item)}
+                      >
+                        <Ionicons name="albums" size={24} color={colors.text.secondary} />
+                        <Text style={styles.boardOptionText}>{item.name}</Text>
+                        <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  
+                  <TouchableOpacity
+                    style={styles.createBoardButton}
+                    onPress={() => setShowCreateBoard(true)}
+                  >
+                    <Ionicons name="add-circle" size={24} color={colors.primary} />
+                    <Text style={styles.createBoardText}>Create New Board</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={styles.createBoardForm}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Board name"
+                    placeholderTextColor={colors.text.disabled}
+                    value={newBoardName}
+                    onChangeText={setNewBoardName}
+                    autoFocus
+                  />
+                  <View style={styles.createBoardActions}>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => {
+                        setShowCreateBoard(false);
+                        setNewBoardName('');
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.createButton}
+                      onPress={handleCreateAndSave}
+                    >
+                      <Text style={styles.createButtonText}>Create</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 

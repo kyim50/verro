@@ -14,6 +14,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import Toast from 'react-native-toast-message';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
@@ -100,7 +102,7 @@ export default function EditProfileScreen() {
 
       // Update user profile
       const userResponse = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/users/me`,
+        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me`,
         {
           method: 'PUT',
           headers: {
@@ -137,7 +139,7 @@ export default function EditProfileScreen() {
 
         if (Object.keys(artistData).length > 0) {
           const artistResponse = await fetch(
-            `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/users/me/artist`,
+            `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me/artist`,
             {
               method: 'PUT',
               headers: {
@@ -162,17 +164,13 @@ export default function EditProfileScreen() {
         await fetchProfile(user.id, token);
       }
 
-      Alert.alert('Success!', 'Profile updated successfully', [
-        { 
-          text: 'OK', 
-          onPress: () => {
-            // Force a small delay to ensure stores are updated before navigation
-            setTimeout(() => {
-              router.back();
-            }, 100);
-          }
-        }
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: 'Profile updated successfully',
+        visibilityTime: 2000,
+      });
+      setTimeout(() => router.back(), 1000);
     } catch (error) {
       console.error('Error updating profile:', error);
       Alert.alert('Error', 'Failed to update profile. Please try again.');

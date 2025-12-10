@@ -149,7 +149,12 @@ export default function ProfileScreen() {
               await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure state clears
               await fetchProfile(user.id, token);
               
-              Alert.alert('Success', 'Artwork deleted successfully');
+              Toast.show({
+                type: 'success',
+                text1: 'Success',
+                text2: 'Artwork deleted successfully',
+                visibilityTime: 2000,
+              });
             } catch (error) {
               console.error('Error deleting artwork:', error);
               const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';

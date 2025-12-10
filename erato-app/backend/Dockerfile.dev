@@ -21,3 +21,4 @@ EXPOSE 3000
 # Start with nodemon for hot reloading
 CMD ["nodemon", "src/server.js"]
 
+

@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore, useProfileStore } from '../../store';
@@ -77,15 +78,22 @@ export default function EditArtistProfileScreen() {
         }
       );
 
-      // Refresh profile
+      // Refresh profile and update store
       await fetchProfile(user.id, token);
+      
+      // Also update auth store user data if artist info is nested there
+      const { fetchUser } = useAuthStore.getState();
+      if (fetchUser) {
+        await fetchUser();
+      }
 
-      Alert.alert('Success', 'Artist profile updated successfully', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: 'Artist profile updated successfully',
+        visibilityTime: 2000,
+      });
+      setTimeout(() => router.back(), 1000);
     } catch (error) {
       console.error('Error updating artist profile:', error);
       Alert.alert('Error', error.response?.data?.error || 'Failed to update artist profile');

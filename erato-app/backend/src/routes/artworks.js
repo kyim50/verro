@@ -499,12 +499,20 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
     }
 
     // Check if artwork is already in the board
-    const { data: existing } = await supabaseAdmin
+    // Use a fresh query (not cached) to check current state
+    const { data: existing, error: checkError } = await supabaseAdmin
       .from('board_artworks')
       .select('id')
       .eq('board_id', likedBoard.id)
       .eq('artwork_id', artworkId)
       .maybeSingle();
+
+    if (checkError) {
+      console.error('Error checking if artwork is in board:', checkError);
+      throw checkError;
+    }
+
+    console.log('Like check:', { artworkId, boardId: likedBoard.id, existing: !!existing });
 
     // Toggle behavior: if already liked, unlike it; otherwise like it
     if (existing) {
@@ -527,19 +535,52 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
 
       if (updateError) throw updateError;
 
-      // Invalidate cache
+      // Invalidate caches
       await cache.del(cacheKeys.artwork(artworkId));
+      await cache.del(cacheKeys.userBoards(req.user.id)); // Invalidate user boards cache
+      await cache.del(cacheKeys.board(likedBoard.id)); // Invalidate specific board cache
+      await cache.delPattern(`board:${likedBoard.id}:*`); // Invalidate all board-related caches
 
       res.json({ message: 'Artwork unliked', likeCount: updated.like_count });
     } else {
       // Not liked - like it
       // Add to board
-      await supabaseAdmin
+      const { data: insertResult, error: insertError } = await supabaseAdmin
         .from('board_artworks')
         .insert({
           board_id: likedBoard.id,
           artwork_id: artworkId
-        });
+        })
+        .select('id');
+
+      if (insertError) {
+        console.error('Error inserting artwork into liked board:', insertError);
+        throw insertError;
+      }
+
+      console.log('Artwork inserted into liked board:', { 
+        artworkId, 
+        boardId: likedBoard.id, 
+        insertResult,
+        insertError: null 
+      });
+
+      // Verify the insert actually worked by querying it back
+      const { data: verifyInsert, error: verifyError } = await supabaseAdmin
+        .from('board_artworks')
+        .select('id')
+        .eq('board_id', likedBoard.id)
+        .eq('artwork_id', artworkId)
+        .maybeSingle();
+
+      if (verifyError) {
+        console.error('Error verifying insert:', verifyError);
+      } else if (!verifyInsert) {
+        console.error('⚠️ CRITICAL: Insert succeeded but artwork not found in board!');
+        throw new Error('Failed to verify artwork was added to board');
+      } else {
+        console.log('✅ Verified artwork is in board:', verifyInsert);
+      }
 
       // Increment like_count
       const { data: updated, error: updateError } = await supabaseAdmin
@@ -549,11 +590,18 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
         .select('like_count')
         .single();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating artwork like_count:', updateError);
+        throw updateError;
+      }
 
-      // Invalidate cache
+      // Invalidate caches
       await cache.del(cacheKeys.artwork(artworkId));
+      await cache.del(cacheKeys.userBoards(req.user.id)); // Invalidate user boards cache
+      await cache.del(cacheKeys.board(likedBoard.id)); // Invalidate specific board cache
+      await cache.delPattern(`board:${likedBoard.id}:*`); // Invalidate all board-related caches
 
+      console.log('Successfully liked artwork:', { artworkId, likeCount: updated.like_count });
       res.json({ message: 'Artwork liked', likeCount: updated.like_count });
     }
   } catch (error) {
@@ -604,8 +652,11 @@ router.post('/:id/unlike', authenticate, async (req, res, next) => {
 
       if (updateError) throw updateError;
 
-      // Invalidate cache
+      // Invalidate caches
       await cache.del(cacheKeys.artwork(artworkId));
+      await cache.del(cacheKeys.userBoards(req.user.id)); // Invalidate user boards cache
+      await cache.del(cacheKeys.board(likedBoard.id)); // Invalidate specific board cache
+      await cache.delPattern(`board:${likedBoard.id}:*`); // Invalidate all board-related caches
 
       res.json({ message: 'Artwork unliked', likeCount: updated.like_count });
     } else {

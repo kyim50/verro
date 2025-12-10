@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
@@ -36,12 +38,16 @@ export default function EditPortfolioScreen() {
   useEffect(() => {
     // Load existing portfolio images
     if (profile?.artist?.portfolio_images && profile.artist.portfolio_images.length > 0) {
-      const existing = [...profile.artist.portfolio_images];
-      // Fill remaining slots with empty strings
-      while (existing.length < 6) {
-        existing.push('');
+      const existing = profile.artist.portfolio_images.filter(img => img && img.trim() !== '');
+      // Fill remaining slots with empty strings up to 6
+      const filled = [...existing];
+      while (filled.length < 6) {
+        filled.push('');
       }
-      setPortfolioImages(existing.slice(0, 6));
+      setPortfolioImages(filled.slice(0, 6));
+    } else if (profile?.artist) {
+      // Artist exists but no portfolio images - start with one empty slot
+      setPortfolioImages(['']);
     }
   }, [profile]);
 
@@ -69,7 +75,28 @@ export default function EditPortfolioScreen() {
   const removeImage = (index) => {
     const newImages = [...portfolioImages];
     newImages[index] = '';
-    setPortfolioImages(newImages);
+    // Remove empty slots from the end, but keep at least one slot
+    const filledImages = newImages.filter(img => img && img.trim() !== '');
+    // If we have filled images, show only those (minimum 1 slot for adding)
+    if (filledImages.length > 0) {
+      // Add empty slots up to 6, but remove trailing empty slots
+      const filtered = newImages.filter((img, i) => {
+        if (i === index) return false; // Remove the deleted one
+        return true;
+      });
+      // Remove trailing empty slots
+      while (filtered.length > 0 && !filtered[filtered.length - 1]) {
+        filtered.pop();
+      }
+      // Ensure at least 1 slot remains (or up to 6)
+      while (filtered.length < 6) {
+        filtered.push('');
+      }
+      setPortfolioImages(filtered.slice(0, 6));
+    } else {
+      // If all images removed, keep just one empty slot
+      setPortfolioImages(['']);
+    }
   };
 
   const handleSave = async () => {
@@ -85,7 +112,7 @@ export default function EditPortfolioScreen() {
 
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/users/me/artist`,
+        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me/artist`,
         {
           method: 'PUT',
           headers: {
@@ -103,9 +130,13 @@ export default function EditPortfolioScreen() {
       }
 
       await fetchProfile(user.id, token);
-      Alert.alert('Success!', 'Portfolio updated successfully', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: 'Portfolio updated successfully',
+        visibilityTime: 2000,
+      });
+      setTimeout(() => router.back(), 1000);
     } catch (error) {
       console.error('Error updating portfolio:', error);
       Alert.alert('Error', 'Failed to update portfolio. Please try again.');
