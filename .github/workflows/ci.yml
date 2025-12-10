@@ -22,14 +22,14 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: erato-app/backend/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: npm ci
 
       - name: Run linter
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: |
           if [ -f "package.json" ] && grep -q '"lint"' package.json; then
             npm run lint || echo "Linting issues found (non-blocking)"
@@ -39,13 +39,13 @@ jobs:
         continue-on-error: true
 
       - name: Check for security vulnerabilities
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: |
           npm audit --audit-level=high
         continue-on-error: true
 
       - name: Check package.json syntax
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: |
           node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
           echo "✅ package.json is valid"
@@ -63,26 +63,26 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: erato-app/frontend/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./frontend
+        working-directory: ./erato-app/frontend
         run: npm ci
 
       - name: Check for security vulnerabilities
-        working-directory: ./frontend
+        working-directory: ./erato-app/frontend
         run: |
           npm audit --audit-level=high
         continue-on-error: true
 
       - name: Check package.json syntax
-        working-directory: ./frontend
+        working-directory: ./erato-app/frontend
         run: |
           node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
           echo "✅ package.json is valid"
 
       - name: Validate app.json
-        working-directory: ./frontend
+        working-directory: ./erato-app/frontend
         run: |
           node -e "JSON.parse(require('fs').readFileSync('app.json', 'utf8'))"
           echo "✅ app.json is valid"

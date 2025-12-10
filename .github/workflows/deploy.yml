@@ -23,11 +23,11 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: npm ci
 
       - name: Run backend tests (if available)
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: |
           if [ -f "package.json" ] && grep -q '"test"' package.json; then
             npm test || echo "No tests configured or tests skipped"
@@ -37,7 +37,7 @@ jobs:
         continue-on-error: true
 
       - name: Check for security vulnerabilities
-        working-directory: ./backend
+        working-directory: ./erato-app/backend
         run: |
           npm audit --audit-level=high || true
         continue-on-error: true
