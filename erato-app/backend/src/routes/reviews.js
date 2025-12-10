@@ -53,9 +53,20 @@ router.post('/', authenticate, async (req, res) => {
     if (artistError) {
       console.error('Error fetching artist:', artistError);
       console.error('Commission artist_id:', commission.artist_id);
+      console.error('Commission ID:', commission.id);
+      console.error('User ID:', userId);
     }
 
-    const artistUserId = artist ? String(artist.user_id) : null;
+    if (!artist) {
+      console.error('Artist not found for commission:', {
+        commissionId: commission.id,
+        artistId: commission.artist_id,
+        userId: userId
+      });
+      return res.status(500).json({ error: 'Failed to verify commission ownership - artist not found' });
+    }
+
+    const artistUserId = String(artist.user_id);
 
     // Check if user is client or artist
     const isClient = clientId === userId;
@@ -65,13 +76,21 @@ router.post('/', authenticate, async (req, res) => {
       userId,
       clientId,
       artistUserId,
+      commissionArtistId: commission.artist_id,
       isClient,
       isArtist,
       commissionId: commission.id,
-      reviewType: type
+      reviewType: type,
+      artistFound: !!artist
     });
 
     if (!isClient && !isArtist) {
+      console.error('Authorization failed:', {
+        userId,
+        clientId,
+        artistUserId,
+        commissionId: commission.id
+      });
       return res.status(403).json({ error: 'You must be part of this commission to review' });
     }
 

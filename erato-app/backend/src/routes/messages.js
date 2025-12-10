@@ -530,18 +530,25 @@ router.delete('/conversations/:id', authenticate, async (req, res) => {
       .select('conversation_id')
       .eq('conversation_id', conversationId)
       .eq('user_id', req.user.id)
-      .single();
+      .maybeSingle();
 
     if (partError || !participation) {
+      console.error('Conversation deletion authorization error:', partError);
+      console.error('Conversation ID:', conversationId, 'User ID:', req.user.id);
       return res.status(403).json({ error: 'Access denied' });
     }
 
     // Remove user from conversation participants (don't delete conversation if it has a commission)
-    const { data: conversation } = await supabaseAdmin
+    const { data: conversation, error: convError } = await supabaseAdmin
       .from('conversations')
       .select('commission_id')
       .eq('id', conversationId)
-      .single();
+      .maybeSingle();
+
+    if (convError) {
+      console.error('Error fetching conversation:', convError);
+      return res.status(500).json({ error: 'Failed to fetch conversation' });
+    }
 
     if (conversation?.commission_id) {
       // Conversation has a commission - just remove user from participants
