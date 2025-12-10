@@ -84,6 +84,11 @@ echo -e "${YELLOW}  Stopping old backend container...${NC}"
 $SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE stop backend 2>/dev/null || true"
 echo -e "${YELLOW}  Removing old backend container...${NC}"
 $SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE rm -f backend 2>/dev/null || true"
+
+# Clean up Docker to free space and fix potential issues
+echo -e "${YELLOW}  Cleaning up Docker (pruning unused resources)...${NC}"
+$SSH_CMD "docker system prune -f --volumes 2>/dev/null || true"
+
 # Build and start with force recreate (no interactive prompts)
 echo -e "${YELLOW}  Building and starting new backend container...${NC}"
 $SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE up -d --build --force-recreate --no-deps backend"
