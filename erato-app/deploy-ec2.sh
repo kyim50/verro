@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 # Configuration - UPDATE THESE VALUES
 EC2_USER="ubuntu"
 EC2_IP="3.18.213.189"
-EC2_KEY_PATH=""  # Path to your .pem key file (leave empty to use SSH config)
+EC2_KEY_PATH="/Users/kimanimcleish/Desktop/Projects/verro/erato-app/verro.pem"  # Path to your .pem key file (leave empty to use SSH config)
 PROJECT_PATH="~/erato-app"  # Path to project on EC2 (adjust if different)
 COMPOSE_FILE="docker-compose.prod.yml"
 
