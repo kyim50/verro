@@ -258,9 +258,8 @@ router.get('/', authenticate, async (req, res) => {
     console.log(`- Found ${clientsResult.data?.length || 0} clients`);
     console.log(`- Found ${artistsResult.data?.length || 0} artists`);
     console.log(`- Found ${artistUsers?.length || 0} artist users`);
-    console.log(`- Commission artist IDs:`, artistIds);
+    console.log(`- Commission artist IDs (user_ids):`, artistIds);
     console.log(`- Artist IDs found in DB:`, artistsResult.data?.map(a => a.id) || []);
-    console.log(`- Artist user IDs to fetch:`, artistUserIds);
     console.log(`- Artist map keys:`, Array.from(artistMap.keys()));
     
     if (commissions.length > 0) {
