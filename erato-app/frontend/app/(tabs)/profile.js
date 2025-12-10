@@ -51,12 +51,24 @@ export default function ProfileScreen() {
 
   // Watch for profile store changes (from portfolio/commission updates) to refresh UI
   useEffect(() => {
-    if (profile?.artist?.portfolio_images) {
-      // Profile artist data changed, update avatar key if needed
+    // Force component re-render when artist data changes
+    // This effect doesn't need to do anything - just watching these values triggers re-render
+    // But we can update avatar key if avatar changed
+    if (profile?.artist) {
       const newAvatarUrl = profile?.avatar_url || user?.avatar_url;
-      setAvatarKey(prev => prev + 1);
+      if (newAvatarUrl) {
+        setAvatarKey(prev => prev + 1);
+      }
     }
-  }, [profile?.artist?.portfolio_images, profile?.artist?.commission_status, profile?.artist?.min_price, profile?.artist?.max_price]);
+  }, [
+    profile?.artist?.portfolio_images?.length, 
+    profile?.artist?.commission_status, 
+    profile?.artist?.min_price, 
+    profile?.artist?.max_price,
+    profile?.artist?.turnaround_days,
+    profile?.artist?.specialties?.join(','), // Convert array to string for comparison
+    profile?.artist // Watch entire artist object
+  ]);
 
   useEffect(() => {
     // Only reset if user actually changed (not on every mount)

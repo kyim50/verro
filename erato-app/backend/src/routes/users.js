@@ -192,6 +192,11 @@ router.put('/me/artist', authenticate, async (req, res) => {
       updates.portfolio_images = filteredImages;
     }
 
+    console.log('Updating artist profile with:', JSON.stringify(updates, null, 2));
+    if (updates.portfolio_images) {
+      console.log('Portfolio images to save (count:', updates.portfolio_images.length, '):', updates.portfolio_images);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('artists')
       .update(updates)
@@ -199,12 +204,38 @@ router.put('/me/artist', authenticate, async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
-
-    // Filter out empty portfolio images in response
-    if (data.portfolio_images) {
-      data.portfolio_images = data.portfolio_images.filter(img => img && img.trim() !== '');
+    if (error) {
+      console.error('Database error updating artist profile:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      throw error;
     }
+
+    console.log('Database update successful. Raw response:', JSON.stringify(data, null, 2));
+
+    // Ensure portfolio_images is an array and filter out empty strings
+    if (data.portfolio_images) {
+      // Handle case where portfolio_images might be stored as string (JSON)
+      if (typeof data.portfolio_images === 'string') {
+        try {
+          data.portfolio_images = JSON.parse(data.portfolio_images);
+        } catch (e) {
+          console.error('Error parsing portfolio_images as JSON:', e);
+          data.portfolio_images = [];
+        }
+      }
+      // Filter out empty strings and ensure all entries are valid URLs
+      data.portfolio_images = (Array.isArray(data.portfolio_images) ? data.portfolio_images : [])
+        .filter(img => img && typeof img === 'string' && img.trim() !== '');
+      console.log('Filtered portfolio images (count:', data.portfolio_images.length, '):', data.portfolio_images);
+    } else {
+      console.log('No portfolio_images in response, setting to empty array');
+      data.portfolio_images = [];
+    }
+
+    // Invalidate cache for this user's profile to ensure fresh data on next fetch
+    const { cache, cacheKeys } = await import('../utils/cache.js');
+    await cache.del(cacheKeys.userProfile(req.user.id));
+    console.log('Cache invalidated for user:', req.user.id);
 
     res.json(data);
   } catch (error) {
