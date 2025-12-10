@@ -2,6 +2,7 @@
 
 # EC2 Deployment Script
 # This script automates the deployment of backend changes to EC2
+# Configuration is loaded from deploy.config (create from deploy.config.example)
 
 set -e  # Exit on error
 
@@ -11,12 +12,39 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Configuration - UPDATE THESE VALUES
-EC2_USER="ubuntu"
-EC2_IP="3.18.213.189"
-EC2_KEY_PATH="/Users/kimanimcleish/Desktop/Projects/verro/erato-app/verro.pem"  # Path to your .pem key file (leave empty to use SSH config)
-PROJECT_PATH=""  # Path to project on EC2 (will auto-detect if empty)
-COMPOSE_FILE="docker-compose.prod.yml"
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/deploy.config"
+
+if [ -f "$CONFIG_FILE" ]; then
+    echo -e "${BLUE}Loading configuration from deploy.config...${NC}"
+    source "$CONFIG_FILE"
+else
+    echo -e "${RED}Error: deploy.config not found${NC}"
+    echo -e "${YELLOW}Please copy deploy.config.example to deploy.config and fill in your values${NC}"
+    exit 1
+fi
+
+# Validate required variables
+if [ -z "$EC2_USER" ] || [ -z "$EC2_IP" ]; then
+    echo -e "${RED}Error: EC2_USER and EC2_IP must be set in deploy.config${NC}"
+    exit 1
+fi
+
+# Set EC2_HOST if not provided
+if [ -z "$EC2_HOST" ]; then
+    EC2_HOST="${EC2_USER}@${EC2_IP}"
+fi
+
+# Set COMPOSE_FILE if not provided
+if [ -z "$COMPOSE_FILE" ]; then
+    COMPOSE_FILE="docker-compose.prod.yml"
+fi
+
+# Use default SSH key if not provided
+if [ -z "$EC2_KEY_PATH" ]; then
+    EC2_KEY_PATH="${HOME}/.ssh/id_rsa"
+fi
 
 echo -e "${GREEN}🚀 Starting EC2 Deployment${NC}"
 echo ""
@@ -44,32 +72,15 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 # Build SSH command
-if [ -z "$EC2_KEY_PATH" ]; then
-    SSH_CMD="ssh $EC2_USER@$EC2_IP"
-else
-    SSH_CMD="ssh -i $EC2_KEY_PATH $EC2_USER@$EC2_IP"
-fi
+SSH_CMD="ssh -i $EC2_KEY_PATH -o StrictHostKeyChecking=no $EC2_HOST"
 
 # Auto-detect project path if not set
 if [ -z "$PROJECT_PATH" ]; then
     echo -e "${YELLOW}🔍 Auto-detecting project path on EC2...${NC}"
-    # Check common locations first
     PROJECT_PATH=$($SSH_CMD "if [ -d ~/erato-app ]; then echo ~/erato-app; elif [ -d /home/$EC2_USER/erato-app ]; then echo /home/$EC2_USER/erato-app; else find ~ /home/$EC2_USER -maxdepth 3 -type d -name 'erato-app' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -1; fi")
     if [ -z "$PROJECT_PATH" ]; then
         echo -e "${RED}❌ Could not find erato-app directory on EC2${NC}"
-        echo -e "${YELLOW}Please manually set PROJECT_PATH in the script${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✅ Found project at: $PROJECT_PATH${NC}"
-fi
-
-# Auto-detect project path if not set
-if [ -z "$PROJECT_PATH" ]; then
-    echo -e "${YELLOW}🔍 Auto-detecting project path on EC2...${NC}"
-    PROJECT_PATH=$($SSH_CMD "find ~ -type d -name 'erato-app' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -1 || find /home/$EC2_USER -type d -name 'erato-app' -not -path '*/node_modules/*' 2>/dev/null | head -1")
-    if [ -z "$PROJECT_PATH" ]; then
-        echo -e "${RED}❌ Could not find erato-app directory on EC2${NC}"
-        echo -e "${YELLOW}Please manually set PROJECT_PATH in the script${NC}"
+        echo -e "${YELLOW}Please manually set PROJECT_PATH in deploy.config${NC}"
         exit 1
     fi
     echo -e "${GREEN}✅ Found project at: $PROJECT_PATH${NC}"
@@ -96,12 +107,17 @@ $SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE up -d --build --fo
 echo -e "${YELLOW}⏳ Waiting for backend to be healthy...${NC}"
 sleep 5
 
+# Set health check URL if not provided
+if [ -z "$HEALTH_CHECK_URL" ]; then
+    HEALTH_CHECK_URL="http://${EC2_IP}:3000/health"
+fi
+
 # Health check
-HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://$EC2_IP:3000/health || echo "000")
+HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_CHECK_URL" || echo "000")
 
 if [ "$HEALTH_CHECK" = "200" ]; then
     echo -e "${GREEN}✅ Deployment successful! Backend is healthy.${NC}"
-    echo -e "${GREEN}📍 Backend URL: http://$EC2_IP:3000${NC}"
+    echo -e "${GREEN}📍 Backend URL: http://${EC2_IP}:3000${NC}"
 else
     echo -e "${RED}⚠️  Warning: Health check returned status $HEALTH_CHECK${NC}"
     echo -e "${YELLOW}Check backend logs:${NC}"
@@ -110,4 +126,3 @@ fi
 
 echo ""
 echo -e "${GREEN}✨ Deployment complete!${NC}"
-

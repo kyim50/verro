@@ -33,9 +33,22 @@ const app = express();
 const httpServer = createServer(app);
 
 // Socket.io setup for real-time messaging
+// Support both domain and localhost for development
+const allowedOrigins = process.env.FRONTEND_URL 
+  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+  : ['http://localhost:19006', 'https://api.verrocio.com'];
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:19006',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -63,10 +76,24 @@ app.use(compression({
   level: 6, // Compression level (1-9, 6 is good balance)
   threshold: 1024, // Only compress responses > 1KB
 }));
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:19006',
+// CORS configuration - support both domain and localhost
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    const allowedOrigins = process.env.FRONTEND_URL 
+      ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+      : ['http://localhost:19006', 'https://api.verrocio.com'];
+    
+    if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-}));
+};
+app.use(cors(corsOptions));
 app.use(performanceMonitor); // Add performance monitoring before routes
 app.use(morgan('dev'));
 app.use(express.json());

@@ -19,8 +19,12 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSExceptionDomains": {
-            "3.18.213.189": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
+            "verrocio.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSIncludesSubdomains": true
+            },
+            "api.verrocio.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
               "NSIncludesSubdomains": true
             }
           }
@@ -58,8 +62,8 @@
       "eas": {
         "projectId": "c28d6897-a427-4bbb-8f35-74abae16eef0"
       },
-      "EXPO_PUBLIC_API_URL": "http://3.18.213.189:3000/api",
-      "EXPO_PUBLIC_SOCKET_URL": "http://3.18.213.189:3000"
+      "EXPO_PUBLIC_API_URL": "https://api.verrocio.com/api",
+      "EXPO_PUBLIC_SOCKET_URL": "https://api.verrocio.com"
     },
     "owner": "kyim50"
   }
