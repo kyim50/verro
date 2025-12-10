@@ -186,7 +186,6 @@ export default function BoardsScreen() {
         `${API_URL}/reviews`,
         {
           commission_id: reviewTarget.commissionId,
-          reviewee_id: reviewTarget.userId,
           rating,
           comment,
           review_type: reviewTarget.reviewType

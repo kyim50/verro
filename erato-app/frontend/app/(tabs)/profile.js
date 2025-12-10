@@ -179,11 +179,13 @@ export default function ProfileScreen() {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: async () => {
+              onPress: async () => {
             try {
+              // Filter out any empty/blank images before sending
+              const cleanedImages = updated.filter(img => img && img.trim() !== '');
               await axios.put(
                 `${API_URL}/users/me/artist`,
-                { portfolio_images: updated },
+                { portfolio_images: cleanedImages },
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
               );
               await fetchProfile(user.id, token);
@@ -377,16 +379,18 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {profile.artist.portfolio_images && profile.artist.portfolio_images.length > 0 ? (
+                {profile.artist.portfolio_images && profile.artist.portfolio_images.filter(img => img && img.trim() !== '').length > 0 ? (
                   <View style={styles.portfolioGrid}>
-                    {profile.artist.portfolio_images.map((imageUrl, index) => (
+                    {profile.artist.portfolio_images.filter(img => img && img.trim() !== '').map((imageUrl, index) => (
                       <TouchableOpacity
                         key={index}
                         style={styles.portfolioItem}
                         activeOpacity={0.85}
                         onLongPress={() => {
                           if (isOwnProfile) {
-                            handleDeletePortfolioImage(index);
+                            // Find the original index in the full array
+                            const originalIndex = profile.artist.portfolio_images.indexOf(imageUrl);
+                            handleDeletePortfolioImage(originalIndex);
                           }
                         }}
                       >

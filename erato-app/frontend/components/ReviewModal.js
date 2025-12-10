@@ -7,6 +7,11 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
@@ -81,102 +86,117 @@ export default function ReviewModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.title}>
-                {isArtistReview ? 'Review Client' : 'Review Artist'}
-              </Text>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* User Info */}
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{userName}</Text>
-              <Text style={styles.subtitle}>
-                How would you rate your experience working with {isArtistReview ? 'this client' : 'this artist'}?
-              </Text>
-            </View>
-
-            {/* Star Rating */}
-            <View style={styles.starsContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => setRating(star)}
-                  onPressIn={() => setHoveredRating(star)}
-                  onPressOut={() => setHoveredRating(0)}
-                  activeOpacity={0.7}
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.overlayInner}>
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContainer}>
+                <ScrollView
+                  style={styles.modalContent}
+                  contentContainerStyle={styles.modalContentInner}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
                 >
-                  <Ionicons
-                    name={star <= displayRating ? "star" : "star-outline"}
-                    size={48}
-                    color={star <= displayRating ? colors.status.warning : colors.text.disabled}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
+                  {/* Header */}
+                  <View style={styles.header}>
+                    <Text style={styles.title}>
+                      {isArtistReview ? 'Review Client' : 'Review Artist'}
+                    </Text>
+                    <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                      <Ionicons name="close" size={24} color={colors.text.primary} />
+                    </TouchableOpacity>
+                  </View>
 
-            {rating > 0 && (
-              <Text style={styles.ratingText}>
-                {rating === 5 && 'Excellent!'}
-                {rating === 4 && 'Great!'}
-                {rating === 3 && 'Good'}
-                {rating === 2 && 'Fair'}
-                {rating === 1 && 'Poor'}
-              </Text>
-            )}
+                  {/* User Info */}
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{userName}</Text>
+                    <Text style={styles.subtitle}>
+                      How would you rate your experience working with {isArtistReview ? 'this client' : 'this artist'}?
+                    </Text>
+                  </View>
 
-            {/* Comment Input */}
-            <View style={styles.commentContainer}>
-              <Text style={styles.commentLabel}>Share your experience (optional)</Text>
-              <TextInput
-                style={styles.commentInput}
-                placeholder="Tell others about your experience..."
-                placeholderTextColor={colors.text.disabled}
-                value={comment}
-                onChangeText={setComment}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                maxLength={500}
-              />
-              <Text style={styles.charCount}>{comment.length}/500</Text>
-            </View>
+                  {/* Star Rating */}
+                  <View style={styles.starsContainer}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => setRating(star)}
+                        onPressIn={() => setHoveredRating(star)}
+                        onPressOut={() => setHoveredRating(0)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={star <= displayRating ? "star" : "star-outline"}
+                          size={48}
+                          color={star <= displayRating ? colors.status.warning : colors.text.disabled}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.button, styles.skipButton]}
-                onPress={handleClose}
-                disabled={submitting}
-              >
-                <Text style={styles.skipButtonText}>Skip</Text>
-              </TouchableOpacity>
+                  {rating > 0 && (
+                    <Text style={styles.ratingText}>
+                      {rating === 5 && 'Excellent!'}
+                      {rating === 4 && 'Great!'}
+                      {rating === 3 && 'Good'}
+                      {rating === 2 && 'Fair'}
+                      {rating === 1 && 'Poor'}
+                    </Text>
+                  )}
 
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.submitButton,
-                  rating === 0 && styles.submitButtonDisabled,
-                ]}
-                onPress={handleSubmit}
-                disabled={submitting || rating === 0}
-              >
-                {submitting ? (
-                  <Text style={styles.submitButtonText}>Submitting...</Text>
-                ) : (
-                  <Text style={styles.submitButtonText}>Submit Review</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                  {/* Comment Input */}
+                  <View style={styles.commentContainer}>
+                    <Text style={styles.commentLabel}>Share your experience (optional)</Text>
+                    <TextInput
+                      style={styles.commentInput}
+                      placeholder="Tell others about your experience..."
+                      placeholderTextColor={colors.text.disabled}
+                      value={comment}
+                      onChangeText={setComment}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                      maxLength={500}
+                    />
+                    <Text style={styles.charCount}>{comment.length}/500</Text>
+                  </View>
+
+                  {/* Action Buttons */}
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.skipButton]}
+                      onPress={handleClose}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.skipButtonText}>Skip</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.button,
+                        styles.submitButton,
+                        rating === 0 && styles.submitButtonDisabled,
+                      ]}
+                      onPress={handleSubmit}
+                      disabled={submitting || rating === 0}
+                    >
+                      {submitting ? (
+                        <Text style={styles.submitButtonText}>Submitting...</Text>
+                      ) : (
+                        <Text style={styles.submitButtonText}>Submit Review</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -187,17 +207,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  overlayInner: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: spacing.lg,
   },
   modalContainer: {
     width: '100%',
     maxWidth: 500,
+    maxHeight: '90%',
   },
   modalContent: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
-    padding: spacing.lg,
     ...shadows.large,
+  },
+  modalContentInner: {
+    padding: spacing.lg,
   },
   header: {
     flexDirection: 'row',

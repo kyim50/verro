@@ -255,6 +255,8 @@ const styles = StyleSheet.create({
   slide: {
     width,
     justifyContent: 'center',
+    flex: 1,
+    paddingVertical: spacing.md,
   },
   slideContent: {
     paddingHorizontal: spacing.xl,
@@ -282,12 +284,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: spacing.xl,
+    flexShrink: 1,
   },
   tipsContainer: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginTop: spacing.md,
+    maxHeight: 200,
   },
   tipsTitle: {
     ...typography.bodyBold,

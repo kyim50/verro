@@ -59,24 +59,71 @@ router.post('/request', authenticate, async (req, res) => {
 
     if (commissionError) throw commissionError;
 
-    // Create a conversation for this commission
-    const { data: conversation, error: conversationError } = await supabaseAdmin
-      .from('conversations')
-      .insert({
-        commission_id: commission.id
-      })
-      .select()
-      .single();
+    // Check if there's an existing conversation between client and artist
+    // First, get all conversations the client is in
+    const { data: clientConversations } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', req.user.id);
 
-    if (conversationError) throw conversationError;
+    let conversation = null;
 
-    // Add both participants to the conversation
-    const participants = [
-      { conversation_id: conversation.id, user_id: req.user.id },
-      { conversation_id: conversation.id, user_id: artist_id }
-    ];
+    if (clientConversations && clientConversations.length > 0) {
+      const conversationIds = clientConversations.map(p => p.conversation_id);
+      
+      // Check each conversation to see if it has both client and artist
+      for (const convId of conversationIds) {
+        const { data: convParticipants } = await supabaseAdmin
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', convId);
 
-    await supabaseAdmin.from('conversation_participants').insert(participants);
+        if (convParticipants) {
+          const participantIds = convParticipants.map(p => p.user_id);
+          // Check if both client and artist are in this conversation
+          if (participantIds.includes(req.user.id) && participantIds.includes(artist_id)) {
+            // Found existing conversation - get it
+            const { data: existingConv } = await supabaseAdmin
+              .from('conversations')
+              .select('*')
+              .eq('id', convId)
+              .single();
+            
+            if (existingConv) {
+              conversation = existingConv;
+              // Update the conversation to link it to this commission
+              await supabaseAdmin
+                .from('conversations')
+                .update({ commission_id: commission.id })
+                .eq('id', convId);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // If no existing conversation found, create a new one
+    if (!conversation) {
+      const { data: newConversation, error: conversationError } = await supabaseAdmin
+        .from('conversations')
+        .insert({
+          commission_id: commission.id
+        })
+        .select()
+        .single();
+
+      if (conversationError) throw conversationError;
+      conversation = newConversation;
+
+      // Add both participants to the conversation (only if new conversation)
+      const participants = [
+        { conversation_id: conversation.id, user_id: req.user.id },
+        { conversation_id: conversation.id, user_id: artist_id }
+      ];
+
+      await supabaseAdmin.from('conversation_participants').insert(participants);
+    }
 
     // Send initial message
     await supabaseAdmin.from('messages').insert({
