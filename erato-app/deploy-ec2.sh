@@ -79,7 +79,14 @@ echo -e "${YELLOW}📥 Pulling latest changes on EC2...${NC}"
 $SSH_CMD "cd $PROJECT_PATH && git pull"
 
 echo -e "${YELLOW}🔨 Rebuilding Docker containers...${NC}"
-$SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE up -d --build backend"
+# Stop and remove old container first to avoid image conflicts
+echo -e "${YELLOW}  Stopping old backend container...${NC}"
+$SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE stop backend 2>/dev/null || true"
+echo -e "${YELLOW}  Removing old backend container...${NC}"
+$SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE rm -f backend 2>/dev/null || true"
+# Build and start with force recreate (no interactive prompts)
+echo -e "${YELLOW}  Building and starting new backend container...${NC}"
+$SSH_CMD "cd $PROJECT_PATH && docker-compose -f $COMPOSE_FILE up -d --build --force-recreate --no-deps backend"
 
 echo -e "${YELLOW}⏳ Waiting for backend to be healthy...${NC}"
 sleep 5
