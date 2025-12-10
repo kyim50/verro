@@ -63,7 +63,9 @@
         "projectId": "c28d6897-a427-4bbb-8f35-74abae16eef0"
       },
       "EXPO_PUBLIC_API_URL": "https://api.verrocio.com/api",
-      "EXPO_PUBLIC_SOCKET_URL": "https://api.verrocio.com"
+      "EXPO_PUBLIC_SOCKET_URL": "https://api.verrocio.com",
+      "EXPO_PUBLIC_SUPABASE_URL": "",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": ""
     },
     "owner": "kyim50"
   }

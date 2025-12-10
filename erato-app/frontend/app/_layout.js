@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
 import LoadingScreen from './auth/loading';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -13,6 +14,33 @@ export default function RootLayout() {
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
   useEffect(() => {
+    // Set up global error handlers
+    const errorHandler = (error, isFatal) => {
+      console.error('Global error:', error, 'Fatal:', isFatal);
+      // Don't crash on non-fatal errors
+      if (isFatal) {
+        // Could show error screen here
+        console.error('Fatal error occurred:', error);
+      }
+    };
+
+    // Handle unhandled promise rejections
+    const rejectionHandler = (reason, promise) => {
+      console.error('Unhandled promise rejection:', reason, promise);
+      // Don't crash - just log
+    };
+
+    // Set up error handlers
+    if (ErrorUtils) {
+      const originalHandler = ErrorUtils.getGlobalHandler();
+      ErrorUtils.setGlobalHandler((error, isFatal) => {
+        errorHandler(error, isFatal);
+        if (originalHandler) {
+          originalHandler(error, isFatal);
+        }
+      });
+    }
+
     // Debug: Log API URLs being used
     const apiURL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
     const socketURL = Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL || process.env.EXPO_PUBLIC_SOCKET_URL;
@@ -21,6 +49,15 @@ export default function RootLayout() {
     console.log('🔍 Constants.expoConfig.extra:', Constants.expoConfig?.extra);
 
     let mounted = true;
+    
+    // Safety timeout - ensure app loads even if something hangs
+    const safetyTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('App initialization timeout - forcing load');
+        setIsLoading(false);
+      }
+    }, 10000); // 10 second max wait
+    
     const initializeApp = async () => {
       try {
         if (!mounted) return;
@@ -32,18 +69,29 @@ export default function RootLayout() {
           } catch (error) {
             // fetchUser will handle clearing invalid tokens
             console.log('Failed to fetch user, token may be invalid:', error);
+            // Don't crash - continue without user data
           }
         }
       } catch (error) {
         console.error('Error initializing app:', error);
+        // Don't crash - continue anyway
       } finally {
         if (mounted) {
-          // Show loading screen for at least 1.5 seconds
-          setTimeout(() => {
+          clearTimeout(safetyTimeout);
+          // Show loading screen for at least 1.5 seconds but max 3 seconds
+          const minWait = setTimeout(() => {
             if (mounted) {
               setIsLoading(false);
             }
           }, 1500);
+          
+          // But also ensure we don't wait too long
+          setTimeout(() => {
+            clearTimeout(minWait);
+            if (mounted) {
+              setIsLoading(false);
+            }
+          }, 3000);
         }
       }
     };
@@ -56,6 +104,7 @@ export default function RootLayout() {
     
     return () => {
       mounted = false;
+      clearTimeout(safetyTimeout);
     };
   }, []);
 
@@ -64,20 +113,22 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: '#000000' },
-          animation: 'fade',
-          gestureEnabled: true,
-          gestureDirection: 'horizontal',
-          animationDuration: 200,
-          fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
-        }}
-      />
-      <Toast />
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: '#000000' },
+            animation: 'fade',
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
+            animationDuration: 200,
+            fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
+          }}
+        />
+        <Toast />
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

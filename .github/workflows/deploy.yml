@@ -54,19 +54,50 @@ jobs:
           ssh-keyscan -H ${{ secrets.EC2_IP }} >> ~/.ssh/known_hosts || true
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Test EC2 connection
+        run: |
+          echo "Testing connection to EC2 instance..."
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              -o BatchMode=yes \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
+              "echo 'Connection successful'" || {
+            echo "❌ Failed to connect to EC2 instance"
+            echo "Please check:"
+            echo "1. EC2 instance is running"
+            echo "2. Security Group allows SSH (port 22) from GitHub Actions IPs"
+            echo "3. EC2_IP and EC2_USER secrets are correct"
+            echo ""
+            echo "Note: GitHub Actions IPs change frequently. Consider:"
+            echo "- Allowing SSH from 0.0.0.0/0 (less secure but works)"
+            echo "- Or use GitHub's IP ranges: https://api.github.com/meta"
+            exit 1
+          }
+          echo "✅ Connection successful"
+
       - name: Detect project path on EC2
         id: detect-path
         run: |
-          PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
+          PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
             "if [ -d ~/erato-app ]; then echo ~/erato-app; \
              elif [ -d /home/${{ secrets.EC2_USER }}/erato-app ]; then echo /home/${{ secrets.EC2_USER }}/erato-app; \
              else find ~ -maxdepth 3 -type d -name 'erato-app' 2>/dev/null | head -1; fi")
+          
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "❌ Could not detect project path on EC2"
+            exit 1
+          fi
+          
           echo "project_path=$PROJECT_PATH" >> $GITHUB_OUTPUT
-          echo "Detected project path: $PROJECT_PATH"
+          echo "✅ Detected project path: $PROJECT_PATH"
 
       - name: Pull latest code on EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
             "cd ${{ steps.detect-path.outputs.project_path }} && \
              git fetch origin && \
              git reset --hard origin/main && \
@@ -74,7 +105,9 @@ jobs:
 
       - name: Rebuild and restart Docker container
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} << 'EOF'
             PROJECT_PATH="${{ steps.detect-path.outputs.project_path }}"
             COMPOSE_FILE="docker-compose.prod.yml"
             
