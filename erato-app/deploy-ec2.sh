@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 EC2_USER="ubuntu"
 EC2_IP="3.18.213.189"
 EC2_KEY_PATH="/Users/kimanimcleish/Desktop/Projects/verro/erato-app/verro.pem"  # Path to your .pem key file (leave empty to use SSH config)
-PROJECT_PATH="~/erato-app"  # Path to project on EC2 (adjust if different)
+PROJECT_PATH=""  # Path to project on EC2 (will auto-detect if empty)
 COMPOSE_FILE="docker-compose.prod.yml"
 
 echo -e "${GREEN}🚀 Starting EC2 Deployment${NC}"
@@ -48,6 +48,31 @@ if [ -z "$EC2_KEY_PATH" ]; then
     SSH_CMD="ssh $EC2_USER@$EC2_IP"
 else
     SSH_CMD="ssh -i $EC2_KEY_PATH $EC2_USER@$EC2_IP"
+fi
+
+# Auto-detect project path if not set
+if [ -z "$PROJECT_PATH" ]; then
+    echo -e "${YELLOW}🔍 Auto-detecting project path on EC2...${NC}"
+    # Check common locations first
+    PROJECT_PATH=$($SSH_CMD "if [ -d ~/erato-app ]; then echo ~/erato-app; elif [ -d /home/$EC2_USER/erato-app ]; then echo /home/$EC2_USER/erato-app; else find ~ /home/$EC2_USER -maxdepth 3 -type d -name 'erato-app' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -1; fi")
+    if [ -z "$PROJECT_PATH" ]; then
+        echo -e "${RED}❌ Could not find erato-app directory on EC2${NC}"
+        echo -e "${YELLOW}Please manually set PROJECT_PATH in the script${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Found project at: $PROJECT_PATH${NC}"
+fi
+
+# Auto-detect project path if not set
+if [ -z "$PROJECT_PATH" ]; then
+    echo -e "${YELLOW}🔍 Auto-detecting project path on EC2...${NC}"
+    PROJECT_PATH=$($SSH_CMD "find ~ -type d -name 'erato-app' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -1 || find /home/$EC2_USER -type d -name 'erato-app' -not -path '*/node_modules/*' 2>/dev/null | head -1")
+    if [ -z "$PROJECT_PATH" ]; then
+        echo -e "${RED}❌ Could not find erato-app directory on EC2${NC}"
+        echo -e "${YELLOW}Please manually set PROJECT_PATH in the script${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Found project at: $PROJECT_PATH${NC}"
 fi
 
 echo -e "${YELLOW}📥 Pulling latest changes on EC2...${NC}"
