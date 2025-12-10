@@ -14,29 +14,43 @@ export default function RootLayout() {
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
   useEffect(() => {
-    // Set up global error handlers
+    // Set up global error handlers FIRST - before anything else
     const errorHandler = (error, isFatal) => {
-      console.error('Global error:', error, 'Fatal:', isFatal);
+      console.error('🚨 Global error:', error, 'Fatal:', isFatal);
+      // Log to console for debugging
+      if (__DEV__) {
+        console.error('Error stack:', error?.stack);
+        console.error('Error message:', error?.message);
+      }
       // Don't crash on non-fatal errors
       if (isFatal) {
-        // Could show error screen here
-        console.error('Fatal error occurred:', error);
+        console.error('🚨 Fatal error occurred:', error);
+        // Try to show error screen instead of crashing
+        try {
+          setIsLoading(false);
+        } catch (e) {
+          console.error('Failed to handle fatal error:', e);
+        }
       }
     };
 
     // Handle unhandled promise rejections
-    const rejectionHandler = (reason, promise) => {
-      console.error('Unhandled promise rejection:', reason, promise);
-      // Don't crash - just log
-    };
+    if (typeof Promise !== 'undefined' && Promise.reject) {
+      const originalRejection = Promise.reject;
+      // Note: Can't override Promise.reject easily, but we can catch in our code
+    }
 
     // Set up error handlers
-    if (ErrorUtils) {
+    if (typeof ErrorUtils !== 'undefined' && ErrorUtils.setGlobalHandler) {
       const originalHandler = ErrorUtils.getGlobalHandler();
       ErrorUtils.setGlobalHandler((error, isFatal) => {
         errorHandler(error, isFatal);
         if (originalHandler) {
-          originalHandler(error, isFatal);
+          try {
+            originalHandler(error, isFatal);
+          } catch (e) {
+            console.error('Original error handler failed:', e);
+          }
         }
       });
     }
