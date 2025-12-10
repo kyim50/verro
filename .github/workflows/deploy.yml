@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: erato-app/backend/package-lock.json
 
       - name: Install backend dependencies
         working-directory: ./erato-app/backend
