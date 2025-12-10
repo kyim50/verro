@@ -8,6 +8,10 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL ||
                 process.env.EXPO_PUBLIC_API_URL || 
                 'http://3.18.213.189:3000/api';
 
+// Configure axios defaults
+axios.defaults.timeout = 15000; // 15 second timeout for all requests
+axios.defaults.headers.common['Content-Type'] = 'application/json';
+
 // Axios interceptor to handle 401 errors globally
 // This will be set up after the store is created to avoid circular imports
 let authStoreRef = null;
@@ -18,13 +22,25 @@ export const setAuthStoreRef = (store) => {
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Handle network errors gracefully
+    if (!error.response) {
+      console.warn('Network error - no response from server:', error.message);
+      // Don't crash on network errors, just log them
+      return Promise.reject(error);
+    }
+    
     if (error.response?.status === 401 && authStoreRef) {
       // Token is invalid, clear it
-      const authStore = authStoreRef.getState();
-      if (authStore.token) {
-        console.log('401 detected, clearing invalid token...');
-        await authStore.setToken(null);
-        authStore.setUser(null);
+      try {
+        const authStore = authStoreRef.getState();
+        if (authStore.token) {
+          console.log('401 detected, clearing invalid token...');
+          await authStore.setToken(null);
+          authStore.setUser(null);
+        }
+      } catch (clearError) {
+        console.error('Error clearing token on 401:', clearError);
+        // Don't crash if clearing token fails
       }
     }
     return Promise.reject(error);
@@ -41,14 +57,30 @@ export const useAuthStore = create((set) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user }),
 
   setToken: async (token) => {
-    if (token) {
-      await SecureStore.setItemAsync('authToken', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } else {
-      await SecureStore.deleteItemAsync('authToken');
-      delete axios.defaults.headers.common['Authorization'];
+    try {
+      if (token) {
+        await SecureStore.setItemAsync('authToken', token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      } else {
+        try {
+          await SecureStore.deleteItemAsync('authToken');
+        } catch (deleteError) {
+          // Ignore if item doesn't exist
+          console.log('Token not found in SecureStore (already deleted)');
+        }
+        delete axios.defaults.headers.common['Authorization'];
+      }
+      set({ token, isAuthenticated: !!token });
+    } catch (error) {
+      console.error('Error setting token:', error);
+      // Still update state even if SecureStore fails
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      } else {
+        delete axios.defaults.headers.common['Authorization'];
+      }
+      set({ token, isAuthenticated: !!token });
     }
-    set({ token, isAuthenticated: !!token });
   },
 
   loadToken: async () => {
@@ -61,6 +93,7 @@ export const useAuthStore = create((set) => ({
       }
     } catch (error) {
       console.error('Error loading token:', error);
+      // Don't crash if SecureStore fails - just continue without token
     }
     set({ isLoading: false });
     return null;
@@ -71,17 +104,28 @@ export const useAuthStore = create((set) => ({
       const response = await axios.post(`${API_URL}/auth/login`, {
         email,
         password,
+      }, {
+        timeout: 15000,
       });
       const { token, user } = response.data;
       await useAuthStore.getState().setToken(token);
       set({ user, isAuthenticated: true });
       // Fetch full user data including artists array
-      await useAuthStore.getState().fetchUser();
+      try {
+        await useAuthStore.getState().fetchUser();
+      } catch (fetchError) {
+        console.warn('Failed to fetch user after login, but login succeeded:', fetchError);
+        // Don't fail login if fetchUser fails
+      }
       return { success: true };
     } catch (error) {
+      const errorMessage = error.response?.data?.error 
+        || (error.code === 'ECONNABORTED' ? 'Request timed out. Please check your connection.' : 'Network error. Please check your connection.')
+        || error.message 
+        || 'Login failed';
       return {
         success: false,
-        error: error.response?.data?.error || 'Login failed',
+        error: errorMessage,
       };
     }
   },
@@ -100,7 +144,9 @@ export const useAuthStore = create((set) => ({
 
       console.log('Registering user with data:', { ...backendData, password: '***' });
       
-      const response = await axios.post(`${API_URL}/auth/register`, backendData);
+      const response = await axios.post(`${API_URL}/auth/register`, backendData, {
+        timeout: 15000,
+      });
       const { token, user } = response.data;
       await useAuthStore.getState().setToken(token);
       set({ user, isAuthenticated: true });
@@ -115,6 +161,7 @@ export const useAuthStore = create((set) => ({
       const errorMessage = error.response?.data?.error 
         || error.response?.data?.errors?.[0]?.msg 
         || error.response?.data?.message
+        || (error.code === 'ECONNABORTED' ? 'Request timed out. Please check your connection.' : 'Network error. Please check your connection.')
         || error.message 
         || 'Registration failed';
         
@@ -127,33 +174,49 @@ export const useAuthStore = create((set) => ({
 
   logout: async () => {
     try {
-      await axios.post(`${API_URL}/auth/logout`);
+      await axios.post(`${API_URL}/auth/logout`, {}, {
+        timeout: 5000,
+      });
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Logout error (continuing anyway):', error);
+      // Don't fail logout if API call fails - still clear local state
     } finally {
       // Clear user immediately before token to prevent flash
       set({ user: null, isAuthenticated: false });
       // Clear profile store to prevent flash of previous account data
-      useProfileStore.getState().reset();
-      useBoardStore.getState().reset();
-      useFeedStore.getState().reset();
-      useSwipeStore.getState().reset();
-      await useAuthStore.getState().setToken(null);
+      try {
+        useProfileStore.getState().reset();
+        useBoardStore.getState().reset();
+        useFeedStore.getState().reset();
+        useSwipeStore.getState().reset();
+        await useAuthStore.getState().setToken(null);
+      } catch (clearError) {
+        console.error('Error clearing stores on logout:', clearError);
+        // Don't crash - continue
+      }
     }
   },
 
   fetchUser: async () => {
     try {
-      const response = await axios.get(`${API_URL}/auth/me`);
+      const response = await axios.get(`${API_URL}/auth/me`, {
+        timeout: 10000, // 10 second timeout
+      });
       set({ user: response.data.user });
     } catch (error) {
       console.error('Error fetching user:', error);
       // If token is invalid (401), clear it and logout
       if (error.response?.status === 401) {
         console.log('Token invalid, clearing and logging out...');
-        await useAuthStore.getState().setToken(null);
-        set({ user: null, isAuthenticated: false });
+        try {
+          await useAuthStore.getState().setToken(null);
+          set({ user: null, isAuthenticated: false });
+        } catch (clearError) {
+          console.error('Error clearing token:', clearError);
+          // Don't crash if clearing token fails
+        }
       }
+      // Don't throw - allow app to continue without user data
     }
   },
 }));
@@ -238,6 +301,7 @@ export const useFeedStore = create((set, get) => ({
     try {
       const response = await axios.get(`${API_URL}/artworks`, {
         params: { page, limit: 20 },
+        timeout: 15000,
       });
 
       const removedIds = get().removedIds || [];
@@ -256,6 +320,7 @@ export const useFeedStore = create((set, get) => ({
       });
     } catch (error) {
       console.error('Error fetching artworks:', error);
+      // Don't crash - just stop loading and keep existing artworks
       set({ isLoading: false });
     }
   },
@@ -294,11 +359,15 @@ export const useSwipeStore = create((set, get) => ({
       // Get token from auth store to exclude swiped artists
       const token = useAuthStore.getState().token;
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get(`${API_URL}/artists`, { headers });
-      set({ artists: response.data.artists, currentIndex: 0, isLoading: false });
+      const response = await axios.get(`${API_URL}/artists`, { 
+        headers,
+        timeout: 15000,
+      });
+      set({ artists: response.data.artists || [], currentIndex: 0, isLoading: false });
     } catch (error) {
       console.error('Error fetching artists:', error);
-      set({ isLoading: false });
+      // Don't crash - just show empty list
+      set({ artists: [], isLoading: false });
     }
   },
 

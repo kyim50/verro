@@ -20,12 +20,18 @@ export default function Index() {
       const hasLaunched = await AsyncStorage.getItem('hasLaunched');
       if (hasLaunched === null) {
         setIsFirstLaunch(true);
-        await AsyncStorage.setItem('hasLaunched', 'true');
+        try {
+          await AsyncStorage.setItem('hasLaunched', 'true');
+        } catch (setError) {
+          console.warn('Failed to save first launch flag:', setError);
+          // Don't crash - continue anyway
+        }
       } else {
         setIsFirstLaunch(false);
       }
     } catch (error) {
       console.error('Error checking first launch:', error);
+      // Default to not first launch if we can't check
       setIsFirstLaunch(false);
     } finally {
       setCheckingFirstLaunch(false);
