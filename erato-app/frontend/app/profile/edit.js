@@ -189,10 +189,9 @@ export default function EditProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Profile Picture */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile Picture</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Profile Header Section */}
+        <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <Image
               key={avatarUrl}
@@ -204,11 +203,18 @@ export default function EditProfileScreen() {
             <TouchableOpacity
               style={styles.changePhotoButton}
               onPress={pickProfileImage}
+              activeOpacity={0.8}
             >
-              <Ionicons name="camera" size={20} color={colors.text.primary} />
+              <View style={styles.changePhotoIconContainer}>
+                <Ionicons name="camera" size={18} color={colors.text.primary} />
+              </View>
               <Text style={styles.changePhotoText}>Change Photo</Text>
             </TouchableOpacity>
           </View>
+          
+          {user?.username && (
+            <Text style={styles.username}>@{user.username}</Text>
+          )}
         </View>
 
         {/* Basic Info */}
@@ -223,6 +229,7 @@ export default function EditProfileScreen() {
               onChangeText={setFullName}
               placeholder="Your full name"
               placeholderTextColor={colors.text.disabled}
+              maxLength={50}
             />
           </View>
 
@@ -237,7 +244,9 @@ export default function EditProfileScreen() {
               multiline
               numberOfLines={4}
               textAlignVertical="top"
+              maxLength={150}
             />
+            <Text style={styles.characterCount}>{bio.length}/150</Text>
           </View>
         </View>
 
@@ -310,7 +319,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border + '40',
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
@@ -334,10 +344,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   content: {
-    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+    marginBottom: spacing.xl,
   },
   section: {
-    marginBottom: spacing.xl + spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
     ...typography.h3,
@@ -351,25 +371,44 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: colors.surface,
     marginBottom: spacing.md,
+    borderWidth: 3,
+    borderColor: colors.surface,
   },
   changePhotoButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  changePhotoIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   changePhotoText: {
-    ...typography.button,
+    ...typography.body,
     color: colors.text.primary,
     fontWeight: '600',
+    fontSize: 14,
+  },
+  username: {
+    ...typography.h3,
+    color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '500',
   },
   inputGroup: {
     marginBottom: spacing.lg,
@@ -379,6 +418,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.sm,
     fontSize: 15,
+    fontWeight: '600',
   },
   sublabel: {
     ...typography.caption,
@@ -390,17 +430,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     color: colors.text.primary,
     fontSize: 15,
     lineHeight: 20,
     borderWidth: 1,
     borderColor: colors.border,
+    minHeight: 48,
   },
   textArea: {
     minHeight: 100,
     paddingTop: spacing.sm + 2,
     paddingBottom: spacing.sm + 2,
+  },
+  characterCount: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    textAlign: 'right',
+    marginTop: spacing.xs,
+    fontSize: 11,
   },
   row: {
     flexDirection: 'row',

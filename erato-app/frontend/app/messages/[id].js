@@ -426,15 +426,15 @@ export default function ConversationScreen() {
     return (
       <>
         {shouldShowDayHeader(item, index) && renderDayHeader(item.created_at)}
-        <TouchableOpacity
-          style={[styles.messageWrapper, isOwn && styles.messageWrapperOwn]}
-          onLongPress={() => {
-            if (isOwn) handleDeleteMessage(item.id);
-          }}
-          activeOpacity={0.7}
-        >
+        <View style={[styles.messageWrapper, isOwn && styles.messageWrapperOwn]}>
           {item.image_url ? (
-            <View style={styles.imageMessageContainer}>
+            <TouchableOpacity
+              onLongPress={() => {
+                if (isOwn) handleDeleteMessage(item.id);
+              }}
+              activeOpacity={0.7}
+              style={styles.imageMessageContainer}
+            >
               <View style={[styles.imageBubble, isOwn && styles.imageBubbleOwn]}>
                 <Image
                   source={{ uri: item.image_url }}
@@ -442,22 +442,30 @@ export default function ConversationScreen() {
                   contentFit="cover"
                 />
               </View>
-              {isLastInGroup && isOwn && (
+              {isOwn && (
                 <View style={styles.messageStatusContainer}>
                   <Text style={styles.messageStatusText}>
                     {isRead ? 'Read' : 'Delivered'}
                   </Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           ) : (
             <View style={styles.textMessageContainer}>
-              <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}>
-                <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
-                  {item.content}
-                </Text>
-              </View>
-              {isLastInGroup && isOwn && (
+              <TouchableOpacity
+                onLongPress={() => {
+                  if (isOwn) handleDeleteMessage(item.id);
+                }}
+                activeOpacity={0.7}
+                style={styles.messageTouchable}
+              >
+                <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}>
+                  <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
+                    {item.content}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              {isOwn && (
                 <View style={styles.messageStatusContainer}>
                   <Text style={styles.messageStatusText}>
                     {isRead ? 'Read' : 'Delivered'}
@@ -466,7 +474,7 @@ export default function ConversationScreen() {
               )}
             </View>
           )}
-        </TouchableOpacity>
+        </View>
       </>
     );
   };
@@ -557,7 +565,7 @@ export default function ConversationScreen() {
                     );
                   }}
                 >
-                  <Ionicons name="close-circle-outline" size={22} color="#F44336" />
+                  <Ionicons name="close-circle-outline" size={22} color={colors.status.error} />
                   <Text style={styles.cancelActionButtonText}>Cancel Commission</Text>
                 </TouchableOpacity>
 
@@ -601,7 +609,7 @@ export default function ConversationScreen() {
                       );
                     }}
                   >
-                    <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+                    <Ionicons name="checkmark-circle-outline" size={22} color={colors.text.primary} />
                     <Text style={styles.completeActionButtonText}>Mark as Complete</Text>
                   </TouchableOpacity>
                 )}
@@ -718,9 +726,9 @@ export default function ConversationScreen() {
               disabled={sending}
             >
               {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.text.primary} />
               ) : (
-                <Ionicons name="send" size={20} color="#fff" />
+                <Ionicons name="send" size={20} color={colors.text.primary} />
               )}
             </TouchableOpacity>
           )}
@@ -745,7 +753,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: STATUS_BAR_HEIGHT + spacing.sm,
     paddingBottom: spacing.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -774,7 +782,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.status.success,
     borderWidth: 2,
     borderColor: colors.background,
   },
@@ -816,20 +824,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   messageWrapper: {
-    flexDirection: 'row',
     marginBottom: spacing.sm,
     maxWidth: '80%',
+    alignSelf: 'flex-start',
   },
   messageWrapperOwn: {
     alignSelf: 'flex-end',
   },
   messageBubble: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
-    ...shadows.small,
+    maxWidth: '100%',
   },
   messageBubbleOwn: {
     backgroundColor: colors.primary,
@@ -839,26 +847,31 @@ const styles = StyleSheet.create({
   messageBubbleOther: {
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   messageText: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 15,
     lineHeight: 20,
+    fontWeight: '600',
   },
   messageTextOwn: {
     color: colors.text.primary,
+    fontWeight: '600',
   },
   textMessageContainer: {
-    width: '100%',
     alignItems: 'flex-end',
   },
   imageMessageContainer: {
-    width: '100%',
     alignItems: 'flex-end',
+  },
+  messageTouchable: {
+    alignSelf: 'flex-end',
   },
   messageStatusContainer: {
     marginTop: 4,
+    alignSelf: 'flex-end',
     paddingRight: spacing.xs,
   },
   messageStatusText: {
@@ -961,7 +974,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1022,20 +1035,20 @@ const styles = StyleSheet.create({
   cancelActionButton: {
     backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#F44336',
+    borderColor: colors.status.error,
   },
   cancelActionButtonText: {
     ...typography.bodyBold,
-    color: '#F44336',
+    color: colors.status.error,
     fontSize: 15,
     fontWeight: '700',
   },
   completeActionButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.status.success,
   },
   completeActionButtonText: {
     ...typography.bodyBold,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -1060,26 +1073,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? spacing.lg : spacing.md,
-    backgroundColor: colors.background,
+    paddingBottom: Platform.OS === 'ios' ? spacing.lg + spacing.xs : spacing.md,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: spacing.sm,
   },
   attachButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
   },
   inputWrapper: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 100,
     justifyContent: 'center',
   },
@@ -1092,9 +1107,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

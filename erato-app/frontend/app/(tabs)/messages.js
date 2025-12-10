@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.status.success,
     borderWidth: 2.5,
     borderColor: colors.surface,
   },
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   },
   unreadText: {
     ...typography.small,
-    color: '#fff',
+    color: colors.text.primary,
     fontWeight: '700',
     fontSize: 12,
   },

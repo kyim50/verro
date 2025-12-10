@@ -147,6 +147,10 @@ router.get('/', authenticate, async (req, res) => {
     const artistIds = [...new Set(commissions.map(c => c.artist_id).filter(Boolean))];
     const artworkIds = [...new Set(commissions.map(c => c.artwork_id).filter(Boolean))];
 
+    console.log('Fetching related data:');
+    console.log(`- Client IDs: ${clientIds.length}`, clientIds);
+    console.log(`- Artist IDs: ${artistIds.length}`, artistIds);
+
     // Fetch all related data in parallel (no loops!)
     const [clientsResult, artistsResult, artworksResult] = await Promise.all([
       // Fetch all clients
@@ -156,10 +160,12 @@ router.get('/', authenticate, async (req, res) => {
         .in('id', clientIds),
       
       // Fetch all artists
-      supabaseAdmin
-        .from('artists')
-        .select('id, user_id')
-        .in('id', artistIds),
+      artistIds.length > 0
+        ? supabaseAdmin
+            .from('artists')
+            .select('id, user_id')
+            .in('id', artistIds)
+        : Promise.resolve({ data: [], error: null }),
       
       // Fetch all artworks (if any)
       artworkIds.length > 0
@@ -167,11 +173,23 @@ router.get('/', authenticate, async (req, res) => {
             .from('artworks')
             .select('id, title, thumbnail_url, image_url')
             .in('id', artworkIds)
-        : Promise.resolve({ data: [] })
+        : Promise.resolve({ data: [], error: null })
     ]);
 
-    // Get artist user IDs
-    const artistUserIds = artistsResult.data?.map(a => a.user_id || a.id).filter(Boolean) || [];
+    // Check for errors
+    if (clientsResult.error) {
+      console.error('Error fetching clients:', clientsResult.error);
+    }
+    if (artistsResult.error) {
+      console.error('Error fetching artists:', artistsResult.error);
+      console.error('Artist IDs we tried to fetch:', artistIds);
+    }
+    if (artworksResult.error) {
+      console.error('Error fetching artworks:', artworksResult.error);
+    }
+
+    // Get artist user IDs (only use user_id, not artist.id - artist.id is the artist table ID, not user ID)
+    const artistUserIds = artistsResult.data?.map(a => a.user_id).filter(Boolean) || [];
     
     // Fetch artist users
     const { data: artistUsers } = artistUserIds.length > 0
@@ -187,12 +205,50 @@ router.get('/', authenticate, async (req, res) => {
     const artistUserMap = new Map(artistUsers?.map(u => [u.id, u]) || []);
     const artworkMap = new Map(artworksResult.data?.map(a => [a.id, a]) || []);
 
+    // Debug logging
+    console.log('Commissions data enrichment:');
+    console.log(`- Found ${commissions.length} commissions`);
+    console.log(`- Found ${clientsResult.data?.length || 0} clients`);
+    console.log(`- Found ${artistsResult.data?.length || 0} artists`);
+    console.log(`- Found ${artistUsers?.length || 0} artist users`);
+    console.log(`- Commission artist IDs:`, artistIds);
+    console.log(`- Artist IDs found in DB:`, artistsResult.data?.map(a => a.id) || []);
+    console.log(`- Artist user IDs to fetch:`, artistUserIds);
+    console.log(`- Artist map keys:`, Array.from(artistMap.keys()));
+    
+    if (commissions.length > 0) {
+      commissions.forEach((comm, idx) => {
+        if (idx < 3) { // Log first 3 commissions
+          const artist = artistMap.get(comm.artist_id);
+          const artistUser = artist && artist.user_id ? artistUserMap.get(artist.user_id) : null;
+          console.log(`Commission ${idx + 1} (${comm.id}):`);
+          console.log(`  - artist_id: ${comm.artist_id}`);
+          console.log(`  - artist found: ${!!artist}`);
+          console.log(`  - artist object:`, artist);
+          console.log(`  - artist.user_id: ${artist?.user_id}`);
+          console.log(`  - artistUser found: ${!!artistUser}`);
+        }
+      });
+    }
+
     // Enrich commissions with pre-fetched data (no additional queries)
     const enrichedCommissions = commissions.map((commission) => {
       const client = clientMap.get(commission.client_id);
       const artist = artistMap.get(commission.artist_id);
-      const artistUser = artist ? artistUserMap.get(artist.user_id || artist.id) : null;
+      // Lookup by artist.user_id only (don't fallback to artist.id - that's the artist table ID, not user ID)
+      const artistUser = artist && artist.user_id ? artistUserMap.get(artist.user_id) : null;
       const artwork = commission.artwork_id ? artworkMap.get(commission.artwork_id) : null;
+
+      // Debug missing data
+      if (!client && commission.client_id) {
+        console.warn(`Missing client data for commission ${commission.id}, client_id: ${commission.client_id}`);
+      }
+      if (!artist && commission.artist_id) {
+        console.warn(`Missing artist data for commission ${commission.id}, artist_id: ${commission.artist_id}`);
+      }
+      if (artist && !artistUser && artist.user_id) {
+        console.warn(`Missing artist user data for commission ${commission.id}, artist.user_id: ${artist.user_id}, artistUserMap keys:`, Array.from(artistUserMap.keys()));
+      }
 
       return {
         ...commission,

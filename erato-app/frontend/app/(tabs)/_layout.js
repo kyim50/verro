@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Constants from 'expo-constants';
+import { BlurView } from 'expo-blur';
 import { useAuthStore } from '../../store';
 import { colors } from '../../constants/theme';
 
@@ -73,6 +74,14 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarBackground: () => (
+          <View style={{ 
+            flex: 1, 
+            backgroundColor: 'rgba(26, 26, 26, 0.45)',
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(58, 58, 58, 0.25)',
+          }} />
+        ),
       }}
     >
       <Tabs.Screen
@@ -87,9 +96,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: isArtist ? 'Commissions' : 'Explore',
+          title: 'Commissions',
           tabBarIcon: ({ color }) => (
-            <Ionicons name={isArtist ? 'briefcase' : 'search'} size={22} color={color} />
+            <Ionicons name="briefcase" size={22} color={color} />
           ),
         }}
         listeners={{
@@ -103,7 +112,11 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <View style={[styles.createWrapper, focused && styles.createWrapperFocused]}>
               <View style={[styles.createButton, focused && styles.createButtonFocused]}>
-                <Ionicons name="add" size={30} color={colors.text.primary} />
+                <Ionicons 
+                  name={isArtist ? "add" : "search"} 
+                  size={30} 
+                  color={colors.text.primary} 
+                />
               </View>
             </View>
           ),
@@ -138,12 +151,14 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.surface,
-    borderTopColor: colors.border,
+    backgroundColor: 'rgba(26, 26, 26, 0.45)',
+    borderTopColor: 'rgba(58, 58, 58, 0.25)',
     borderTopWidth: 1,
     height: Platform.OS === 'ios' ? 88 : 65,
     paddingBottom: Platform.OS === 'ios' ? 28 : 8,
     paddingTop: 5,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   tabBarLabel: {
     fontSize: 11,

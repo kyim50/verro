@@ -38,14 +38,21 @@ export default function BoardsScreen() {
   const [selectedCommission, setSelectedCommission] = useState(null);
   const [showCommissionModal, setShowCommissionModal] = useState(false);
 
+  const isArtistUser = user?.user_type === 'artist' || 
+                       (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+
   useEffect(() => {
     loadBoards();
-    if (activeTab === 'commissions') {
-      loadCommissions();
-    } else if (activeTab === 'liked') {
+    if (!isArtistUser) {
       loadLikedArtists();
     }
-  }, [activeTab]);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'liked' && !isArtistUser) {
+      loadLikedArtists();
+    }
+  }, [activeTab, isArtistUser]);
 
   const loadBoards = async () => {
     try {
@@ -128,15 +135,12 @@ export default function BoardsScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (activeTab === 'boards') {
-      await loadBoards();
-    } else if (activeTab === 'commissions') {
-      await loadCommissions();
-    } else if (activeTab === 'liked') {
+    await loadBoards();
+    if (!isArtistUser && activeTab === 'liked') {
       await loadLikedArtists();
     }
     setRefreshing(false);
-  }, [activeTab]);
+  }, [isArtistUser, activeTab]);
 
   const handleCreateBoard = async () => {
     if (!newBoardName.trim()) {
@@ -380,39 +384,91 @@ export default function BoardsScreen() {
   };
 
   const renderEmpty = () => {
+    return (
+      <View style={styles.emptyState}>
+        <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
+        <Text style={styles.emptyTitle}>No Collections Yet</Text>
+        <Text style={styles.emptyText}>
+          Create boards to save and organize artworks you love!
+        </Text>
+        <TouchableOpacity
+          style={styles.createButton}
+          onPress={() => setShowCreateModal(true)}
+        >
+          <Text style={styles.createButtonText}>Create Your First Board</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderTabContent = () => {
     if (activeTab === 'boards') {
       return (
-        <View style={styles.emptyState}>
-          <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>No Collections Yet</Text>
-          <Text style={styles.emptyText}>
-            Create boards to save and organize artworks you love!
-          </Text>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Text style={styles.createButtonText}>Create Your First Board</Text>
-          </TouchableOpacity>
-        </View>
+        <FlatList
+          key="boards-list"
+          data={boards.sort((a, b) => {
+            // Pin "Created" board at top
+            if (a.board_type === 'created') return -1;
+            if (b.board_type === 'created') return 1;
+            // Sort rest by creation date (newest first)
+            return new Date(b.created_at) - new Date(a.created_at);
+          })}
+          renderItem={renderBoard}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.row}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={!isLoading && renderEmpty}
+          showsVerticalScrollIndicator={false}
+        />
       );
-    } else if (activeTab === 'commissions') {
+    } else if (activeTab === 'liked') {
+      // Sort liked artists by timestamp (from Tinder swipe view)
+      const sortedLikedArtists = [...likedArtists].sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return likedSortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+      });
+
       return (
-        <View style={styles.emptyState}>
-          <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>No Commissions</Text>
-          <Text style={styles.emptyText}>
-            {user?.user_type === 'artist' || user?.user_type === 'both'
-              ? 'You haven\'t received any commission requests yet.'
-              : 'You haven\'t requested any commissions yet.'}
-          </Text>
-        </View>
+        <FlatList
+          key="liked-artists-list"
+          data={sortedLikedArtists}
+          renderItem={renderLikedArtist}
+          keyExtractor={(item) => item.artist_id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
+          ListEmptyComponent={!likedLoading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="heart-outline" size={64} color={colors.text.disabled} />
+              <Text style={styles.emptyTitle}>No Liked Artists</Text>
+              <Text style={styles.emptyText}>
+                Artists you like will appear here. Start exploring!
+              </Text>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+        />
       );
     }
     return null;
   };
 
-  const renderTabContent = () => {
+  // Removed commissions and liked tab content - keeping old code commented for reference
+  const renderTabContentOld = () => {
     if (activeTab === 'boards') {
       return (
         <FlatList
@@ -495,7 +551,15 @@ export default function BoardsScreen() {
             />
           }
           contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
-          ListEmptyComponent={!likedLoading && renderEmpty}
+          ListEmptyComponent={!likedLoading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="heart-outline" size={64} color={colors.text.disabled} />
+              <Text style={styles.emptyTitle}>No Liked Artists</Text>
+              <Text style={styles.emptyText}>
+                Artists you like will appear here. Start exploring!
+              </Text>
+            </View>
+          )}
           showsVerticalScrollIndicator={false}
         />
       );
@@ -508,29 +572,12 @@ export default function BoardsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Library</Text>
-        {activeTab === 'boards' && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Ionicons name="add" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-        )}
-        {activeTab === 'liked' && (
-          <TouchableOpacity
-            style={styles.sortButton}
-            onPress={() => setLikedSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
-          >
-            <Ionicons
-              name={likedSortOrder === 'newest' ? 'arrow-down' : 'arrow-up'}
-              size={20}
-              color={colors.text.primary}
-            />
-            <Text style={styles.sortButtonText}>
-              {likedSortOrder === 'newest' ? 'Newest' : 'Oldest'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setShowCreateModal(true)}
+        >
+          <Ionicons name="add" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -548,34 +595,21 @@ export default function BoardsScreen() {
             Library
           </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
-          onPress={() => setActiveTab('liked')}
-        >
-          <Ionicons
-            name="heart"
-            size={20}
-            color={activeTab === 'liked' ? colors.primary : colors.text.secondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
-            Liked
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'commissions' && styles.tabActive]}
-          onPress={() => setActiveTab('commissions')}
-        >
-          <Ionicons
-            name="briefcase"
-            size={20}
-            color={activeTab === 'commissions' ? colors.primary : colors.text.secondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'commissions' && styles.tabTextActive]}>
-            Commissions
-          </Text>
-        </TouchableOpacity>
+        {!isArtistUser && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
+            onPress={() => setActiveTab('liked')}
+          >
+            <Ionicons
+              name="heart"
+              size={20}
+              color={activeTab === 'liked' ? colors.primary : colors.text.secondary}
+            />
+            <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
+              Liked
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Content */}

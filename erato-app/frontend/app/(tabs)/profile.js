@@ -261,66 +261,82 @@ export default function ProfileScreen() {
           <>
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Commission Info</Text>
-                <TouchableOpacity onPress={() => router.push('/profile/edit-artist')}>
-                  <Ionicons name="create-outline" size={20} color={colors.primary} />
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="briefcase" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Commission Info</Text>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => router.push('/profile/edit-artist')}
+                  style={styles.editIconButton}
+                >
+                  <Ionicons name="create-outline" size={22} color={colors.primary} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.commissionCard}>
-                <View style={styles.commissionRow}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons
-                      name={
-                        profile.artist.commission_status === 'open'
-                          ? 'checkmark-circle'
-                          : profile.artist.commission_status === 'limited'
-                          ? 'time'
-                          : 'close-circle'
-                      }
-                      size={18}
-                      color={
-                        profile.artist.commission_status === 'open'
-                          ? colors.success
-                          : profile.artist.commission_status === 'limited'
-                          ? colors.warning
-                          : colors.text.secondary
-                      }
-                    />
-                    <Text style={styles.infoLabel}>Status</Text>
-                  </View>
+                {/* Status Badge */}
+                <View style={[
+                  styles.statusBadgeContainer,
+                  profile.artist.commission_status === 'open' && styles.statusBadgeOpen,
+                  profile.artist.commission_status === 'limited' && styles.statusBadgeLimited,
+                  profile.artist.commission_status === 'closed' && styles.statusBadgeClosed,
+                ]}>
+                  <Ionicons
+                    name={
+                      profile.artist.commission_status === 'open'
+                        ? 'checkmark-circle'
+                        : profile.artist.commission_status === 'limited'
+                        ? 'time'
+                        : 'close-circle'
+                    }
+                    size={20}
+                    color={
+                      profile.artist.commission_status === 'open'
+                        ? colors.status.success
+                        : profile.artist.commission_status === 'limited'
+                        ? colors.status.warning
+                        : colors.status.error
+                    }
+                  />
                   <Text
                     style={[
-                      styles.statusText,
-                      profile.artist.commission_status === 'open' && styles.statusOpenText,
-                      profile.artist.commission_status === 'limited' && styles.statusLimitedText,
-                      profile.artist.commission_status === 'closed' && styles.statusClosedText,
+                      styles.statusBadgeText,
+                      {
+                        color: profile.artist.commission_status === 'open'
+                          ? colors.status.success
+                          : profile.artist.commission_status === 'limited'
+                          ? colors.status.warning
+                          : colors.status.error
+                      }
                     ]}
                   >
                     {profile.artist.commission_status === 'open'
-                      ? 'Open'
+                      ? 'Open for Commissions'
                       : profile.artist.commission_status === 'limited'
-                      ? 'Limited'
-                      : 'Closed'}
+                      ? 'Limited Availability'
+                      : 'Currently Closed'}
                   </Text>
                 </View>
 
-                <View style={styles.commissionRow}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="pricetag" size={18} color={colors.text.secondary} />
-                    <Text style={styles.infoLabel}>Pricing</Text>
+                {/* Info Grid */}
+                <View style={styles.infoGrid}>
+                  <View style={styles.infoGridItem}>
+                    <View style={styles.infoIconContainer}>
+                      <Ionicons name="pricetag" size={20} color={colors.primary} />
+                    </View>
+                    <Text style={styles.infoGridLabel}>Pricing</Text>
+                    <Text style={styles.infoGridValue}>
+                      ${profile.artist.min_price} - ${profile.artist.max_price}
+                    </Text>
                   </View>
-                  <Text style={styles.infoValue}>
-                    ${profile.artist.min_price} - ${profile.artist.max_price}
-                  </Text>
-                </View>
 
-                <View style={styles.commissionRow}>
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="time-outline" size={18} color={colors.text.secondary} />
-                    <Text style={styles.infoLabel}>Turnaround</Text>
+                  <View style={styles.infoGridItem}>
+                    <View style={styles.infoIconContainer}>
+                      <Ionicons name="time-outline" size={20} color={colors.primary} />
+                    </View>
+                    <Text style={styles.infoGridLabel}>Turnaround</Text>
+                    <Text style={styles.infoGridValue}>{profile.artist.turnaround_days} days</Text>
                   </View>
-                  <Text style={styles.infoValue}>{profile.artist.turnaround_days} days</Text>
                 </View>
 
                 {profile.artist.specialties && profile.artist.specialties.length > 0 && (
@@ -440,45 +456,64 @@ export default function ProfileScreen() {
         {/* Client Stats Section (only for non-artists) */}
         {!isArtist && (
           <View style={styles.section}>
-            <View style={styles.statsGrid}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="stats-chart" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Overview</Text>
+              </View>
+            </View>
+            <View style={styles.clientStatsCard}>
               <TouchableOpacity
-                style={styles.statCard}
+                style={styles.clientStatItem}
                 onPress={() => router.push('/(tabs)/boards')}
+                activeOpacity={0.7}
               >
-                <View style={styles.statIconContainer}>
-                  <Ionicons name="heart" size={24} color={colors.primary} />
+                <View style={styles.clientStatIconContainer}>
+                  <Ionicons name="albums" size={22} color={colors.primary} />
                 </View>
-                <Text style={styles.statValue}>{profile?.boards?.length || 0}</Text>
-                <Text style={styles.statLabel}>Boards</Text>
+                <View style={styles.clientStatContent}>
+                  <Text style={styles.clientStatValue}>{profile?.boards?.length || 0}</Text>
+                  <Text style={styles.clientStatLabel}>Collections</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
               </TouchableOpacity>
+
+              <View style={styles.clientStatDivider} />
 
               <TouchableOpacity
-                style={styles.statCard}
-                onPress={() => router.push('/(tabs)/boards?tab=commissions')}
+                style={styles.clientStatItem}
+                onPress={() => router.push('/(tabs)/explore')}
+                activeOpacity={0.7}
               >
-                <View style={styles.statIconContainer}>
-                  <Ionicons name="briefcase" size={24} color={colors.primary} />
+                <View style={styles.clientStatIconContainer}>
+                  <Ionicons name="briefcase" size={22} color={colors.primary} />
                 </View>
-                <Text style={styles.statValue}>
-                  {/* This would need to be fetched from the backend */}
-                  0
-                </Text>
-                <Text style={styles.statLabel}>Commissions</Text>
+                <View style={styles.clientStatContent}>
+                  <Text style={styles.clientStatValue}>
+                    {profile?.commissions_count || 0}
+                  </Text>
+                  <Text style={styles.clientStatLabel}>Commissions</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
               </TouchableOpacity>
 
-              <View style={styles.statCard}>
-                <View style={styles.statIconContainer}>
-                  <Ionicons name="time" size={24} color={colors.primary} />
+              <View style={styles.clientStatDivider} />
+
+              <View style={styles.clientStatItem}>
+                <View style={styles.clientStatIconContainer}>
+                  <Ionicons name="calendar" size={22} color={colors.text.secondary} />
                 </View>
-                <Text style={styles.statValue}>
-                  {profile?.created_at
-                    ? new Date(profile.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        year: 'numeric'
-                      })
-                    : 'N/A'}
-                </Text>
-                <Text style={styles.statLabel}>Member Since</Text>
+                <View style={styles.clientStatContent}>
+                  <Text style={styles.clientStatValue}>
+                    {profile?.created_at
+                      ? new Date(profile.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          year: 'numeric'
+                        })
+                      : 'N/A'}
+                  </Text>
+                  <Text style={styles.clientStatLabel}>Member Since</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -653,10 +688,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 18 : 20,
+  },
+  editIconButton: {
+    padding: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   artworkCount: {
     ...typography.body,
@@ -688,12 +732,34 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 3,
+    gap: spacing.lg,
+  },
+  statusBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+  },
+  statusBadgeOpen: {
+    borderColor: colors.success + '40',
+    backgroundColor: colors.success + '10',
+  },
+  statusBadgeLimited: {
+    borderColor: colors.warning + '40',
+    backgroundColor: colors.warning + '10',
+  },
+  statusBadgeClosed: {
+    borderColor: colors.text.disabled + '40',
+    backgroundColor: colors.text.disabled + '10',
+  },
+  statusBadgeText: {
+    ...typography.bodyBold,
+    fontSize: 15,
+    fontWeight: '700',
   },
   commissionStatus: {
     flexDirection: 'row',
@@ -714,6 +780,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xs,
   },
+  infoGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  infoGridItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  infoIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  infoGridLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    marginBottom: spacing.xs - 2,
+  },
+  infoGridValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -728,13 +829,13 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   statusOpenText: {
-    color: colors.success,
+    color: colors.status.success,
   },
   statusLimitedText: {
-    color: colors.warning,
+    color: colors.status.warning,
   },
   statusClosedText: {
-    color: colors.text.secondary,
+    color: colors.status.error,
   },
   specialtiesContainer: {
     gap: spacing.xs,
@@ -859,6 +960,47 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     textAlign: 'center',
+  },
+  clientStatsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  clientStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  clientStatDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.md,
+  },
+  clientStatIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clientStatContent: {
+    flex: 1,
+  },
+  clientStatValue: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  clientStatLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
   },
   quickActionsList: {
     marginTop: spacing.md,

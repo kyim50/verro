@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.erato.app",
+      "bundleIdentifier": "com.kyim50.erato",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.erato.app",
+      "package": "com.kyim50.erato",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]

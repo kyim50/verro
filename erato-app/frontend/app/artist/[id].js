@@ -40,6 +40,8 @@ export default function ArtistProfileScreen() {
   const [error, setError] = useState(null);
   const [selectedPortfolioIndex, setSelectedPortfolioIndex] = useState(null);
   const [isModalClosing, setIsModalClosing] = useState(false);
+  const [columns, setColumns] = useState([[], []]);
+  const [createdColumns, setCreatedColumns] = useState([[], []]);
   const portfolioFlatListRef = useRef(null);
   const isClosingModal = useRef(false);
   const lastClosedIndex = useRef(null);
@@ -166,22 +168,127 @@ export default function ArtistProfileScreen() {
     router.push(`/commission/create?artistId=${id}`);
   };
 
-  const renderArtwork = ({ item, index }) => {
-    const heightMultipliers = [1.2, 1.5, 1.3, 1.6, 1.4];
-    const imageHeight = ITEM_WIDTH * heightMultipliers[index % heightMultipliers.length];
+  // Organize artworks into balanced columns (Pinterest masonry style)
+  useEffect(() => {
+    if (artworks.length > 0) {
+      const newColumns = [[], []];
+      const columnHeights = [0, 0];
 
+      artworks.forEach((item) => {
+        // Calculate image height based on aspect ratio if available
+        let imageHeight;
+        const ratio = item.aspect_ratio || item.aspectRatio; // Handle both snake_case and camelCase
+
+        if (ratio && typeof ratio === 'string' && ratio.includes(':')) {
+          const parts = ratio.split(':');
+          const w = parseFloat(parts[0]);
+          const h = parseFloat(parts[1]);
+
+          // Ensure valid numbers
+          if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+            imageHeight = ITEM_WIDTH * (h / w);
+          } else {
+            // Use default 4:5 ratio if invalid
+            imageHeight = ITEM_WIDTH * 1.25;
+          }
+        } else {
+          // Use default 4:5 ratio for artworks without aspect ratio
+          imageHeight = ITEM_WIDTH * 1.25;
+        }
+
+        const textHeight = 60; // Space for title + artist name below image
+        const totalHeight = imageHeight + textHeight;
+
+        // Add to the shorter column
+        const shortestColumnIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+
+        newColumns[shortestColumnIndex].push({
+          ...item,
+          imageHeight,
+          totalHeight,
+        });
+
+        columnHeights[shortestColumnIndex] += totalHeight + SPACING;
+      });
+
+      setColumns(newColumns);
+    } else {
+      setColumns([[], []]);
+    }
+  }, [artworks]);
+
+  // Organize created board artworks into balanced columns
+  useEffect(() => {
+    if (createdBoard && createdBoard.board_artworks && createdBoard.board_artworks.length > 0) {
+      const createdArtworks = createdBoard.board_artworks.map(ba => ba.artworks).filter(Boolean);
+      const newColumns = [[], []];
+      const columnHeights = [0, 0];
+
+      createdArtworks.forEach((item) => {
+        let imageHeight;
+        const ratio = item.aspect_ratio || item.aspectRatio;
+
+        if (ratio && typeof ratio === 'string' && ratio.includes(':')) {
+          const parts = ratio.split(':');
+          const w = parseFloat(parts[0]);
+          const h = parseFloat(parts[1]);
+
+          if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+            imageHeight = ITEM_WIDTH * (h / w);
+          } else {
+            imageHeight = ITEM_WIDTH * 1.25;
+          }
+        } else {
+          imageHeight = ITEM_WIDTH * 1.25;
+        }
+
+        const textHeight = 60;
+        const totalHeight = imageHeight + textHeight;
+
+        const shortestColumnIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+
+        newColumns[shortestColumnIndex].push({
+          ...item,
+          imageHeight,
+          totalHeight,
+        });
+
+        columnHeights[shortestColumnIndex] += totalHeight + SPACING;
+      });
+
+      setCreatedColumns(newColumns);
+    } else {
+      setCreatedColumns([[], []]);
+    }
+  }, [createdBoard]);
+
+  const renderArtwork = (item) => {
     return (
-      <TouchableOpacity
-        style={[styles.artworkCard, { height: imageHeight }]}
-        onPress={() => router.push(`/artwork/${item.id}`)}
-        activeOpacity={0.9}
-      >
-        <Image
-          source={{ uri: item.thumbnail_url || item.image_url }}
-          style={styles.artworkImage}
-          contentFit="cover"
-        />
-      </TouchableOpacity>
+      <View key={item.id} style={styles.masonryCard}>
+        <TouchableOpacity
+          style={styles.masonryImageContainer}
+          onPress={() => router.push(`/artwork/${item.id}`)}
+          activeOpacity={0.9}
+        >
+          <Image
+            source={{ uri: item.thumbnail_url || item.image_url }}
+            style={[styles.masonryImage, { height: item.imageHeight }]}
+            contentFit="cover"
+            transition={200}
+          />
+        </TouchableOpacity>
+        
+        <View style={styles.masonryTextContainer}>
+          <Text style={styles.masonryTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          {item.artists?.users && (
+            <Text style={styles.masonryArtistName} numberOfLines={1}>
+              {item.artists.users.username}
+            </Text>
+          )}
+        </View>
+      </View>
     );
   };
 
@@ -277,38 +384,89 @@ export default function ArtistProfileScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Artist Header */}
         <View style={styles.artistHeader}>
-          <Image
-            source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/120' }}
-            style={styles.avatar}
-            contentFit="cover"
-          />
-          <View style={styles.nameSection}>
-            <Text style={styles.artistName}>
+          {/* Avatar */}
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/120' }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+          </View>
+
+          {/* Name and Username */}
+          <View style={styles.nameContainer}>
+            <Text style={styles.artistName} numberOfLines={1}>
               {artist.users?.full_name || artist.users?.username}
             </Text>
-            <Text style={styles.artistUsername}>@{artist.users?.username}</Text>
-            {artist.average_rating && artist.average_rating > 0 && (
-              <View style={styles.ratingContainer}>
-                <View style={styles.ratingStars}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Ionicons
-                      key={star}
-                      name={star <= Math.round(artist.average_rating) ? "star" : "star-outline"}
-                      size={18}
-                      color={colors.status.warning}
-                    />
-                  ))}
-                </View>
-                <Text style={styles.ratingText}>
-                  {artist.average_rating.toFixed(1)} ({artist.review_count || 0} {artist.review_count === 1 ? 'review' : 'reviews'})
-                </Text>
+            <Text style={styles.artistUsername} numberOfLines={1}>
+              @{artist.users?.username}
+            </Text>
+          </View>
+
+          {/* Rating (if available) */}
+          {artist.average_rating && artist.average_rating > 0 && (
+            <View style={styles.ratingContainer}>
+              <View style={styles.ratingStars}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Ionicons
+                    key={star}
+                    name={star <= Math.round(artist.average_rating) ? "star" : "star-outline"}
+                    size={16}
+                    color={colors.status.warning}
+                  />
+                ))}
               </View>
+              <Text style={styles.ratingText}>
+                {artist.average_rating.toFixed(1)} ({artist.review_count || 0} {artist.review_count === 1 ? 'review' : 'reviews'})
+              </Text>
+            </View>
+          )}
+
+          {/* Bio */}
+          {artist.users?.bio && (
+            <Text style={styles.bio} numberOfLines={3}>
+              {artist.users.bio}
+            </Text>
+          )}
+
+          {/* Stats */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Ionicons name="star" size={18} color={colors.primary} />
+              <Text style={styles.statValue}>{artist.rating?.toFixed(1) || '0.0'}</Text>
+              <Text style={styles.statLabel}>Rating</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="briefcase-outline" size={18} color={colors.primary} />
+              <Text style={styles.statValue}>{artist.total_commissions || 0}</Text>
+              <Text style={styles.statLabel}>Commissions</Text>
+            </View>
+            {artist.min_price && artist.max_price && (
+              <>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Ionicons name="cash-outline" size={18} color={colors.primary} />
+                  <Text style={styles.statValue} numberOfLines={1}>
+                    ${artist.min_price} - ${artist.max_price}
+                  </Text>
+                  <Text style={styles.statLabel}>Price Range</Text>
+                </View>
+              </>
             )}
           </View>
 
-          {artist.users?.bio && (
-            <Text style={styles.bio}>{artist.users.bio}</Text>
-          )}
+          {/* Commission Status */}
+          <View style={[styles.statusBadge, artist.commission_status === 'open' ? styles.statusOpen : styles.statusClosed]}>
+            <Ionicons
+              name={artist.commission_status === 'open' ? 'checkmark-circle' : 'close-circle'}
+              size={14}
+              color={artist.commission_status === 'open' ? colors.success : colors.error}
+            />
+            <Text style={[styles.statusText, artist.commission_status === 'open' ? styles.statusOpenText : styles.statusClosedText]}>
+              Commissions {artist.commission_status === 'open' ? 'Open' : 'Closed'}
+            </Text>
+          </View>
 
           {/* Social Links */}
           {artist.social_links && Object.keys(artist.social_links).length > 0 && (
@@ -323,7 +481,7 @@ export default function ArtistProfileScreen() {
                     await Linking.openURL(url);
                   }}
                 >
-                  <Ionicons name="logo-instagram" size={24} color={colors.text.primary} />
+                  <Ionicons name="logo-instagram" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
               )}
               {artist.social_links.twitter && (
@@ -336,7 +494,7 @@ export default function ArtistProfileScreen() {
                     await Linking.openURL(url);
                   }}
                 >
-                  <Ionicons name="logo-twitter" size={24} color={colors.text.primary} />
+                  <Ionicons name="logo-twitter" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
               )}
               {artist.social_links.tiktok && (
@@ -349,7 +507,7 @@ export default function ArtistProfileScreen() {
                     await Linking.openURL(url);
                   }}
                 >
-                  <Ionicons name="logo-tiktok" size={24} color={colors.text.primary} />
+                  <Ionicons name="logo-tiktok" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
               )}
               {artist.social_links.youtube && (
@@ -362,7 +520,7 @@ export default function ArtistProfileScreen() {
                     await Linking.openURL(url);
                   }}
                 >
-                  <Ionicons name="logo-youtube" size={24} color={colors.text.primary} />
+                  <Ionicons name="logo-youtube" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
               )}
               {artist.social_links.website && (
@@ -372,50 +530,11 @@ export default function ArtistProfileScreen() {
                     await Linking.openURL(artist.social_links.website);
                   }}
                 >
-                  <Ionicons name="globe-outline" size={24} color={colors.text.primary} />
+                  <Ionicons name="globe-outline" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
               )}
             </View>
           )}
-
-          {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Ionicons name="star" size={20} color={colors.primary} />
-              <Text style={styles.statValue}>{artist.rating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.statLabel}>Rating</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
-              <Text style={styles.statValue}>{artist.total_commissions || 0}</Text>
-              <Text style={styles.statLabel}>Commissions</Text>
-            </View>
-            {artist.min_price && artist.max_price && (
-              <>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Ionicons name="cash-outline" size={20} color={colors.primary} />
-                  <Text style={styles.statValue}>
-                    ${artist.min_price} - ${artist.max_price}
-                  </Text>
-                  <Text style={styles.statLabel}>Price Range</Text>
-                </View>
-              </>
-            )}
-          </View>
-
-          {/* Commission Status */}
-          <View style={[styles.statusBadge, artist.commission_status === 'open' ? styles.statusOpen : styles.statusClosed]}>
-            <Ionicons
-              name={artist.commission_status === 'open' ? 'checkmark-circle' : 'close-circle'}
-              size={16}
-              color={artist.commission_status === 'open' ? colors.success : colors.error}
-            />
-            <Text style={[styles.statusText, artist.commission_status === 'open' ? styles.statusOpenText : styles.statusClosedText]}>
-              Commissions {artist.commission_status === 'open' ? 'Open' : 'Closed'}
-            </Text>
-          </View>
 
           {/* Action Buttons */}
           {!isOwnProfile && (
@@ -425,6 +544,7 @@ export default function ArtistProfileScreen() {
                 <TouchableOpacity
                   style={[styles.actionButton, styles.messageButton]}
                   onPress={handleMessage}
+                  activeOpacity={0.8}
                 >
                   <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
                   <Text style={styles.messageButtonText}>Message</Text>
@@ -440,9 +560,13 @@ export default function ArtistProfileScreen() {
                   ]}
                   onPress={handleCommission}
                   disabled={artist.commission_status !== 'open'}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="brush-outline" size={20} color={colors.text.primary} />
-                  <Text style={styles.commissionButtonText}>
+                  <Ionicons name="brush-outline" size={20} color={artist.commission_status === 'open' ? colors.text.primary : colors.text.secondary} />
+                  <Text style={[
+                    styles.commissionButtonText,
+                    artist.commission_status !== 'open' && styles.commissionButtonTextDisabled
+                  ]}>
                     {artist.commission_status === 'open' ? 'Request Commission' : 'Commissions Closed'}
                   </Text>
                 </TouchableOpacity>
@@ -530,7 +654,7 @@ export default function ArtistProfileScreen() {
 
         {/* All Artworks Section */}
         {artworks.length > 0 && (
-          <View style={styles.section}>
+          <View style={[styles.section, { paddingBottom: SPACING }]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="grid-outline" size={20} color={colors.primary} />
@@ -539,20 +663,23 @@ export default function ArtistProfileScreen() {
               <Text style={styles.artworkCountText}>{artworks.length} artworks</Text>
             </View>
 
-            <FlatList
-              data={artworks}
-              renderItem={renderArtwork}
-              keyExtractor={(item) => item.id}
-              numColumns={2}
-              columnWrapperStyle={styles.row}
-              scrollEnabled={false}
-            />
+            <View style={styles.masonryContainer}>
+              {/* Left Column */}
+              <View style={styles.masonryColumn}>
+                {columns[0].map(item => renderArtwork(item))}
+              </View>
+
+              {/* Right Column */}
+              <View style={styles.masonryColumn}>
+                {columns[1].map(item => renderArtwork(item))}
+              </View>
+            </View>
           </View>
         )}
 
         {/* Created Board (Pinned) */}
-        {createdBoard && (
-          <View style={styles.section}>
+        {createdBoard && createdBoard.board_artworks && createdBoard.board_artworks.length > 0 ? (
+          <View style={[styles.section, { paddingBottom: SPACING }]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
@@ -563,23 +690,32 @@ export default function ArtistProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {createdBoard.board_artworks && createdBoard.board_artworks.length > 0 ? (
-              <FlatList
-                data={createdBoard.board_artworks.map(ba => ba.artworks).slice(0, 6)}
-                renderItem={renderArtwork}
-                keyExtractor={(item, index) => item?.id || index.toString()}
-                numColumns={2}
-                columnWrapperStyle={styles.row}
-                scrollEnabled={false}
-              />
-            ) : (
-              <View style={styles.emptyCreated}>
-                <Ionicons name="images-outline" size={48} color={colors.text.disabled} />
-                <Text style={styles.emptyText}>No artworks yet</Text>
+            <View style={styles.masonryContainer}>
+              {/* Left Column */}
+              <View style={styles.masonryColumn}>
+                {createdColumns[0].map(item => renderArtwork(item))}
               </View>
-            )}
+
+              {/* Right Column */}
+              <View style={styles.masonryColumn}>
+                {createdColumns[1].map(item => renderArtwork(item))}
+              </View>
+            </View>
           </View>
-        )}
+        ) : createdBoard ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Created</Text>
+              </View>
+            </View>
+            <View style={styles.emptyCreated}>
+              <Ionicons name="images-outline" size={48} color={colors.text.disabled} />
+              <Text style={styles.emptyText}>No artworks yet</Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Other Boards */}
         {boards.length > 0 && (
@@ -674,11 +810,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border + '20',
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
@@ -687,10 +824,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '20',
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
+    fontWeight: '700',
   },
   content: {
     paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
@@ -737,97 +878,129 @@ const styles = StyleSheet.create({
   },
   artistHeader: {
     alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingTop: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+  },
+  avatarContainer: {
+    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   avatar: {
-    width: IS_SMALL_SCREEN ? 100 : 120,
-    height: IS_SMALL_SCREEN ? 100 : 120,
-    borderRadius: IS_SMALL_SCREEN ? 50 : 60,
-    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    width: IS_SMALL_SCREEN ? 100 : 110,
+    height: IS_SMALL_SCREEN ? 100 : 110,
+    borderRadius: IS_SMALL_SCREEN ? 50 : 55,
+    borderWidth: 3,
+    borderColor: colors.primary + '30',
+  },
+  nameContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    width: '100%',
   },
   artistName: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 26 : 32,
-    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 24 : 28,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   artistUsername: {
     ...typography.body,
     color: colors.text.secondary,
-    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    textAlign: 'center',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
-    marginTop: spacing.sm,
     marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
   },
   ratingStars: {
     flexDirection: 'row',
-    gap: 2,
+    gap: 3,
   },
   ratingText: {
-    ...typography.body,
+    ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   bio: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
     textAlign: 'center',
-    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginBottom: spacing.lg,
     lineHeight: IS_SMALL_SCREEN ? 20 : 22,
+    paddingHorizontal: spacing.md,
   },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    gap: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    borderRadius: borderRadius.xl,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: spacing.sm,
+    width: '100%',
+    gap: spacing.xs,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 6,
+    minWidth: 0,
   },
   statValue: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: IS_SMALL_SCREEN ? 16 : 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   statLabel: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    textAlign: 'center',
   },
   statDivider: {
     width: 1,
-    height: 40,
-    backgroundColor: colors.border,
+    height: 36,
+    backgroundColor: colors.border + '40',
+    marginHorizontal: spacing.xs,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.xs + 2 : spacing.sm,
     borderRadius: borderRadius.full,
     gap: spacing.xs,
-    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginBottom: spacing.sm,
   },
   statusOpen: {
-    backgroundColor: `${colors.success}20`,
+    backgroundColor: colors.success + '15',
+    borderWidth: 1,
+    borderColor: colors.success + '30',
   },
   statusClosed: {
-    backgroundColor: `${colors.error}20`,
+    backgroundColor: colors.error + '15',
+    borderWidth: 1,
+    borderColor: colors.error + '30',
   },
   statusText: {
     ...typography.caption,
     fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statusOpenText: {
     color: colors.success,
@@ -835,40 +1008,64 @@ const styles = StyleSheet.create({
   statusClosedText: {
     color: colors.error,
   },
+  socialLinksContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  socialLink: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '30',
+  },
   actionButtons: {
     width: '100%',
-    marginTop: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginTop: 0,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    borderRadius: borderRadius.lg,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    borderRadius: borderRadius.xl,
     gap: spacing.sm,
+    width: '100%',
   },
   messageButton: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.border + '50',
   },
   messageButtonText: {
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
   commissionButton: {
     backgroundColor: colors.primary,
   },
   commissionButtonDisabled: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: colors.border + '50',
   },
   commissionButtonText: {
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+  },
+  commissionButtonTextDisabled: {
+    color: colors.text.secondary,
   },
   section: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
@@ -905,16 +1102,44 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: spacing.sm,
   },
-  artworkCard: {
-    width: ITEM_WIDTH,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
+  masonryContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: SPACING,
+    paddingTop: SPACING,
   },
-  artworkImage: {
+  masonryColumn: {
+    flex: 1,
+    paddingHorizontal: SPACING / 2,
+  },
+  masonryCard: {
     width: '100%',
-    height: '100%',
+    marginBottom: SPACING,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+  },
+  masonryImageContainer: {
+    position: 'relative',
+  },
+  masonryImage: {
+    width: '100%',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 20,
+  },
+  masonryTextContainer: {
+    padding: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  masonryTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    marginBottom: 4,
+  },
+  masonryArtistName: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   emptyCreated: {
     alignItems: 'center',
@@ -1039,21 +1264,5 @@ const styles = StyleSheet.create({
   modalImage: {
     width: '100%',
     height: '100%',
-  },
-  socialLinksContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-  },
-  socialLink: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
 });

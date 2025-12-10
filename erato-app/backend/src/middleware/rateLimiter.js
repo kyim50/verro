@@ -20,7 +20,7 @@ if (isDevMode) {
 export const rateLimiter = isDevMode
   ? rateLimit({
       windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 1 minute in dev
-      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // 1000 requests per minute in dev
+      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 2000, // Increased from 1000 to 2000 requests per minute in dev
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
@@ -31,7 +31,7 @@ export const rateLimiter = isDevMode
     })
   : rateLimit({
       windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // Increased from 100 to 500
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
@@ -40,13 +40,13 @@ export const rateLimiter = isDevMode
 export const authLimiter = isDevMode
   ? rateLimit({
       windowMs: 1 * 60 * 1000, // 1 minute in dev
-      max: 50, // 50 attempts in dev
+      max: 100, // Increased from 50 to 100 attempts in dev
       message: 'Too many authentication attempts, please try again later.',
       skipSuccessfulRequests: true,
     })
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 5, // 5 attempts
+      max: 20, // Increased from 5 to 20 attempts
       message: 'Too many authentication attempts, please try again later.',
       skipSuccessfulRequests: true,
     });

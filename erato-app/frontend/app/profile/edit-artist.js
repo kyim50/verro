@@ -112,7 +112,7 @@ export default function EditArtistProfileScreen() {
         {/* Commission Status */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Commission Status</Text>
-          <Text style={styles.helperText}>Let clients know if you’re open</Text>
+          <Text style={styles.helperText}>Let clients know if you're accepting commissions</Text>
 
           <View style={styles.statusButtons}>
             {[
@@ -238,7 +238,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border + '40',
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
@@ -251,23 +252,29 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontWeight: '700',
   },
   content: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
     paddingTop: spacing.lg,
-    gap: spacing.xl,
   },
   section: {
+    marginBottom: spacing.xl,
     gap: spacing.sm,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
   },
   helperText: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontSize: 13,
+    marginBottom: spacing.md,
   },
   switchRow: {
     flexDirection: 'row',
@@ -337,10 +344,13 @@ const styles = StyleSheet.create({
     ...typography.body,
     borderWidth: 1,
     borderColor: colors.border,
+    minHeight: 48,
+    fontSize: 15,
   },
   textArea: {
-    minHeight: 80,
+    minHeight: 90,
     textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   saveButton: {
     backgroundColor: colors.primary,
