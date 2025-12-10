@@ -54,10 +54,16 @@ router.get('/:id', optionalAuth, async (req, res) => {
         ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
         : 0;
 
+      // Filter out empty portfolio images
+      const portfolioImages = (artist.portfolio_images || []).filter(
+        img => img && img.trim() !== ''
+      );
+
       response = {
         ...response,
         artist: {
           ...artist,
+          portfolio_images: portfolioImages,
           artworks,
           featured_artworks: featuredArtworks,
           review_count: reviews?.length || 0,
@@ -138,16 +144,6 @@ router.put('/me/artist', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
-    // Validate portfolio_images array if provided
-    if (portfolio_images !== undefined) {
-      if (!Array.isArray(portfolio_images)) {
-        return res.status(400).json({ error: 'portfolio_images must be an array' });
-      }
-      if (portfolio_images.length > 6) {
-        return res.status(400).json({ error: 'Maximum 6 portfolio images allowed' });
-      }
-    }
-
     const updates = {};
     if (commission_status !== undefined) updates.commission_status = commission_status;
     if (min_price !== undefined) updates.min_price = min_price;
@@ -155,7 +151,20 @@ router.put('/me/artist', authenticate, async (req, res) => {
     if (turnaround_days !== undefined) updates.turnaround_days = turnaround_days;
     if (specialties !== undefined) updates.specialties = specialties;
     if (social_links !== undefined) updates.social_links = social_links;
-    if (portfolio_images !== undefined) updates.portfolio_images = portfolio_images;
+    
+    // Validate and filter portfolio_images array if provided
+    if (portfolio_images !== undefined) {
+      if (!Array.isArray(portfolio_images)) {
+        return res.status(400).json({ error: 'portfolio_images must be an array' });
+      }
+      // Filter out empty strings before validation
+      const filteredImages = portfolio_images.filter(img => img && img.trim() !== '');
+      if (filteredImages.length > 6) {
+        return res.status(400).json({ error: 'Maximum 6 portfolio images allowed' });
+      }
+      // Only save non-empty images
+      updates.portfolio_images = filteredImages;
+    }
 
     const { data, error } = await supabaseAdmin
       .from('artists')
@@ -165,6 +174,11 @@ router.put('/me/artist', authenticate, async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Filter out empty portfolio images in response
+    if (data.portfolio_images) {
+      data.portfolio_images = data.portfolio_images.filter(img => img && img.trim() !== '');
+    }
 
     res.json(data);
   } catch (error) {
