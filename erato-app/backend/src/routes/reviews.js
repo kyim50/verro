@@ -42,31 +42,8 @@ router.post('/', authenticate, async (req, res) => {
     const userId = String(req.user.id);
     const clientId = String(commission.client_id);
     
-    // Get artist to find user_id
-    // commission.artist_id is the artists table ID, not the user_id
-    const { data: artist, error: artistError } = await supabaseAdmin
-      .from('artists')
-      .select('user_id')
-      .eq('id', commission.artist_id)
-      .maybeSingle();
-
-    if (artistError) {
-      console.error('Error fetching artist:', artistError);
-      console.error('Commission artist_id:', commission.artist_id);
-      console.error('Commission ID:', commission.id);
-      console.error('User ID:', userId);
-    }
-
-    if (!artist) {
-      console.error('Artist not found for commission:', {
-        commissionId: commission.id,
-        artistId: commission.artist_id,
-        userId: userId
-      });
-      return res.status(500).json({ error: 'Failed to verify commission ownership - artist not found' });
-    }
-
-    const artistUserId = String(artist.user_id);
+    // commission.artist_id IS the user_id (not the artists table ID)
+    const artistUserId = String(commission.artist_id);
 
     // Check if user is client or artist
     const isClient = clientId === userId;
