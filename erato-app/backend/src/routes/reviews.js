@@ -157,7 +157,7 @@ router.get('/artist/:artistId', async (req, res) => {
         .in('id', clientIds),
       supabaseAdmin
         .from('commissions')
-        .select('id, title, created_at')
+        .select('id, details, client_note, created_at')
         .in('id', commissionIds)
     ]);
 
@@ -166,11 +166,17 @@ router.get('/artist/:artistId', async (req, res) => {
     const commissionMap = new Map(commissionsResult.data?.map(c => [c.id, c]) || []);
 
     // Transform reviews with pre-fetched data
-    const enrichedReviews = reviews.map((review) => ({
-      ...review,
-      clients: clientMap.get(review.client_id) || null,
-      commissions: commissionMap.get(review.commission_id) || null
-    }));
+    const enrichedReviews = reviews.map((review) => {
+      const commission = commissionMap.get(review.commission_id);
+      return {
+        ...review,
+        clients: clientMap.get(review.client_id) || null,
+        commissions: commission ? {
+          ...commission,
+          title: commission.details || commission.client_note || 'Commission'
+        } : null
+      };
+    });
 
     // Calculate average rating
     const averageRating = enrichedReviews.length > 0
@@ -216,9 +222,10 @@ router.get('/client/:clientId', async (req, res) => {
     const commissionIds = reviews.map(r => r.commission_id).filter(Boolean);
     
     // Fetch all commissions in one query
+    // Note: commission.artist_id IS the user_id
     const { data: commissions, error: commError } = await supabaseAdmin
       .from('commissions')
-      .select('id, title, created_at, artist_id')
+      .select('id, details, client_note, created_at, artist_id')
       .in('id', commissionIds);
 
     if (commError) throw commError;
@@ -226,39 +233,31 @@ router.get('/client/:clientId', async (req, res) => {
     // Create a map for fast lookup
     const commissionMap = new Map(commissions?.map(c => [c.id, c]) || []);
 
-    // Get all unique artist IDs
-    const artistIds = [...new Set(commissions?.map(c => c.artist_id).filter(Boolean) || [])];
+    // Get all unique artist IDs (which are actually user_ids)
+    const artistUserIds = [...new Set(commissions?.map(c => c.artist_id).filter(Boolean) || [])];
     
-    // Fetch all artists and their users in one query
-    const { data: artists, error: artistError } = await supabaseAdmin
-      .from('artists')
-      .select(`
-        id,
-        user_id,
-        users:users!artists_user_id_fkey(
-          id,
-          username,
-          full_name,
-          avatar_url
-        )
-      `)
-      .in('id', artistIds);
+    // Fetch artist users directly (artist_id is user_id)
+    const { data: artistUsers, error: artistError } = await supabaseAdmin
+      .from('users')
+      .select('id, username, full_name, avatar_url')
+      .in('id', artistUserIds);
 
     if (artistError) throw artistError;
 
-    // Create maps for fast lookup
-    const artistMap = new Map(artists?.map(a => [a.id, a]) || []);
+    // Create map for fast lookup
+    const artistUserMap = new Map(artistUsers?.map(u => [u.id, u]) || []);
 
     // Transform reviews with pre-fetched data (no additional queries)
     const transformedReviews = reviews.map((review) => {
       const commission = commissionMap.get(review.commission_id);
-      const artist = commission ? artistMap.get(commission.artist_id) : null;
+      // commission.artist_id is the user_id, so look it up directly
+      const artist = commission ? artistUserMap.get(commission.artist_id) : null;
 
       return {
         ...review,
-        artist: artist?.users || null,
+        artist: artist || null,
         commission: commission ? {
-          title: commission.title,
+          details: commission.details || commission.client_note || 'Commission',
           created_at: commission.created_at
         } : null
       };

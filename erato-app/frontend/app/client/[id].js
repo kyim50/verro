@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -14,15 +15,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+const { width } = Dimensions.get('window');
+const IS_SMALL_SCREEN = width < 400;
 
 export default function ClientProfileScreen() {
   const { id } = useLocalSearchParams();
   const { token, user } = useAuthStore();
   const [client, setClient] = useState(null);
   const [commissions, setCommissions] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [totalReviews, setTotalReviews] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -35,8 +41,9 @@ export default function ClientProfileScreen() {
     setError(null);
 
     try {
-      // Fetch client profile
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      // Fetch client profile
       const userResponse = await axios.get(`${API_URL}/users/${id}`, { headers });
       setClient(userResponse.data);
 
@@ -47,11 +54,24 @@ export default function ClientProfileScreen() {
             `${API_URL}/commissions?clientId=${id}&artistId=${user.artists.id}`,
             { headers }
           );
-          setCommissions(commissionsResponse.data || []);
+          setCommissions(commissionsResponse.data.commissions || []);
         } catch (commError) {
           console.error('Error fetching commissions:', commError);
           setCommissions([]);
         }
+      }
+
+      // Fetch client reviews
+      try {
+        const reviewsResponse = await axios.get(`${API_URL}/reviews/client/${id}`, { headers });
+        setReviews(reviewsResponse.data.reviews || []);
+        setAverageRating(parseFloat(reviewsResponse.data.averageRating) || 0);
+        setTotalReviews(reviewsResponse.data.totalReviews || 0);
+      } catch (reviewError) {
+        console.error('Error fetching reviews:', reviewError);
+        setReviews([]);
+        setAverageRating(0);
+        setTotalReviews(0);
       }
     } catch (err) {
       console.error('Error fetching client profile:', err);
@@ -68,14 +88,12 @@ export default function ClientProfileScreen() {
     }
 
     try {
-      // Create or get existing conversation
       const response = await axios.post(
         `${API_URL}/messages/conversations`,
         { participant_ids: [id] },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Navigate to the conversation
       router.push(`/messages/${response.data.conversation.id}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -113,6 +131,10 @@ export default function ClientProfileScreen() {
   }
 
   const isOwnProfile = user?.id === client.id;
+  const completedCommissions = commissions.filter(c => c.status === 'completed');
+  const totalSpent = commissions
+    .filter(c => c.price && (c.status === 'completed' || c.status === 'in_progress' || c.status === 'accepted'))
+    .reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
 
   return (
     <View style={styles.container}>
@@ -130,50 +152,79 @@ export default function ClientProfileScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>Client Profile</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Client Header */}
         <View style={styles.clientHeader}>
-          <Image
-            source={{ uri: client.avatar_url || 'https://via.placeholder.com/120' }}
-            style={styles.avatar}
-            contentFit="cover"
-          />
-          <Text style={styles.clientName}>
-            {client.full_name || client.username}
-          </Text>
-          <Text style={styles.clientUsername}>@{client.username}</Text>
+          {/* Avatar */}
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: client.avatar_url || 'https://via.placeholder.com/120' }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+          </View>
 
+          {/* Name and Username */}
+          <View style={styles.nameContainer}>
+            <Text style={styles.clientName} numberOfLines={1}>
+              {client.full_name || client.username}
+            </Text>
+            <Text style={styles.clientUsername} numberOfLines={1}>
+              @{client.username}
+            </Text>
+          </View>
+
+          {/* Rating (if available) */}
+          {averageRating > 0 && (
+            <View style={styles.ratingContainer}>
+              <View style={styles.ratingStars}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Ionicons
+                    key={star}
+                    name={star <= Math.round(averageRating) ? "star" : "star-outline"}
+                    size={16}
+                    color={colors.status.warning}
+                  />
+                ))}
+              </View>
+              <Text style={styles.ratingText}>
+                {averageRating.toFixed(1)} ({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})
+              </Text>
+            </View>
+          )}
+
+          {/* Bio */}
           {client.bio && (
-            <Text style={styles.bio}>{client.bio}</Text>
+            <Text style={styles.bio} numberOfLines={3}>
+              {client.bio}
+            </Text>
           )}
 
           {/* Stats */}
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
               <Text style={styles.statValue}>
-                {client.created_at ? new Date(client.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'}
+                {client.created_at ? new Date(client.created_at).getFullYear() : 'N/A'}
               </Text>
-              <Text style={styles.statLabel}>Member Since</Text>
+              <Text style={styles.statLabel}>Joined</Text>
             </View>
             {user?.artists && commissions.length > 0 && (
               <>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                  <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
+                  <Ionicons name="briefcase-outline" size={18} color={colors.primary} />
                   <Text style={styles.statValue}>{commissions.length}</Text>
                   <Text style={styles.statLabel}>Total</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                  <Ionicons name="checkmark-done-outline" size={20} color="#4CAF50" />
-                  <Text style={styles.statValue}>
-                    {commissions.filter(c => c.status === 'completed').length}
-                  </Text>
+                  <Ionicons name="checkmark-done-outline" size={18} color={colors.success} />
+                  <Text style={styles.statValue}>{completedCommissions.length}</Text>
                   <Text style={styles.statLabel}>Completed</Text>
                 </View>
               </>
@@ -208,17 +259,85 @@ export default function ClientProfileScreen() {
               <View style={styles.financialItem}>
                 <Text style={styles.financialLabel}>Total Spent</Text>
                 <Text style={styles.financialValue}>
-                  ${commissions.filter(c => c.price && (c.status === 'completed' || c.status === 'in_progress' || c.status === 'accepted')).reduce((sum, c) => sum + parseFloat(c.price || 0), 0).toFixed(2)}
+                  ${totalSpent.toFixed(2)}
                 </Text>
               </View>
               <View style={styles.financialDivider} />
               <View style={styles.financialItem}>
                 <Text style={styles.financialLabel}>Pending</Text>
                 <Text style={styles.financialValue}>
-                  ${commissions.filter(c => c.price && (c.status === 'pending' || c.status === 'in_progress')).reduce((sum, c) => sum + parseFloat(c.price || 0), 0).toFixed(2)}
+                  ${commissions
+                    .filter(c => c.price && (c.status === 'pending' || c.status === 'in_progress'))
+                    .reduce((sum, c) => sum + parseFloat(c.price || 0), 0)
+                    .toFixed(2)}
                 </Text>
               </View>
             </View>
+          </View>
+        )}
+
+        {/* Reviews Section */}
+        {reviews.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="star-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Reviews from Artists</Text>
+              </View>
+            </View>
+
+            {reviews.map((review) => (
+              <View key={review.id} style={styles.reviewCard}>
+                <View style={styles.reviewHeader}>
+                  <View style={styles.reviewAuthor}>
+                    {review.artist?.avatar_url && (
+                      <Image
+                        source={{ uri: review.artist.avatar_url }}
+                        style={styles.reviewAvatar}
+                        contentFit="cover"
+                      />
+                    )}
+                    <View style={styles.reviewAuthorInfo}>
+                      <Text style={styles.reviewAuthorName}>
+                        {review.artist?.full_name || review.artist?.username || 'Anonymous Artist'}
+                      </Text>
+                      <View style={styles.reviewRating}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Ionicons
+                            key={star}
+                            name={star <= review.rating ? "star" : "star-outline"}
+                            size={12}
+                            color={colors.status.warning}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                  {review.created_at && (
+                    <Text style={styles.reviewDate}>
+                      {new Date(review.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  )}
+                </View>
+
+                {review.comment && (
+                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                )}
+
+                {review.commission && (
+                  <View style={styles.reviewCommission}>
+                    <Ionicons name="briefcase-outline" size={12} color={colors.text.secondary} />
+                    <Text style={styles.reviewCommissionText} numberOfLines={1}>
+                      {review.commission.details || review.commission.client_note || 'Commission'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
           </View>
         )}
 
@@ -322,6 +441,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
@@ -330,10 +450,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    ...shadows.sm,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontWeight: '600',
   },
   content: {
     paddingBottom: spacing.xxl,
@@ -384,21 +506,49 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
   },
+  avatarContainer: {
+    marginBottom: spacing.md,
+  },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    marginBottom: spacing.md,
+    borderWidth: 3,
+    borderColor: colors.primary,
+    ...shadows.md,
+  },
+  nameContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    width: '100%',
   },
   clientName: {
     ...typography.h1,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 24 : 28,
+    fontWeight: '700',
     marginBottom: spacing.xs,
   },
   clientUsername: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 16,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
     marginBottom: spacing.md,
+  },
+  ratingStars: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  ratingText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   bio: {
     ...typography.body,
@@ -406,6 +556,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.lg,
     lineHeight: 22,
+    paddingHorizontal: spacing.md,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -418,6 +569,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.sm,
   },
   statItem: {
     flex: 1,
@@ -432,7 +584,7 @@ const styles = StyleSheet.create({
   statValue: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 16 : 18,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -440,11 +592,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     textAlign: 'center',
-    fontSize: 11,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
   },
   actionButtons: {
     width: '100%',
     gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   actionButton: {
     flexDirection: 'row',
@@ -453,6 +606,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
     gap: spacing.sm,
+    ...shadows.sm,
   },
   messageButton: {
     backgroundColor: colors.primary,
@@ -461,6 +615,7 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 14 : 16,
   },
   section: {
     paddingHorizontal: spacing.lg,
@@ -480,6 +635,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
+    fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
   },
   financialCard: {
     flexDirection: 'row',
@@ -489,6 +646,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.lg,
+    ...shadows.sm,
   },
   financialItem: {
     flex: 1,
@@ -510,8 +668,74 @@ const styles = StyleSheet.create({
   financialValue: {
     ...typography.h2,
     color: colors.primary,
-    fontSize: 24,
+    fontSize: IS_SMALL_SCREEN ? 20 : 24,
     fontWeight: '700',
+  },
+  reviewCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  reviewAuthor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  reviewAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reviewAuthorInfo: {
+    flex: 1,
+  },
+  reviewAuthorName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    marginBottom: 2,
+  },
+  reviewRating: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewDate: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  reviewComment: {
+    ...typography.body,
+    color: colors.text.primary,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
+  reviewCommission: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  reviewCommissionText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
   },
   commissionCard: {
     backgroundColor: colors.surface,
@@ -520,6 +744,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.sm,
   },
   commissionHeader: {
     flexDirection: 'row',
@@ -543,7 +768,7 @@ const styles = StyleSheet.create({
   commissionPrice: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 16,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
   commissionDetails: {
     ...typography.body,
