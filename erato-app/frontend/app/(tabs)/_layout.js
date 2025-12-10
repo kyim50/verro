@@ -58,6 +58,63 @@ function MessagesTabIcon({ color }) {
   );
 }
 
+function BoardsTabIcon({ color }) {
+  const { token, user } = useAuthStore();
+  const [newCommissionCount, setNewCommissionCount] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchNewCommissions = async () => {
+      if (!token || !isMounted || !user) return;
+      
+      // Only show for artists (they receive commissions)
+      const isArtist = user?.user_type === 'artist' || 
+                       (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+      
+      if (!isArtist) {
+        setNewCommissionCount(0);
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${API_URL}/commissions?type=received&status=pending`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (isMounted) {
+          const pendingCommissions = response.data.commissions || [];
+          setNewCommissionCount(pendingCommissions.length);
+        }
+      } catch (error) {
+        // Silently fail to avoid spamming console
+        if (error.response?.status !== 429) {
+          console.error('Error fetching new commissions:', error.message);
+        }
+      }
+    };
+
+    // Fetch once on mount
+    fetchNewCommissions();
+
+    // Poll every 2 minutes to check for new commissions
+    const interval = setInterval(fetchNewCommissions, 120000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [token, user]);
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <Ionicons name="library" size={22} color={color} />
+      {newCommissionCount > 0 && (
+        <View style={styles.unreadDot} />
+      )}
+    </View>
+  );
+}
+
 export default function TabsLayout() {
   const { user } = useAuthStore();
   const isArtist = user?.user_type === 'artist' || 
@@ -132,9 +189,7 @@ export default function TabsLayout() {
         name="boards"
         options={{
           title: 'Library',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library" size={22} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <BoardsTabIcon color={color} />,
         }}
       />
       <Tabs.Screen

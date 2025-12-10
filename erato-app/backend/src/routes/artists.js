@@ -136,8 +136,14 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
+    // Filter out empty portfolio images
+    const portfolioImages = (artist.portfolio_images || []).filter(
+      img => img && img.trim() !== ''
+    );
+
     const response = {
       ...artist,
+      portfolio_images: portfolioImages,
       user_id: userId,
       users: userData,
       artworks: artworks || []

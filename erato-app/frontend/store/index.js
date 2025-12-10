@@ -475,8 +475,16 @@ export const useProfileStore = create((set, get) => ({
       
       const response = await axios.get(`${API_URL}/users/${userId}`, { headers });
       
-      set({ profile: response.data, isLoading: false });
-      return response.data;
+      // Filter out empty portfolio images
+      const profileData = { ...response.data };
+      if (profileData?.artist?.portfolio_images) {
+        profileData.artist.portfolio_images = profileData.artist.portfolio_images.filter(
+          img => img && img.trim() !== ''
+        );
+      }
+      
+      set({ profile: profileData, isLoading: false });
+      return profileData;
     } catch (error) {
       set({ error: error.response?.data?.error || error.message, isLoading: false });
       throw error;
@@ -501,14 +509,30 @@ export const useProfileStore = create((set, get) => ({
   updateArtistProfile: async (updates, token) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.put(`${API_URL}/users/me/artist`, updates, {
+      // Filter out empty portfolio images before sending
+      const cleanedUpdates = { ...updates };
+      if (cleanedUpdates.portfolio_images) {
+        cleanedUpdates.portfolio_images = cleanedUpdates.portfolio_images.filter(
+          img => img && img.trim() !== ''
+        );
+      }
+
+      const response = await axios.put(`${API_URL}/users/me/artist`, cleanedUpdates, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      // Filter out empty portfolio images in response
+      const responseData = { ...response.data };
+      if (responseData.portfolio_images) {
+        responseData.portfolio_images = responseData.portfolio_images.filter(
+          img => img && img.trim() !== ''
+        );
+      }
 
       set((state) => ({
         profile: {
           ...state.profile,
-          artist: response.data
+          artist: responseData
         },
         isLoading: false
       }));
