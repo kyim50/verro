@@ -28,21 +28,29 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
     const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
     const contentType = getContentType(ext);
 
-    // Create form data with proper React Native format
+    // Determine endpoint and field name based on bucket and authentication
+    let endpoint;
+    let fieldName = 'file'; // Default field name
+    
+    if (allowUnauthenticated && bucket === 'profiles') {
+      endpoint = `${API_URL}/uploads/register-profile`;
+      fieldName = 'file';
+    } else if (bucket === 'portfolios') {
+      // Portfolio endpoint expects 'files' (plural) even for single uploads
+      endpoint = `${API_URL}/uploads/portfolio`;
+      fieldName = 'files';
+    } else {
+      endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : 'artwork'}`;
+      fieldName = 'file';
+    }
+
+    // Create form data with proper React Native format and correct field name
     const formData = new FormData();
-    formData.append('file', {
+    formData.append(fieldName, {
       uri,
       type: contentType,
       name: `upload.${ext}`,
     });
-
-    // Determine endpoint based on bucket and authentication
-    let endpoint;
-    if (allowUnauthenticated && bucket === 'profiles') {
-      endpoint = `${API_URL}/uploads/register-profile`;
-    } else {
-      endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : bucket === 'portfolios' ? 'portfolio' : 'artwork'}`;
-    }
 
     // Upload to backend API
     // Note: Don't set Content-Type header manually - axios will set it with proper boundary
@@ -59,6 +67,12 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
 
     if (!response.data || !response.data.success) {
       throw new Error(response.data?.error || 'Upload failed');
+    }
+
+    // Portfolio endpoint returns array of URLs, single file endpoints return single URL
+    if (bucket === 'portfolios' && Array.isArray(response.data.urls)) {
+      // For single file upload to portfolio, return first URL
+      return response.data.urls[0];
     }
 
     return response.data.url;

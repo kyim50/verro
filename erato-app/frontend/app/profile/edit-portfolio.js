@@ -15,10 +15,11 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore } from '../../store';
+import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { uploadImage } from '../../utils/imageUpload';
 
 // Get store reference for direct state updates
 const useProfileStoreRef = useProfileStore;
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function EditPortfolioScreen() {
   const { token, user } = useAuthStore();
@@ -114,6 +115,66 @@ export default function EditPortfolioScreen() {
     setLoading(true);
 
     try {
+      // Separate local files (need uploading) from existing URLs (already uploaded)
+      const localFiles = [];
+      const existingUrls = [];
+      const imageMap = new Map(); // Track original order
+
+      filledImages.forEach((img, index) => {
+        if (img.startsWith('file://')) {
+          localFiles.push({ uri: img, originalIndex: index });
+          imageMap.set(index, null); // Will be set after upload
+        } else if (img.startsWith('http://') || img.startsWith('https://')) {
+          existingUrls.push(img);
+          imageMap.set(index, img);
+        }
+      });
+
+      // Upload local files to cloud storage
+      let uploadedUrls = [];
+      if (localFiles.length > 0) {
+        Toast.show({
+          type: 'info',
+          text1: 'Uploading images...',
+          text2: `Uploading ${localFiles.length} image${localFiles.length > 1 ? 's' : ''}`,
+          visibilityTime: 2000,
+        });
+
+        // Upload images one by one
+        for (const file of localFiles) {
+          try {
+            console.log('Uploading portfolio image:', file.uri);
+            const uploadedUrl = await uploadImage(file.uri, 'portfolios', '', token);
+            console.log('Uploaded URL received:', uploadedUrl);
+            if (uploadedUrl) {
+              imageMap.set(file.originalIndex, uploadedUrl);
+              uploadedUrls.push(uploadedUrl);
+            } else {
+              throw new Error('No URL returned from upload');
+            }
+          } catch (uploadError) {
+            console.error('Error uploading image:', uploadError);
+            throw new Error(`Failed to upload image: ${uploadError.message}`);
+          }
+        }
+      }
+
+      // Combine existing URLs and newly uploaded URLs in the correct order
+      const allImages = filledImages.map((img, index) => {
+        if (img.startsWith('file://')) {
+          const uploadedUrl = imageMap.get(index);
+          if (!uploadedUrl) {
+            console.error('No uploaded URL found for index:', index);
+            throw new Error('Image upload failed - no URL returned');
+          }
+          return uploadedUrl;
+        }
+        return img; // Already a URL
+      }).filter(Boolean); // Remove any nulls (shouldn't happen, but safety check)
+
+      console.log('Saving portfolio images to backend:', allImages);
+
+      // Save to backend
       const response = await fetch(
         `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me/artist`,
         {
@@ -123,26 +184,54 @@ export default function EditPortfolioScreen() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            portfolio_images: filledImages,
+            portfolio_images: allImages,
           }),
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to update portfolio');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Backend error response:', errorData);
+        throw new Error(errorData.error || `Failed to update portfolio (${response.status})`);
       }
 
       const responseData = await response.json();
+      console.log('Backend response data:', responseData);
       
-      // Optimistically update profile store immediately with new portfolio
+      // Verify the response contains portfolio_images and it's a valid array
+      if (!responseData.portfolio_images) {
+        console.error('Backend response missing portfolio_images:', responseData);
+        throw new Error('Backend did not return portfolio images');
+      }
+
+      // Ensure portfolio_images is an array and filter out invalid entries
+      const validatedPortfolio = Array.isArray(responseData.portfolio_images)
+        ? responseData.portfolio_images.filter(img => 
+            img && 
+            typeof img === 'string' && 
+            img.trim() !== '' && 
+            (img.startsWith('http://') || img.startsWith('https://'))
+          )
+        : [];
+
+      if (validatedPortfolio.length !== allImages.length) {
+        console.warn('Portfolio count mismatch. Sent:', allImages.length, 'Received:', validatedPortfolio.length);
+        console.warn('Sent images:', allImages);
+        console.warn('Received images:', validatedPortfolio);
+      }
+
+      console.log('Validated portfolio images:', validatedPortfolio);
+
+      // Optimistically update profile store immediately with validated portfolio
       useProfileStoreRef.setState((state) => {
         if (state.profile && state.profile.artist) {
+          console.log('Updating profile store with portfolio (count:', validatedPortfolio.length, '):', validatedPortfolio);
           return {
             profile: {
               ...state.profile,
               artist: {
                 ...state.profile.artist,
-                portfolio_images: responseData.portfolio_images || filledImages,
+                portfolio_images: validatedPortfolio, // Use validated portfolio from server
               },
             },
           };
@@ -150,8 +239,10 @@ export default function EditPortfolioScreen() {
         return state;
       });
 
-      // Force refresh to bypass cache and get fresh data
-      await fetchProfile(user.id, token, true);
+      // Force refresh to bypass cache and get fresh data from server
+      // This ensures everything is in sync
+      const refreshedProfile = await fetchProfile(user.id, token, true);
+      console.log('Refreshed profile portfolio:', refreshedProfile?.artist?.portfolio_images);
       
       Toast.show({
         type: 'success',
@@ -164,7 +255,7 @@ export default function EditPortfolioScreen() {
       router.back();
     } catch (error) {
       console.error('Error updating portfolio:', error);
-      Alert.alert('Error', 'Failed to update portfolio. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to update portfolio. Please try again.');
     } finally {
       setLoading(false);
     }

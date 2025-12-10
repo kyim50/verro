@@ -65,24 +65,49 @@ export default function EditArtistProfileScreen() {
         .filter(s => s.length > 0);
 
       const updateData = {
-        commissionStatus,
+        commission_status: commissionStatus,
       };
 
-      if (minPrice) updateData.minPrice = parseFloat(minPrice);
-      if (maxPrice) updateData.maxPrice = parseFloat(maxPrice);
-      if (turnaroundDays) updateData.turnaroundDays = parseInt(turnaroundDays);
-      if (specialtiesArray.length > 0) updateData.specialties = specialtiesArray;
+      if (minPrice && minPrice.trim() !== '') {
+        updateData.min_price = parseFloat(minPrice);
+      } else if (minPrice === '' || !minPrice) {
+        updateData.min_price = null; // Clear min_price if empty
+      }
+      
+      if (maxPrice && maxPrice.trim() !== '') {
+        updateData.max_price = parseFloat(maxPrice);
+      } else if (maxPrice === '' || !maxPrice) {
+        updateData.max_price = null; // Clear max_price if empty
+      }
+      
+      if (turnaroundDays && turnaroundDays.trim() !== '') {
+        updateData.turnaround_days = parseInt(turnaroundDays);
+      } else if (turnaroundDays === '' || !turnaroundDays) {
+        updateData.turnaround_days = null; // Clear turnaround_days if empty
+      }
+      
+      if (specialtiesArray.length > 0) {
+        updateData.specialties = specialtiesArray;
+      } else {
+        updateData.specialties = []; // Clear specialties if empty
+      }
 
       const response = await axios.put(
-        `${API_URL}/artists/${user.id}`,
+        `${API_URL}/users/me/artist`,
         updateData,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      // Optimistically update profile store immediately
-      const { reset } = useProfileStore.getState();
+      console.log('Commission update response:', response.data);
+
+      // Build updated artist data from response (server is source of truth)
+      const updatedArtistData = {
+        ...response.data,
+      };
+
+      // Optimistically update profile store immediately with server response
       useProfileStore.setState((state) => {
         if (state.profile && state.profile.artist) {
           return {
@@ -90,7 +115,7 @@ export default function EditArtistProfileScreen() {
               ...state.profile,
               artist: {
                 ...state.profile.artist,
-                ...response.data,
+                ...updatedArtistData, // Use server response as source of truth
               },
             },
           };
@@ -98,7 +123,8 @@ export default function EditArtistProfileScreen() {
         return state;
       });
 
-      // Force refresh to bypass cache and get fresh data
+      // Force refresh to bypass cache and get fresh data from server
+      // This ensures everything is in sync
       await fetchProfile(user.id, token, true);
       
       // Also update auth store user data if artist info is nested there
