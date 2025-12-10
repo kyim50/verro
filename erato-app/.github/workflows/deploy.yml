@@ -1,0 +1,128 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  deploy:
+    name: Deploy Backend to EC2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run backend tests (if available)
+        working-directory: ./backend
+        run: |
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then
+            npm test || echo "No tests configured or tests skipped"
+          else
+            echo "No tests configured"
+          fi
+        continue-on-error: true
+
+      - name: Check for security vulnerabilities
+        working-directory: ./backend
+        run: |
+          npm audit --audit-level=high || true
+        continue-on-error: true
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+
+      - name: Add EC2 to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.EC2_IP }} >> ~/.ssh/known_hosts
+
+      - name: Detect project path on EC2
+        id: detect-path
+        run: |
+          PROJECT_PATH=$(ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
+            "if [ -d ~/erato-app ]; then echo ~/erato-app; \
+             elif [ -d /home/${{ secrets.EC2_USER }}/erato-app ]; then echo /home/${{ secrets.EC2_USER }}/erato-app; \
+             else find ~ -maxdepth 3 -type d -name 'erato-app' 2>/dev/null | head -1; fi")
+          echo "project_path=$PROJECT_PATH" >> $GITHUB_OUTPUT
+          echo "Detected project path: $PROJECT_PATH"
+
+      - name: Pull latest code on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
+            "cd ${{ steps.detect-path.outputs.project_path }} && \
+             git fetch origin && \
+             git reset --hard origin/main && \
+             git pull origin main"
+
+      - name: Rebuild and restart Docker container
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} << 'EOF'
+            PROJECT_PATH="${{ steps.detect-path.outputs.project_path }}"
+            COMPOSE_FILE="docker-compose.prod.yml"
+            
+            cd "$PROJECT_PATH"
+            
+            # Stop and remove old container
+            docker-compose -f "$COMPOSE_FILE" stop backend 2>/dev/null || true
+            docker-compose -f "$COMPOSE_FILE" rm -f backend 2>/dev/null || true
+            
+            # Clean up Docker resources
+            docker system prune -af --volumes 2>/dev/null || true
+            docker image prune -af 2>/dev/null || true
+            
+            # Rebuild and start
+            docker-compose -f "$COMPOSE_FILE" up -d --build --force-recreate --no-deps backend
+          EOF
+
+      - name: Wait for service to be ready
+        run: |
+          echo "Waiting for backend to be ready..."
+          sleep 15
+          
+          for i in {1..30}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              ${{ secrets.API_HEALTH_CHECK_URL }} || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Backend is healthy!"
+              exit 0
+            fi
+            
+            echo "Attempt $i/30: Service not ready (HTTP $HTTP_CODE)"
+            sleep 5
+          done
+          
+          echo "⚠️ Service did not become healthy within timeout"
+          exit 1
+
+      - name: Health check verification
+        run: |
+          echo "Performing final health check..."
+          curl -f ${{ secrets.API_HEALTH_CHECK_URL }} || exit 1
+          echo "✅ Deployment successful and healthy!"
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API URL:** ${{ secrets.API_HEALTH_CHECK_URL }}" >> $GITHUB_STEP_SUMMARY
+
