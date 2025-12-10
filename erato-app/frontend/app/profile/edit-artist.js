@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -30,14 +30,17 @@ export default function EditArtistProfileScreen() {
   const [turnaroundDays, setTurnaroundDays] = useState('');
   const [specialties, setSpecialties] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
-    if (profile?.artist) {
+    // Only set initial values on first mount, not when profile updates after save
+    if (isInitialMount.current && profile?.artist) {
       setCommissionStatus(profile.artist.commission_status || 'open');
       setMinPrice(profile.artist.min_price?.toString() || '');
       setMaxPrice(profile.artist.max_price?.toString() || '');
       setTurnaroundDays(profile.artist.turnaround_days?.toString() || '');
       setSpecialties(profile.artist.specialties?.join(', ') || '');
+      isInitialMount.current = false;
     }
   }, [profile]);
 

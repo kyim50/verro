@@ -519,6 +519,69 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
   }
 });
 
+// Delete a conversation
+router.delete('/conversations/:id', authenticate, async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+
+    // Verify user is part of conversation
+    const { data: participation, error: partError } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (partError || !participation) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Remove user from conversation participants (don't delete conversation if it has a commission)
+    const { data: conversation } = await supabaseAdmin
+      .from('conversations')
+      .select('commission_id')
+      .eq('id', conversationId)
+      .single();
+
+    if (conversation?.commission_id) {
+      // Conversation has a commission - just remove user from participants
+      const { error: deleteError } = await supabaseAdmin
+        .from('conversation_participants')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('user_id', req.user.id);
+
+      if (deleteError) throw deleteError;
+    } else {
+      // No commission - can safely delete the conversation and all its messages
+      // First delete messages
+      await supabaseAdmin
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      // Then delete participants
+      await supabaseAdmin
+        .from('conversation_participants')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      // Finally delete the conversation
+      const { error: deleteError } = await supabaseAdmin
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+
+      if (deleteError) throw deleteError;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete a message
 router.delete('/conversations/:id/messages/:messageId', authenticate, async (req, res) => {
   try {

@@ -379,28 +379,34 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {profile.artist.portfolio_images && profile.artist.portfolio_images.filter(img => img && img.trim() !== '').length > 0 ? (
-                  <View style={styles.portfolioGrid}>
-                    {profile.artist.portfolio_images.filter(img => img && img.trim() !== '').map((imageUrl, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={styles.portfolioItem}
-                        activeOpacity={0.85}
-                        onLongPress={() => {
-                          if (isOwnProfile) {
-                            // Find the original index in the full array
-                            const originalIndex = profile.artist.portfolio_images.indexOf(imageUrl);
-                            handleDeletePortfolioImage(originalIndex);
-                          }
-                        }}
-                      >
-                        <Image
-                          source={{ uri: imageUrl }}
-                          style={styles.portfolioImage}
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                {(() => {
+                  const filledImages = (profile.artist.portfolio_images || []).filter(img => img && img.trim() !== '');
+                  return filledImages.length > 0 ? (
+                    <View style={styles.portfolioGrid}>
+                      {filledImages.map((imageUrl, displayIndex) => {
+                        // Find the original index in the unfiltered array
+                        const originalIndex = profile.artist.portfolio_images.indexOf(imageUrl);
+                        return (
+                          <TouchableOpacity
+                            key={`${imageUrl}-${displayIndex}`}
+                            style={styles.portfolioItem}
+                            activeOpacity={0.85}
+                            onLongPress={() => {
+                              if (isOwnProfile) {
+                                handleDeletePortfolioImage(originalIndex);
+                              }
+                            }}
+                          >
+                            <Image
+                              source={{ uri: imageUrl }}
+                              style={styles.portfolioImage}
+                            />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null;
+                })()}
                 ) : (
                   <TouchableOpacity
                     style={styles.addPortfolioButton}
