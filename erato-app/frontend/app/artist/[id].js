@@ -621,7 +621,7 @@ export default function ArtistProfileScreen() {
             </View>
 
             <FlatList
-              data={artist.portfolio_images}
+              data={(artist.portfolio_images || []).filter(img => img && img.trim() !== '')}
               scrollEnabled={selectedPortfolioIndex === null && !isModalClosing}
               renderItem={({ item, index }) => {
                 const handlePortfolioPress = (e) => {
@@ -783,7 +783,7 @@ export default function ArtistProfileScreen() {
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.modalCounter}>
-              {selectedPortfolioIndex !== null ? `${selectedPortfolioIndex + 1} / ${artist?.portfolio_images?.length || 0}` : ''}
+              {selectedPortfolioIndex !== null ? `${selectedPortfolioIndex + 1} / ${(artist?.portfolio_images || []).filter(img => img && img.trim() !== '').length || 0}` : ''}
             </Text>
             <View style={styles.modalHeaderSpacer} />
           </View>
@@ -818,7 +818,8 @@ export default function ArtistProfileScreen() {
               }
               const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
               // Only update if we have a valid index and modal is still visible
-              if (newIndex >= 0 && newIndex < (artist?.portfolio_images?.length || 0) && selectedPortfolioIndex !== null) {
+              const filteredPortfolio = (artist?.portfolio_images || []).filter(img => img && img.trim() !== '');
+              if (newIndex >= 0 && newIndex < filteredPortfolio.length && selectedPortfolioIndex !== null) {
                 setSelectedPortfolioIndex(newIndex);
               }
             }}

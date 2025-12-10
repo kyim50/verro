@@ -37,7 +37,8 @@ export default function CreateScreen() {
 
   // Initialize panResponder unconditionally (hooks must be called before returns)
   const currentArtist = artists[currentIndex];
-  const portfolioImages = currentArtist?.portfolio_images || [];
+  // Filter out any empty/blank portfolio images
+  const portfolioImages = (currentArtist?.portfolio_images || []).filter(img => img && img.trim() !== '');
   
   // Reset portfolio image index when artist changes
   useEffect(() => {
@@ -476,7 +477,7 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
             <View style={styles.modalCounter}>
               <Ionicons name="images-outline" size={14} color={colors.text.secondary} />
               <Text style={styles.modalSubtitle}>
-                {currentIndex + 1} / {portfolioImages.length}
+                {currentIndex + 1} / {portfolioImages.filter(img => img && img.trim() !== '').length}
               </Text>
             </View>
           </View>
@@ -495,7 +496,7 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
             style={styles.modalScrollView}
             contentContainerStyle={styles.modalScrollContent}
           >
-            {portfolioImages.map((imageUri, index) => (
+            {portfolioImages.filter(img => img && img.trim() !== '').map((imageUri, index) => (
               <View key={index} style={styles.portfolioImageContainer}>
                 <Image
                   source={{ uri: imageUri }}
@@ -507,9 +508,9 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
           </ScrollView>
 
           {/* Pagination Dots */}
-          {portfolioImages.length > 1 && (
+          {portfolioImages.filter(img => img && img.trim() !== '').length > 1 && (
             <View style={styles.paginationDots}>
-              {portfolioImages.map((_, index) => (
+              {portfolioImages.filter(img => img && img.trim() !== '').map((_, index) => (
                 <View
                   key={index}
                   style={[
