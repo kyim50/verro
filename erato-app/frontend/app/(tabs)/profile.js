@@ -381,42 +381,45 @@ export default function ProfileScreen() {
 
                 {(() => {
                   const filledImages = (profile.artist.portfolio_images || []).filter(img => img && img.trim() !== '');
-                  return filledImages.length > 0 ? (
-                    <View style={styles.portfolioGrid}>
-                      {filledImages.map((imageUrl, displayIndex) => {
-                        // Find the original index in the unfiltered array
-                        const originalIndex = profile.artist.portfolio_images.indexOf(imageUrl);
-                        return (
-                          <TouchableOpacity
-                            key={`${imageUrl}-${displayIndex}`}
-                            style={styles.portfolioItem}
-                            activeOpacity={0.85}
-                            onLongPress={() => {
-                              if (isOwnProfile) {
-                                handleDeletePortfolioImage(originalIndex);
-                              }
-                            }}
-                          >
-                            <Image
-                              source={{ uri: imageUrl }}
-                              style={styles.portfolioImage}
-                            />
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ) : null;
+                  if (filledImages.length > 0) {
+                    return (
+                      <View style={styles.portfolioGrid}>
+                        {filledImages.map((imageUrl, displayIndex) => {
+                          // Find the original index in the unfiltered array
+                          const originalIndex = profile.artist.portfolio_images.indexOf(imageUrl);
+                          return (
+                            <TouchableOpacity
+                              key={`${imageUrl}-${displayIndex}`}
+                              style={styles.portfolioItem}
+                              activeOpacity={0.85}
+                              onLongPress={() => {
+                                if (isOwnProfile) {
+                                  handleDeletePortfolioImage(originalIndex);
+                                }
+                              }}
+                            >
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.portfolioImage}
+                              />
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    );
+                  } else {
+                    return (
+                      <TouchableOpacity
+                        style={styles.addPortfolioButton}
+                        onPress={() => router.push('/profile/edit-portfolio')}
+                      >
+                        <Ionicons name="add-circle-outline" size={48} color={colors.primary} />
+                        <Text style={styles.addPortfolioText}>Add Portfolio Images</Text>
+                        <Text style={styles.addPortfolioSubtext}>Showcase your best work to attract clients</Text>
+                      </TouchableOpacity>
+                    );
+                  }
                 })()}
-                ) : (
-                  <TouchableOpacity
-                    style={styles.addPortfolioButton}
-                    onPress={() => router.push('/profile/edit-portfolio')}
-                  >
-                    <Ionicons name="add-circle-outline" size={48} color={colors.primary} />
-                    <Text style={styles.addPortfolioText}>Add Portfolio Images</Text>
-                    <Text style={styles.addPortfolioSubtext}>Showcase your best work to attract clients</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             )}
 
