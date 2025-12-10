@@ -38,16 +38,38 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Can only review completed commissions' });
     }
 
+    // Ensure IDs are compared as strings to avoid type mismatch issues
+    const userId = String(req.user.id);
+    const clientId = String(commission.client_id);
+    
     // Get artist to find user_id
-    const { data: artist } = await supabaseAdmin
+    // commission.artist_id is the artists table ID, not the user_id
+    const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
       .select('user_id')
       .eq('id', commission.artist_id)
-      .single();
+      .maybeSingle();
+
+    if (artistError) {
+      console.error('Error fetching artist:', artistError);
+      console.error('Commission artist_id:', commission.artist_id);
+    }
+
+    const artistUserId = artist ? String(artist.user_id) : null;
 
     // Check if user is client or artist
-    const isClient = commission.client_id === req.user.id;
-    const isArtist = artist?.user_id === req.user.id;
+    const isClient = clientId === userId;
+    const isArtist = artistUserId === userId;
+
+    console.log('Review authorization check:', {
+      userId,
+      clientId,
+      artistUserId,
+      isClient,
+      isArtist,
+      commissionId: commission.id,
+      reviewType: type
+    });
 
     if (!isClient && !isArtist) {
       return res.status(403).json({ error: 'You must be part of this commission to review' });
