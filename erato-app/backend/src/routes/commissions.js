@@ -208,10 +208,11 @@ router.get('/', authenticate, async (req, res) => {
         .in('id', clientIds),
       
       // Fetch all artists
+      // Note: artistIds here are actually user_ids (commission.artist_id is user_id)
       artistIds.length > 0
         ? supabaseAdmin
             .from('artists')
-            .select('id, user_id')
+            .select('id')
             .in('id', artistIds)
         : Promise.resolve({ data: [], error: null }),
       
@@ -236,15 +237,13 @@ router.get('/', authenticate, async (req, res) => {
       console.error('Error fetching artworks:', artworksResult.error);
     }
 
-    // Get artist user IDs (only use user_id, not artist.id - artist.id is the artist table ID, not user ID)
-    const artistUserIds = artistsResult.data?.map(a => a.user_id).filter(Boolean) || [];
-    
-    // Fetch artist users
-    const { data: artistUsers } = artistUserIds.length > 0
+    // Note: artistIds are actually user_ids, and artists.id equals user_id
+    // So we can fetch artist users directly using the artistIds (which are user_ids)
+    const { data: artistUsers } = artistIds.length > 0
       ? await supabaseAdmin
           .from('users')
           .select('id, username, full_name, avatar_url')
-          .in('id', artistUserIds)
+          .in('id', artistIds)
       : { data: [] };
 
     // Create lookup maps for O(1) access
@@ -268,7 +267,8 @@ router.get('/', authenticate, async (req, res) => {
       commissions.forEach((comm, idx) => {
         if (idx < 3) { // Log first 3 commissions
           const artist = artistMap.get(comm.artist_id);
-          const artistUser = artist && artist.user_id ? artistUserMap.get(artist.user_id) : null;
+          // commission.artist_id is the user_id, so look it up directly
+          const artistUser = artistUserMap.get(comm.artist_id);
           console.log(`Commission ${idx + 1} (${comm.id}):`);
           console.log(`  - artist_id: ${comm.artist_id}`);
           console.log(`  - artist found: ${!!artist}`);
@@ -283,8 +283,8 @@ router.get('/', authenticate, async (req, res) => {
     const enrichedCommissions = commissions.map((commission) => {
       const client = clientMap.get(commission.client_id);
       const artist = artistMap.get(commission.artist_id);
-      // Lookup by artist.user_id only (don't fallback to artist.id - that's the artist table ID, not user ID)
-      const artistUser = artist && artist.user_id ? artistUserMap.get(artist.user_id) : null;
+      // commission.artist_id IS the user_id, so look it up directly
+      const artistUser = artistUserMap.get(commission.artist_id);
       const artwork = commission.artwork_id ? artworkMap.get(commission.artwork_id) : null;
 
       // Debug missing data
@@ -294,8 +294,8 @@ router.get('/', authenticate, async (req, res) => {
       if (!artist && commission.artist_id) {
         console.warn(`Missing artist data for commission ${commission.id}, artist_id: ${commission.artist_id}`);
       }
-      if (artist && !artistUser && artist.user_id) {
-        console.warn(`Missing artist user data for commission ${commission.id}, artist.user_id: ${artist.user_id}, artistUserMap keys:`, Array.from(artistUserMap.keys()));
+      if (!artistUser && commission.artist_id) {
+        console.warn(`Missing artist user data for commission ${commission.id}, artist_id (user_id): ${commission.artist_id}, artistUserMap keys:`, Array.from(artistUserMap.keys()));
       }
 
       return {
@@ -303,7 +303,7 @@ router.get('/', authenticate, async (req, res) => {
         client,
         artist: artist ? {
           ...artist,
-          users: artistUser
+          users: artistUser || null
         } : null,
         artwork: artwork || null
       };
@@ -395,15 +395,8 @@ router.patch('/:id/status', authenticate, async (req, res) => {
     }
 
     // Verify user is the artist or client
-    // commission.artist_id is the artists table ID, not the user_id
-    // We need to check if the user is the artist by looking up the artist's user_id
-    const { data: artist } = await supabaseAdmin
-      .from('artists')
-      .select('user_id')
-      .eq('id', commission.artist_id)
-      .maybeSingle();
-
-    const isArtist = artist?.user_id === req.user.id;
+    // commission.artist_id IS the user_id (not the artists table ID)
+    const isArtist = String(commission.artist_id) === String(req.user.id);
     const isClient = String(commission.client_id) === String(req.user.id);
 
     if (!isArtist && !isClient) {
