@@ -97,12 +97,31 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // Update own profile
 router.put('/me', authenticate, async (req, res) => {
   try {
-    const { full_name, bio, avatar_url } = req.body;
+    const { full_name, bio, avatar_url, username } = req.body;
 
     const updates = {};
     if (full_name !== undefined) updates.full_name = full_name;
     if (bio !== undefined) updates.bio = bio;
     if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    
+    // Check if username is being changed and if it's unique
+    if (username !== undefined && username.trim() !== '') {
+      const trimmedUsername = username.trim();
+      
+      // Check if username already exists for another user
+      const { data: existingUser } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('username', trimmedUsername)
+        .neq('id', req.user.id)
+        .single();
+      
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username is already taken' });
+      }
+      
+      updates.username = trimmedUsername;
+    }
 
     const { data, error } = await supabaseAdmin
       .from('users')
@@ -111,12 +130,19 @@ router.put('/me', authenticate, async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error updating profile:', error);
+      throw error;
+    }
+
+    // Invalidate cache for this user
+    const { cache, cacheKeys } = await import('../utils/cache.js');
+    await cache.del(cacheKeys.userProfile(req.user.id));
 
     res.json(data);
   } catch (error) {
     console.error('Error updating profile:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to update profile' });
   }
 });
 

@@ -468,19 +468,33 @@ export const useProfileStore = create((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchProfile: async (userId, token = null) => {
-    set({ isLoading: true, error: null });
+  fetchProfile: async (userId, token = null, forceRefresh = false) => {
+    // If forceRefresh, clear cache by resetting first
+    if (forceRefresh) {
+      set({ profile: null, isLoading: true, error: null });
+    } else {
+      set({ isLoading: true, error: null });
+    }
+    
     try {
+      // Add cache-busting query param if force refresh
+      const url = forceRefresh 
+        ? `${API_URL}/users/${userId}?t=${Date.now()}`
+        : `${API_URL}/users/${userId}`;
+      
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(url, { headers });
       
-      const response = await axios.get(`${API_URL}/users/${userId}`, { headers });
-      
-      // Filter out empty portfolio images
+      // Filter out empty portfolio images with stricter validation
       const profileData = { ...response.data };
       if (profileData?.artist?.portfolio_images) {
-        profileData.artist.portfolio_images = profileData.artist.portfolio_images.filter(
-          img => img && img.trim() !== ''
-        );
+        profileData.artist.portfolio_images = profileData.artist.portfolio_images.filter(img => {
+          if (!img || typeof img !== 'string') return false;
+          const trimmed = img.trim();
+          if (!trimmed) return false;
+          // Only keep URLs that start with http:// or https://
+          return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+        });
       }
       
       set({ profile: profileData, isLoading: false });
@@ -521,12 +535,16 @@ export const useProfileStore = create((set, get) => ({
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Filter out empty portfolio images in response
+      // Filter out empty portfolio images in response with stricter validation
       const responseData = { ...response.data };
       if (responseData.portfolio_images) {
-        responseData.portfolio_images = responseData.portfolio_images.filter(
-          img => img && img.trim() !== ''
-        );
+        responseData.portfolio_images = responseData.portfolio_images.filter(img => {
+          if (!img || typeof img !== 'string') return false;
+          const trimmed = img.trim();
+          if (!trimmed) return false;
+          // Only keep URLs that start with http:// or https://
+          return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+        });
       }
 
       set((state) => ({

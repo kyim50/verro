@@ -59,7 +59,19 @@ export default function ArtistProfileScreen() {
       // Fetch artist profile
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const artistResponse = await axios.get(`${API_URL}/artists/${id}`, { headers });
-      setArtist(artistResponse.data);
+      
+      // Filter out empty/invalid portfolio images before setting state
+      const artistData = { ...artistResponse.data };
+      if (artistData.portfolio_images) {
+        artistData.portfolio_images = artistData.portfolio_images.filter(img => {
+          if (!img || typeof img !== 'string') return false;
+          const trimmed = img.trim();
+          if (!trimmed) return false;
+          return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+        });
+      }
+      
+      setArtist(artistData);
 
       // Fetch artist's artworks (uploaded by this artist)
       try {
@@ -604,26 +616,35 @@ export default function ArtistProfileScreen() {
         </View>
 
         {/* Portfolio Images */}
-        {artist.portfolio_images && artist.portfolio_images.length > 0 && (
-          <View 
-            style={[styles.section, { paddingHorizontal: 0, position: 'relative' }]}
-            pointerEvents={isModalClosing ? 'none' : 'auto'}
-          >
-            {/* Touch blocker when modal is closing */}
-            {isModalClosing && (
-              <View style={styles.touchBlocker} />
-            )}
-            <View style={[styles.sectionHeader, { paddingHorizontal: spacing.lg }]}>
-              <View style={styles.sectionTitleContainer}>
-                <Ionicons name="images-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Portfolio</Text>
+        {(() => {
+          // Filter out empty/invalid portfolio images with strict validation
+          const filteredPortfolio = (artist.portfolio_images || []).filter(img => {
+            if (!img || typeof img !== 'string') return false;
+            const trimmed = img.trim();
+            if (!trimmed) return false;
+            return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+          });
+          
+          return filteredPortfolio.length > 0 && (
+            <View 
+              style={[styles.section, { paddingHorizontal: 0, position: 'relative' }]}
+              pointerEvents={isModalClosing ? 'none' : 'auto'}
+            >
+              {/* Touch blocker when modal is closing */}
+              {isModalClosing && (
+                <View style={styles.touchBlocker} />
+              )}
+              <View style={[styles.sectionHeader, { paddingHorizontal: spacing.lg }]}>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="images-outline" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Portfolio</Text>
+                </View>
               </View>
-            </View>
 
-            <FlatList
-              data={(artist.portfolio_images || []).filter(img => img && img.trim() !== '')}
-              scrollEnabled={selectedPortfolioIndex === null && !isModalClosing}
-              renderItem={({ item, index }) => {
+              <FlatList
+                data={filteredPortfolio}
+                scrollEnabled={selectedPortfolioIndex === null && !isModalClosing}
+                renderItem={({ item, index }) => {
                 const handlePortfolioPress = (e) => {
                   // Stop any event propagation immediately
                   if (e) {
@@ -653,6 +674,12 @@ export default function ArtistProfileScreen() {
                   }
                 };
 
+                const imageUrl = item.trim();
+                // Double-check URL validity before rendering
+                if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+                  return null;
+                }
+
                 return (
                   <TouchableOpacity
                     style={styles.portfolioCard}
@@ -661,24 +688,28 @@ export default function ArtistProfileScreen() {
                     disabled={selectedPortfolioIndex !== null || isModalClosing}
                   >
                     <Image
-                      source={{ uri: item }}
+                      source={{ uri: imageUrl }}
                       style={styles.portfolioImage}
                       contentFit="cover"
+                      onError={(error) => {
+                        console.warn('Portfolio image failed to load:', imageUrl, error);
+                      }}
                     />
                   </TouchableOpacity>
                 );
               }}
-              keyExtractor={(item, index) => index.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.portfolioList}
-              snapToAlignment="start"
-              decelerationRate="fast"
-              snapToInterval={width * 0.85 + spacing.md}
-              pointerEvents={isModalClosing ? 'none' : 'auto'}
-            />
-          </View>
-        )}
+                keyExtractor={(item, index) => `${item.trim()}-${index}`}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.portfolioList}
+                snapToAlignment="start"
+                decelerationRate="fast"
+                snapToInterval={width * 0.85 + spacing.md}
+                pointerEvents={isModalClosing ? 'none' : 'auto'}
+              />
+            </View>
+          );
+        })()}
 
         {/* All Artworks Section */}
         {artworks.length > 0 && (
@@ -765,67 +796,88 @@ export default function ArtistProfileScreen() {
       </ScrollView>
 
       {/* Portfolio Modal Viewer */}
-      <Modal
-        visible={selectedPortfolioIndex !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleCloseModal}
-      >
-        <View style={styles.modalContainer}>
-          <StatusBar barStyle="light-content" />
+      {(() => {
+        // Filter portfolio images with strict validation for modal
+        const filteredPortfolio = (artist?.portfolio_images || []).filter(img => {
+          if (!img || typeof img !== 'string') return false;
+          const trimmed = img.trim();
+          if (!trimmed) return false;
+          return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+        });
+        
+        return (
+          <Modal
+            visible={selectedPortfolioIndex !== null && filteredPortfolio.length > 0}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={handleCloseModal}
+          >
+            <View style={styles.modalContainer}>
+              <StatusBar barStyle="light-content" />
 
-          {/* Header */}
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={handleCloseModal}
-            >
-              <Ionicons name="close" size={28} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.modalCounter}>
-              {selectedPortfolioIndex !== null ? `${selectedPortfolioIndex + 1} / ${(artist?.portfolio_images || []).filter(img => img && img.trim() !== '').length || 0}` : ''}
-            </Text>
-            <View style={styles.modalHeaderSpacer} />
-          </View>
-
-          {/* Image Viewer */}
-          <FlatList
-            ref={portfolioFlatListRef}
-            data={artist?.portfolio_images || []}
-            renderItem={({ item }) => (
-              <View style={styles.modalImageContainer}>
-                <Image
-                  source={{ uri: item }}
-                  style={styles.modalImage}
-                  contentFit="contain"
-                />
+              {/* Header */}
+              <View style={styles.modalHeader}>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={handleCloseModal}
+                >
+                  <Ionicons name="close" size={28} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.modalCounter}>
+                  {selectedPortfolioIndex !== null ? `${selectedPortfolioIndex + 1} / ${filteredPortfolio.length}` : ''}
+                </Text>
+                <View style={styles.modalHeaderSpacer} />
               </View>
-            )}
-            keyExtractor={(item, index) => index.toString()}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={selectedPortfolioIndex || 0}
-            getItemLayout={(data, index) => ({
-              length: width,
-              offset: width * index,
-              index,
-            })}
-            onMomentumScrollEnd={(event) => {
-              // Don't update index if modal is closing or already closed
-              if (isClosingModal.current || isModalClosing || selectedPortfolioIndex === null) {
-                return;
-              }
-              const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
-              // Only update if we have a valid index and modal is still visible
-              const filteredPortfolio = (artist?.portfolio_images || []).filter(img => img && img.trim() !== '');
-              if (newIndex >= 0 && newIndex < filteredPortfolio.length && selectedPortfolioIndex !== null) {
-                setSelectedPortfolioIndex(newIndex);
-              }
-            }}
-          />
-        </View>
-      </Modal>
+
+              {/* Image Viewer */}
+              <FlatList
+                ref={portfolioFlatListRef}
+                data={filteredPortfolio}
+                renderItem={({ item }) => {
+                  const imageUrl = item.trim();
+                  // Double-check URL validity
+                  if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+                    return null;
+                  }
+                  return (
+                    <View style={styles.modalImageContainer}>
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.modalImage}
+                        contentFit="contain"
+                        onError={(error) => {
+                          console.warn('Portfolio modal image failed to load:', imageUrl, error);
+                        }}
+                      />
+                    </View>
+                  );
+                }}
+                keyExtractor={(item, index) => `${item.trim()}-${index}`}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={selectedPortfolioIndex !== null && selectedPortfolioIndex < filteredPortfolio.length ? selectedPortfolioIndex : 0}
+                getItemLayout={(data, index) => ({
+                  length: width,
+                  offset: width * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(event) => {
+                  // Don't update index if modal is closing or already closed
+                  if (isClosingModal.current || isModalClosing || selectedPortfolioIndex === null) {
+                    return;
+                  }
+                  const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+                  // Only update if we have a valid index and modal is still visible
+                  if (newIndex >= 0 && newIndex < filteredPortfolio.length && selectedPortfolioIndex !== null) {
+                    setSelectedPortfolioIndex(newIndex);
+                  }
+                }}
+              />
+            </View>
+          </Modal>
+        );
+      })()}
     </View>
   );
 }
