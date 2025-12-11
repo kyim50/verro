@@ -35,6 +35,8 @@ export default function ArtistProfileScreen() {
   const { token, user } = useAuthStore();
   const [artist, setArtist] = useState(null);
   const [artworks, setArtworks] = useState([]);
+  const [packages, setPackages] = useState([]);
+  const [isPackagesLoading, setIsPackagesLoading] = useState(false);
   const [boards, setBoards] = useState([]);
   const [createdBoard, setCreatedBoard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +53,19 @@ export default function ArtistProfileScreen() {
   useEffect(() => {
     fetchArtistProfile();
   }, [id]);
+
+  const fetchArtistPackages = async (artistId, headers) => {
+    setIsPackagesLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/artists/${artistId}/packages`, { headers });
+      setPackages(response.data || []);
+    } catch (err) {
+      console.error('Error fetching artist packages:', err);
+      setPackages([]);
+    } finally {
+      setIsPackagesLoading(false);
+    }
+  };
 
   const fetchArtistProfile = async () => {
     setIsLoading(true);
@@ -73,6 +88,7 @@ export default function ArtistProfileScreen() {
       }
       
       setArtist(artistData);
+      await fetchArtistPackages(id, headers);
 
       // Fetch artist's artworks (uploaded by this artist)
       try {
@@ -641,6 +657,84 @@ export default function ArtistProfileScreen() {
           )}
         </View>
 
+        {/* Packages */}
+        <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Commission Packages</Text>
+              </View>
+              {isOwnProfile && (
+                <TouchableOpacity
+                  style={styles.manageLink}
+                  onPress={() => router.push('/commission-packages')}
+                >
+                  <Text style={styles.manageLinkText}>Manage</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {isPackagesLoading ? (
+              <View style={styles.packagesLoading}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : packages.length === 0 ? (
+              <View style={styles.packageEmpty}>
+                <Ionicons name="cube-outline" size={28} color={colors.text.secondary} />
+                <Text style={styles.packageEmptyTitle}>No packages yet</Text>
+                {isOwnProfile ? (
+                  <Text style={styles.packageEmptySubtitle}>
+                    Add packages to showcase pricing and turnaround to clients.
+                  </Text>
+                ) : (
+                  <Text style={styles.packageEmptySubtitle}>
+                    This artist hasn’t published packages yet.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.packagesGrid}>
+                {packages.map((pkg) => (
+                  <View key={pkg.id} style={styles.packageCard}>
+                    {pkg.example_image_urls?.length > 0 && (
+                      <Image
+                        source={{ uri: pkg.example_image_urls[0] }}
+                        style={styles.packageImage}
+                        contentFit="cover"
+                        transition={150}
+                      />
+                    )}
+                    <View style={styles.packageCardHeader}>
+                      <Text style={styles.packageTitle} numberOfLines={1}>{pkg.name}</Text>
+                      <View style={styles.packageBadge}>
+                        <Text style={styles.packageBadgeText}>PACKAGE</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.packagePrice}>${pkg.base_price}</Text>
+                    {pkg.description && (
+                      <Text style={styles.packageDescription} numberOfLines={3}>
+                        {pkg.description}
+                      </Text>
+                    )}
+                    <View style={styles.packageMetaRow}>
+                      {pkg.estimated_delivery_days && (
+                        <View style={styles.packageMetaItem}>
+                          <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
+                          <Text style={styles.packageMetaText}>{pkg.estimated_delivery_days} days</Text>
+                        </View>
+                      )}
+                      <View style={styles.packageMetaItem}>
+                        <Ionicons name="refresh-outline" size={14} color={colors.text.secondary} />
+                        <Text style={styles.packageMetaText}>{pkg.revision_count || 0} revisions</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
         {/* Portfolio Images */}
         {(() => {
           // Filter out empty/invalid portfolio images with strict validation
@@ -1194,6 +1288,16 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 18 : 20,
   },
+  manageLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  manageLinkText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   seeAllText: {
     ...typography.caption,
     color: colors.primary,
@@ -1259,6 +1363,104 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.disabled,
     marginTop: spacing.sm,
+  },
+  packagesLoading: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  packagesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  packageCard: {
+    flexBasis: '48%',
+    minWidth: 160,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '70',
+  },
+  packageImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surfaceLight,
+  },
+  packageCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  packageTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    flex: 1,
+    fontSize: 16,
+  },
+  packageBadge: {
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  packageBadgeText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  packagePrice: {
+    ...typography.h3,
+    color: colors.primary,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  packageDescription: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
+  },
+  packageMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  packageMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  packageMetaText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  packageEmpty: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '60',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  packageEmptyTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  packageEmptySubtitle: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   boardCard: {
     width: ITEM_WIDTH,

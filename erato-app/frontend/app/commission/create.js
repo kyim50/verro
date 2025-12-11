@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -29,7 +29,31 @@ export default function CreateCommissionScreen() {
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [packages, setPackages] = useState([]);
+  const [packagesLoading, setPackagesLoading] = useState(true);
+  const [selectedPackageId, setSelectedPackageId] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      if (!artistId) return;
+      setPackagesLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/artists/${artistId}/packages`);
+        setPackages(response.data || []);
+        if ((response.data || []).length === 1) {
+          setSelectedPackageId(response.data[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching packages for request:', error);
+        setPackages([]);
+      } finally {
+        setPackagesLoading(false);
+      }
+    };
+
+    fetchPackages();
+  }, [artistId]);
 
   const handleSubmit = async () => {
     // Check if current user is an artist
@@ -75,6 +99,7 @@ export default function CreateCommissionScreen() {
           client_note: title.trim(),
           budget: budget.trim() ? parseFloat(budget.trim()) : null,
           deadline: deadline.trim() || null,
+          package_id: selectedPackageId || null,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -119,6 +144,66 @@ export default function CreateCommissionScreen() {
         <Text style={styles.description}>
           Describe what you'd like the artist to create for you
         </Text>
+
+        {/* Package selection */}
+        <View style={styles.inputGroup}>
+          <View style={styles.packageHeader}>
+            <Text style={styles.label}>Choose a package (optional)</Text>
+            {packagesLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          </View>
+
+          {packagesLoading ? null : packages.length === 0 ? (
+            <Text style={styles.packageEmptyText}>
+              This artist hasn't published packages yet. You can still send a custom request.
+            </Text>
+          ) : (
+            <View style={styles.packageList}>
+              {packages.map((pkg) => {
+                const isSelected = selectedPackageId === pkg.id;
+                return (
+                  <TouchableOpacity
+                    key={pkg.id}
+                    style={[
+                      styles.packageOption,
+                      isSelected && styles.packageOptionSelected,
+                    ]}
+                    onPress={() => setSelectedPackageId(isSelected ? null : pkg.id)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.packageOptionHeader}>
+                      <Text style={styles.packageOptionTitle} numberOfLines={1}>{pkg.name}</Text>
+                      <Text style={styles.packageOptionPrice}>${pkg.base_price}</Text>
+                    </View>
+                    {pkg.description ? (
+                      <Text style={styles.packageOptionDescription} numberOfLines={2}>
+                        {pkg.description}
+                      </Text>
+                    ) : (
+                      <Text style={styles.packageOptionDescriptionMuted}>No description</Text>
+                    )}
+                    <View style={styles.packageOptionMeta}>
+                      {pkg.estimated_delivery_days ? (
+                        <View style={styles.packageMetaItem}>
+                          <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
+                          <Text style={styles.packageMetaText}>{pkg.estimated_delivery_days} days</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.packageMetaItem}>
+                          <Ionicons name="sparkles-outline" size={14} color={colors.text.secondary} />
+                          <Text style={styles.packageMetaText}>Delivery TBD</Text>
+                        </View>
+                      )}
+                      <View style={styles.packageMetaItem}>
+                        <Ionicons name="refresh-outline" size={14} color={colors.text.secondary} />
+                        <Text style={styles.packageMetaText}>{pkg.revision_count || 0} revisions</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* Title */}
         <View style={styles.inputGroup}>
@@ -240,6 +325,74 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     marginBottom: spacing.xl,
+  },
+  packageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  packageList: {
+    gap: spacing.sm,
+  },
+  packageOption: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  packageOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  packageOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  packageOptionTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  packageOptionPrice: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 16,
+  },
+  packageOptionDescription: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
+  },
+  packageOptionDescriptionMuted: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    marginBottom: spacing.sm,
+  },
+  packageOptionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  packageMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  packageMetaText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  packageEmptyText: {
+    ...typography.caption,
+    color: colors.text.secondary,
   },
   inputGroup: {
     marginBottom: spacing.lg,

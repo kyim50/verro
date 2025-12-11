@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   Dimensions,
   Modal,
   RefreshControl,
@@ -29,6 +28,7 @@ import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } fr
 import { uploadImage } from '../../utils/imageUpload';
 import ReviewModal from '../../components/ReviewModal';
 import { initSocket, getSocket, disconnectSocket } from '../../lib/socket';
+import { showAlert } from '../../components/StyledAlert';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -515,10 +515,11 @@ export default function ConversationScreen() {
   };
 
   const handleDeleteMessage = async (messageId) => {
-    Alert.alert(
-      'Delete Message',
-      'Are you sure you want to delete this message?',
-      [
+    showAlert({
+      title: 'Delete Message',
+      message: 'Are you sure you want to delete this message?',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -530,6 +531,12 @@ export default function ConversationScreen() {
                 { headers: { Authorization: `Bearer ${token}` } }
               );
               await fetchMessages();
+              Toast.show({
+                type: 'success',
+                text1: 'Deleted',
+                text2: 'Message deleted successfully',
+                visibilityTime: 2000,
+              });
             } catch (error) {
               try {
                 await axios.delete(
@@ -537,6 +544,12 @@ export default function ConversationScreen() {
                   { headers: { Authorization: `Bearer ${token}` } }
                 );
                 await fetchMessages();
+                Toast.show({
+                  type: 'success',
+                  text1: 'Deleted',
+                  text2: 'Message deleted successfully',
+                  visibilityTime: 2000,
+                });
               } catch (err) {
                 Toast.show({
                   type: 'error',
@@ -548,8 +561,8 @@ export default function ConversationScreen() {
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const renderDayHeader = (timestamp) => (
@@ -760,10 +773,11 @@ export default function ConversationScreen() {
                 <TouchableOpacity
                   style={[styles.modalActionButton, styles.cancelActionButton]}
                   onPress={() => {
-                    Alert.alert(
-                      'Cancel Commission',
-                      'Are you sure you want to cancel this commission? This action cannot be undone.',
-                      [
+                    showAlert({
+                      title: 'Cancel Commission',
+                      message: 'Are you sure you want to cancel this commission? This action cannot be undone.',
+                      type: 'warning',
+                      buttons: [
                         { text: 'No', style: 'cancel' },
                         {
                           text: 'Yes, Cancel',
@@ -796,7 +810,7 @@ export default function ConversationScreen() {
                           }
                         }
                       ]
-                    );
+                    });
                   }}
                 >
                   <Ionicons name="close-circle-outline" size={22} color={colors.status.error} />
@@ -807,13 +821,15 @@ export default function ConversationScreen() {
                   <TouchableOpacity
                     style={[styles.modalActionButton, styles.completeActionButton]}
                     onPress={() => {
-                      Alert.alert(
-                        'Complete Commission',
-                        'Mark this commission as completed?',
-                        [
+                      showAlert({
+                        title: 'Complete Commission',
+                        message: 'Mark this commission as completed?',
+                        type: 'info',
+                        buttons: [
                           { text: 'Not Yet', style: 'cancel' },
                           {
                             text: 'Complete',
+                            style: 'default',
                             onPress: async () => {
                               try {
                                 await axios.patch(
@@ -850,7 +866,7 @@ export default function ConversationScreen() {
                             }
                           }
                         ]
-                      );
+                      });
                     }}
                   >
                     <Ionicons name="checkmark-circle-outline" size={22} color={colors.text.primary} />
@@ -1037,9 +1053,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingTop: STATUS_BAR_HEIGHT + (IS_SMALL_SCREEN ? spacing.xs : spacing.sm),
     paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   backButton: {
     marginRight: spacing.sm,
@@ -1118,19 +1132,17 @@ const styles = StyleSheet.create({
   messageBubble: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.lg + 2,
     backgroundColor: colors.surface,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
     maxWidth: '100%',
   },
   messageBubbleOwn: {
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 4,
-    borderBottomLeftRadius: borderRadius.lg,
+    borderBottomRightRadius: 6,
+    borderBottomLeftRadius: borderRadius.lg + 2,
   },
   messageBubbleOther: {
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   messageText: {
@@ -1361,10 +1373,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingVertical: spacing.sm,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+    backgroundColor: colors.background,
     gap: spacing.sm,
   },
   attachButton: {
@@ -1377,11 +1387,9 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 36,
+    minHeight: 40,
     maxHeight: 100,
     justifyContent: 'center',
   },
@@ -1389,18 +1397,19 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
     fontSize: 15,
     lineHeight: 20,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    ...shadows.medium,
   },
   pendingMessage: {
     opacity: 0.5,

@@ -287,6 +287,10 @@ router.post('/', authenticate, async (req, res) => {
 
     if (error) throw error;
 
+    // Invalidate user boards cache
+    const cacheKey = cacheKeys.userBoards(req.user.id);
+    await cache.del(cacheKey);
+
     res.status(201).json(data);
   } catch (error) {
     console.error('Error creating board:', error);
@@ -339,6 +343,14 @@ router.put('/:id', authenticate, async (req, res) => {
 
     if (error) throw error;
 
+    // Invalidate both user boards cache and specific board cache
+    const userBoardsCacheKey = cacheKeys.userBoards(req.user.id);
+    const boardCacheKey = cacheKeys.board(req.params.id);
+    await Promise.all([
+      cache.del(userBoardsCacheKey),
+      cache.del(boardCacheKey)
+    ]);
+
     res.json(data);
   } catch (error) {
     console.error('Error updating board:', error);
@@ -377,6 +389,14 @@ router.delete('/:id', authenticate, async (req, res) => {
       .eq('id', req.params.id);
 
     if (error) throw error;
+
+    // Invalidate both user boards cache and specific board cache
+    const userBoardsCacheKey = cacheKeys.userBoards(req.user.id);
+    const boardCacheKey = cacheKeys.board(req.params.id);
+    await Promise.all([
+      cache.del(userBoardsCacheKey),
+      cache.del(boardCacheKey)
+    ]);
 
     res.json({ message: 'Board deleted successfully' });
   } catch (error) {
@@ -433,6 +453,14 @@ router.post('/:id/artworks', authenticate, async (req, res) => {
 
     if (error) throw error;
 
+    // Invalidate both user boards cache and specific board cache
+    const userBoardsCacheKey = cacheKeys.userBoards(req.user.id);
+    const boardCacheKey = cacheKeys.board(req.params.id);
+    await Promise.all([
+      cache.del(userBoardsCacheKey),
+      cache.del(boardCacheKey)
+    ]);
+
     res.status(201).json(data);
   } catch (error) {
     console.error('Error adding artwork to board:', error);
@@ -465,6 +493,14 @@ router.delete('/:id/artworks/:artwork_id', authenticate, async (req, res) => {
       .eq('artwork_id', req.params.artwork_id);
 
     if (error) throw error;
+
+    // Invalidate both user boards cache and specific board cache
+    const userBoardsCacheKey = cacheKeys.userBoards(req.user.id);
+    const boardCacheKey = cacheKeys.board(req.params.id);
+    await Promise.all([
+      cache.del(userBoardsCacheKey),
+      cache.del(boardCacheKey)
+    ]);
 
     res.json({ message: 'Artwork removed from board' });
   } catch (error) {

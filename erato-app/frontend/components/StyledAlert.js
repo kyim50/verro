@@ -12,9 +12,9 @@ import { colors, spacing, borderRadius, shadows } from '../constants/theme';
 
 let alertInstance = null;
 
-export const showAlert = ({ title, message, type = 'info', onPress, duration }) => {
+export const showAlert = ({ title, message, type = 'info', onPress, duration, buttons }) => {
   if (alertInstance && alertInstance.show) {
-    alertInstance.show({ title, message, type, onPress, duration });
+    alertInstance.show({ title, message, type, onPress, duration, buttons });
   } else {
     // Fallback: log error if alert instance not ready
     console.warn('StyledAlert instance not ready. Title:', title, 'Message:', message);
@@ -29,22 +29,25 @@ const showAlertInternal = (setVisible, setAlertData, timerRef) => (data) => {
     type: data?.type || 'info',
     onPress: data?.onPress,
     duration: data?.duration || 2500,
+    buttons: data?.buttons || null,
   };
-  
+
   // Clear any existing timer
   if (timerRef.current) {
     clearTimeout(timerRef.current);
     timerRef.current = null;
   }
-  
+
   setAlertData(safeData);
   setVisible(true);
 
-  // Auto-dismiss after duration to prevent UI blocking
-  timerRef.current = setTimeout(() => {
-    setVisible(false);
-    setTimeout(() => setAlertData(null), 250);
-  }, safeData.duration);
+  // Auto-dismiss after duration only if no custom buttons (confirmations should stay)
+  if (!safeData.buttons) {
+    timerRef.current = setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => setAlertData(null), 250);
+    }, safeData.duration);
+  }
 };
 
 const StyledAlert = forwardRef((props, ref) => {
@@ -83,13 +86,26 @@ const StyledAlert = forwardRef((props, ref) => {
   // Don't render modal if not visible - prevents blocking overlay
   if (!visible || !alertData) return null;
 
-  const { title, message, type } = alertData;
+  const { title, message, type, buttons } = alertData;
   const iconMap = {
     success: { name: 'checkmark-circle', color: colors.status.success },
     error: { name: 'close-circle', color: colors.status.error },
+    warning: { name: 'warning', color: colors.status.warning },
     info: { name: 'information-circle', color: colors.status.info },
   };
   const icon = iconMap[type] || iconMap.info;
+
+  const handleButtonPress = (button) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setVisible(false);
+    if (button.onPress) {
+      button.onPress();
+    }
+    setTimeout(() => setAlertData(null), 300);
+  };
 
   return (
     <Modal
@@ -98,17 +114,43 @@ const StyledAlert = forwardRef((props, ref) => {
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
+      <TouchableWithoutFeedback onPress={buttons ? null : handleClose}>
         <View style={styles.overlay} pointerEvents="box-none">
           <TouchableWithoutFeedback>
             <View style={styles.alertContainer}>
               <View style={styles.alertContent}>
-                <Ionicons name={icon.name} size={24} color={icon.color} style={styles.icon} />
+                <Ionicons name={icon.name} size={28} color={icon.color} style={styles.icon} />
                 {title && <Text style={styles.title}>{title}</Text>}
                 {message && <Text style={styles.message}>{message}</Text>}
-                <TouchableOpacity style={styles.button} onPress={handleClose}>
-                  <Text style={styles.buttonText}>OK</Text>
-                </TouchableOpacity>
+                {buttons ? (
+                  <View style={styles.buttonsContainer}>
+                    {buttons.map((button, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.button,
+                          button.style === 'cancel' && styles.cancelButton,
+                          button.style === 'destructive' && styles.destructiveButton,
+                        ]}
+                        onPress={() => handleButtonPress(button)}
+                      >
+                        <Text
+                          style={[
+                            styles.buttonText,
+                            button.style === 'cancel' && styles.cancelButtonText,
+                            button.style === 'destructive' && styles.destructiveButtonText,
+                          ]}
+                        >
+                          {button.text}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.singleButton} onPress={handleClose}>
+                    <Text style={styles.buttonText}>OK</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </TouchableWithoutFeedback>
@@ -125,56 +167,87 @@ export default StyledAlert;
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.md,
+    padding: spacing.lg,
   },
   alertContainer: {
     width: '100%',
-    maxWidth: 280,
+    maxWidth: 320,
     alignItems: 'center',
   },
   alertContent: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     width: '100%',
     alignItems: 'center',
-    ...shadows.medium,
-    elevation: 6,
+    ...shadows.large,
+    elevation: 8,
   },
   icon: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: colors.text.primary,
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   message: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '400',
     color: colors.text.secondary,
     textAlign: 'center',
-    marginBottom: spacing.md,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
   },
   button: {
+    flex: 1,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.sm,
-    paddingVertical: 10,
-    paddingHorizontal: spacing.lg,
-    minWidth: 100,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.medium,
+  },
+  singleButton: {
+    width: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.medium,
+  },
+  cancelButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
+    ...shadows.small,
+  },
+  destructiveButton: {
+    backgroundColor: colors.primary,
   },
   buttonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  cancelButtonText: {
+    color: colors.text.secondary,
+  },
+  destructiveButtonText: {
+    color: colors.text.primary,
   },
 });

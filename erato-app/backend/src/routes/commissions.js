@@ -9,7 +9,16 @@ const router = express.Router();
 // Request a commission
 router.post('/request', authenticate, async (req, res) => {
   try {
-    const { artist_id, artwork_id, details, client_note, budget, deadline } = req.body;
+    const {
+      artist_id,
+      artwork_id,
+      details,
+      client_note,
+      budget,
+      deadline,
+      package_id: packageId,
+      selected_addons: selectedAddons = []
+    } = req.body;
 
     if (!artist_id || !details) {
       return res.status(400).json({ error: 'artist_id and details are required' });
@@ -42,6 +51,30 @@ router.post('/request', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
+    // Validate package selection (if provided)
+    let selectedPackage = null;
+    if (packageId) {
+      const { data: pkg, error: packageError } = await supabaseAdmin
+        .from('commission_packages')
+        .select('id, artist_id, is_active, base_price, name, estimated_delivery_days, revision_count')
+        .eq('id', packageId)
+        .maybeSingle();
+
+      if (packageError || !pkg) {
+        return res.status(404).json({ error: 'Selected package not found' });
+      }
+
+      if (pkg.artist_id !== artist_id) {
+        return res.status(400).json({ error: 'Package does not belong to this artist' });
+      }
+
+      if (!pkg.is_active) {
+        return res.status(400).json({ error: 'This package is currently hidden' });
+      }
+
+      selectedPackage = pkg;
+    }
+
     // Create commission
     const { data: commission, error: commissionError } = await supabaseAdmin
       .from('commissions')
@@ -53,7 +86,10 @@ router.post('/request', authenticate, async (req, res) => {
         client_note: client_note || null,
         budget: budget || null,
         deadline_text: deadline || null,
-        status: 'pending'
+        status: 'pending',
+        package_id: selectedPackage?.id || null,
+        selected_addons: Array.isArray(selectedAddons) ? selectedAddons : [],
+        final_price: selectedPackage?.base_price || null
       })
       .select()
       .single();
@@ -137,7 +173,17 @@ router.post('/request', authenticate, async (req, res) => {
         artwork_id: artwork_id || null,
         title: client_note || null,
         budget: budget || null,
-        deadline: deadline || null
+        deadline: deadline || null,
+        package: selectedPackage
+          ? {
+              id: selectedPackage.id,
+              name: selectedPackage.name,
+              base_price: selectedPackage.base_price,
+              estimated_delivery_days: selectedPackage.estimated_delivery_days,
+              revision_count: selectedPackage.revision_count
+            }
+          : null,
+        selected_addons: Array.isArray(selectedAddons) ? selectedAddons : []
       }
     });
 
@@ -274,6 +320,14 @@ router.get('/', authenticate, async (req, res) => {
     const artistMap = new Map(artistsResult.data?.map(a => [a.id, a]) || []);
     const artistUserMap = new Map(artistUsers?.map(u => [u.id, u]) || []);
     const artworkMap = new Map(artworksResult.data?.map(a => [a.id, a]) || []);
+    const packageIds = [...new Set(commissions.map(c => c.package_id).filter(Boolean))];
+    const { data: packages } = packageIds.length > 0
+      ? await supabaseAdmin
+          .from('commission_packages')
+          .select('id, name, base_price, estimated_delivery_days, revision_count')
+          .in('id', packageIds)
+      : { data: [] };
+    const packageMap = new Map(packages?.map(p => [p.id, p]) || []);
 
     // Debug logging
     console.log('Commissions data enrichment:');
@@ -327,7 +381,8 @@ router.get('/', authenticate, async (req, res) => {
           ...artist,
           users: artistUser || null
         } : null,
-        artwork: artwork || null
+        artwork: artwork || null,
+        package: commission.package_id ? packageMap.get(commission.package_id) || null : null
       };
     });
 
@@ -345,7 +400,8 @@ router.get('/:id', authenticate, async (req, res) => {
       .from('commissions')
       .select(`
         *,
-        artwork:artworks(id, title, thumbnail_url, image_url)
+        artwork:artworks(id, title, thumbnail_url, image_url),
+        package:commission_packages(id, name, base_price, estimated_delivery_days, revision_count)
       `)
       .eq('id', req.params.id)
       .single();

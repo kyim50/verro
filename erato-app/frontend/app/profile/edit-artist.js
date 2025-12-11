@@ -180,6 +180,22 @@ export default function EditArtistProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Quick link to manage packages */}
+        <TouchableOpacity
+          style={styles.quickLinkCard}
+          onPress={() => router.push('/commission-packages')}
+          activeOpacity={0.9}
+        >
+          <View style={styles.quickLinkIcon}>
+            <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.quickLinkText}>
+            <Text style={styles.quickLinkTitle}>Manage Packages</Text>
+            <Text style={styles.quickLinkSubtitle}>Create, edit, and hide client-facing packages.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
+        </TouchableOpacity>
+
         {/* Commission Status */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Commission Status</Text>
@@ -328,6 +344,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
     paddingTop: spacing.lg,
+  },
+  quickLinkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '50',
+    marginBottom: spacing.xl,
+  },
+  quickLinkIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLinkText: {
+    flex: 1,
+    gap: spacing.xs / 2,
+  },
+  quickLinkTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  quickLinkSubtitle: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
   },
   section: {
     marginBottom: spacing.xl,

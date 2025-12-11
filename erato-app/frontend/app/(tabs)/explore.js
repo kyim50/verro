@@ -9,7 +9,6 @@ import {
   PanResponder,
   Modal,
   ScrollView,
-  Alert,
   FlatList,
   RefreshControl,
   ActivityIndicator,
@@ -778,9 +777,10 @@ export default function ExploreScreen() {
               </View>
 
               {selectedCommission && (
-                <ScrollView 
+                <ScrollView
                   style={styles.commissionDetailContent}
                   contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
+                  showsVerticalScrollIndicator={false}
                 >
                   {/* User Info */}
                   <TouchableOpacity
@@ -832,37 +832,38 @@ export default function ExploreScreen() {
                     </View>
                   </TouchableOpacity>
 
-                  {/* Quick meta summary */}
-                  <View style={styles.detailMetaChips}>
-                    <View style={[styles.detailMetaPill, { borderColor: getStatusColor(selectedCommission.status) + '55', backgroundColor: getStatusColor(selectedCommission.status) + '12' }]}>
-                      <Ionicons name={getStatusIcon(selectedCommission.status)} size={12} color={getStatusColor(selectedCommission.status)} />
-                      <Text style={[styles.detailMetaText, { color: getStatusColor(selectedCommission.status) }]} numberOfLines={1} ellipsizeMode="tail">
-                        {formatStatus(selectedCommission.status)}
+                  {/* Quick Info Cards */}
+                  <View style={styles.detailInfoGrid}>
+                    <View style={styles.detailInfoCard}>
+                      <Ionicons name="cash" size={20} color={colors.primary} />
+                      <Text style={styles.detailInfoLabel}>
+                        {selectedCommission.price ? 'Price' : 'Budget'}
                       </Text>
-                    </View>
-
-                    <View style={styles.detailMetaPill}>
-                      <Ionicons name="cash-outline" size={12} color={colors.text.secondary} />
-                      <Text style={styles.detailMetaText} numberOfLines={1} ellipsizeMode="tail">
+                      <Text style={styles.detailInfoValue}>
                         {selectedCommission.price
                           ? `$${selectedCommission.price}`
                           : selectedCommission.budget
                           ? `$${selectedCommission.budget}`
-                          : 'No price set'}
+                          : 'Not set'}
                       </Text>
                     </View>
 
-                    <View style={styles.detailMetaPill}>
-                      <Ionicons name="calendar-outline" size={12} color={colors.text.secondary} />
-                      <Text style={styles.detailMetaText} numberOfLines={1} ellipsizeMode="tail">
-                        {new Date(selectedCommission.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    <View style={styles.detailInfoCard}>
+                      <Ionicons name="calendar-outline" size={20} color={colors.text.secondary} />
+                      <Text style={styles.detailInfoLabel}>Created</Text>
+                      <Text style={styles.detailInfoValue}>
+                        {new Date(selectedCommission.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric'
+                        })}
                       </Text>
                     </View>
 
                     {selectedCommission.deadline_text && (
-                      <View style={[styles.detailMetaPill, { borderColor: '#FFA50055', backgroundColor: '#FFA50012' }]}>
-                        <Ionicons name="time-outline" size={12} color="#FFA500" />
-                        <Text style={[styles.detailMetaText, { color: '#FFA500' }]} numberOfLines={1} ellipsizeMode="tail">
+                      <View style={[styles.detailInfoCard, { borderColor: '#FFA50035' }]}>
+                        <Ionicons name="time-outline" size={20} color="#FFA500" />
+                        <Text style={styles.detailInfoLabel}>Deadline</Text>
+                        <Text style={[styles.detailInfoValue, { color: '#FFA500' }]}>
                           {selectedCommission.deadline_text}
                         </Text>
                       </View>
@@ -879,51 +880,25 @@ export default function ExploreScreen() {
                           router.push(`/artwork/${selectedCommission.artwork.id}`);
                         }}
                         activeOpacity={0.8}
+                        style={styles.detailArtwork}
                       >
-                        <View style={styles.detailArtwork}>
-                          <Image
-                            source={{ uri: selectedCommission.artwork.thumbnail_url || selectedCommission.artwork.image_url }}
-                            style={styles.detailArtworkImage}
-                            contentFit="cover"
-                          />
-                          <Text style={styles.detailArtworkTitle}>{selectedCommission.artwork.title}</Text>
-                        </View>
+                        <Image
+                          source={{ uri: selectedCommission.artwork.thumbnail_url || selectedCommission.artwork.image_url }}
+                          style={styles.detailArtworkImage}
+                          contentFit="cover"
+                        />
+                        <Text style={styles.detailArtworkTitle} numberOfLines={1}>{selectedCommission.artwork.title}</Text>
                       </TouchableOpacity>
-                      <View style={styles.referenceStrip}>
-                        {(Array.isArray(selectedCommission.artwork?.images) && selectedCommission.artwork.images.length > 0
-                          ? selectedCommission.artwork.images.slice(0, 3)
-                          : [selectedCommission.artwork.thumbnail_url || selectedCommission.artwork.image_url].filter(Boolean)
-                        ).map((img, idx) => (
-                          <Image
-                            key={`${img}-${idx}`}
-                            source={{ uri: img }}
-                            style={styles.referenceThumb}
-                            contentFit="cover"
-                          />
-                        ))}
-                        {(!selectedCommission.artwork?.thumbnail_url && !selectedCommission.artwork?.image_url && !selectedCommission.artwork?.images?.length) && (
-                          <View style={styles.referencePlaceholder}>
-                            <Ionicons name="image-outline" size={14} color={colors.text.secondary} />
-                            <Text style={styles.referencePlaceholderText}>No reference attached</Text>
-                          </View>
-                        )}
-                      </View>
                     </View>
-                  ) : (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Reference Artwork</Text>
-                      <View style={styles.referencePlaceholder}>
-                        <Ionicons name="image-outline" size={14} color={colors.text.secondary} />
-                        <Text style={styles.referencePlaceholderText}>No reference attached</Text>
-                      </View>
-                    </View>
-                  )}
+                  ) : null}
 
                   {/* Commission Details */}
                   {selectedCommission.details && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Description</Text>
-                      <Text style={styles.detailText}>{selectedCommission.details}</Text>
+                      <View style={styles.detailContentBox}>
+                        <Text style={styles.detailText}>{selectedCommission.details}</Text>
+                      </View>
                     </View>
                   )}
 
@@ -932,6 +907,7 @@ export default function ExploreScreen() {
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Client Note</Text>
                       <View style={styles.detailNoteBox}>
+                        <Ionicons name="document-text-outline" size={16} color={colors.primary} style={{ marginBottom: 4 }} />
                         <Text style={styles.detailText}>{selectedCommission.client_note}</Text>
                       </View>
                     </View>
@@ -941,62 +917,12 @@ export default function ExploreScreen() {
                   {selectedCommission.artist_response && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Artist Response</Text>
-                      <View style={styles.detailNoteBox}>
+                      <View style={styles.detailResponseBox}>
+                        <Ionicons name="chatbubble-outline" size={16} color={colors.status.success} style={{ marginBottom: 4 }} />
                         <Text style={styles.detailText}>{selectedCommission.artist_response}</Text>
                       </View>
                     </View>
                   )}
-
-                  {/* Budget/Price */}
-                  <View style={styles.detailSection}>
-                    <View style={styles.detailRow}>
-                      <View style={styles.detailItem}>
-                        <Text style={styles.detailLabel}>
-                          {selectedCommission.price ? 'Price' : 'Budget'}
-                        </Text>
-                        <View style={styles.priceValueContainer}>
-                          <Ionicons name="cash" size={18} color={colors.primary} />
-                          <Text style={[styles.detailValue, { color: colors.primary }]}>
-                            {selectedCommission.price
-                              ? `$${selectedCommission.price}`
-                              : selectedCommission.budget
-                              ? `$${selectedCommission.budget}`
-                              : 'Not specified'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Dates */}
-                  <View style={styles.detailSection}>
-                    <View style={styles.detailRow}>
-                      <View style={styles.detailItem}>
-                        <View style={styles.dateLabelContainer}>
-                          <Ionicons name="calendar-outline" size={14} color={colors.text.secondary} />
-                          <Text style={styles.detailLabel}>Created</Text>
-                        </View>
-                        <Text style={styles.detailValue}>
-                          {new Date(selectedCommission.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </Text>
-                      </View>
-                      {selectedCommission.deadline_text && (
-                        <View style={styles.detailItem}>
-                          <View style={styles.dateLabelContainer}>
-                            <Ionicons name="time-outline" size={14} color="#FF9800" />
-                            <Text style={[styles.detailLabel, { color: '#FF9800' }]}>Deadline</Text>
-                          </View>
-                          <Text style={[styles.detailValue, { color: '#FF9800' }]}>
-                            {selectedCommission.deadline_text}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
                 </ScrollView>
               )}
               {selectedCommission && (
@@ -1019,10 +945,11 @@ export default function ExploreScreen() {
                       <TouchableOpacity
                         style={styles.detailDeclineButton}
                         onPress={() => {
-                          Alert.alert(
-                            'Decline Commission',
-                            'Are you sure you want to decline this commission request? This action cannot be undone.',
-                            [
+                          showAlert({
+                            title: 'Decline Commission',
+                            message: 'Are you sure you want to decline this commission request?',
+                            type: 'warning',
+                            buttons: [
                               { text: 'Cancel', style: 'cancel' },
                               {
                                 text: 'Decline',
@@ -1054,7 +981,7 @@ export default function ExploreScreen() {
                                 }
                               }
                             ]
-                          );
+                          });
                         }}
                       >
                         <Ionicons name="close-circle-outline" size={20} color="#F44336" />
@@ -1064,13 +991,15 @@ export default function ExploreScreen() {
                       <TouchableOpacity
                         style={styles.detailAcceptButton}
                         onPress={() => {
-                          Alert.alert(
-                            'Accept Commission',
-                            'Accept this commission request? You can start working on it right away.',
-                            [
+                          showAlert({
+                            title: 'Accept Commission',
+                            message: 'Accept this commission request? You can start working on it right away.',
+                            type: 'info',
+                            buttons: [
                               { text: 'Cancel', style: 'cancel' },
                               {
                                 text: 'Accept',
+                                style: 'default',
                                 onPress: async () => {
                                   try {
                                     await axios.patch(
@@ -1098,7 +1027,7 @@ export default function ExploreScreen() {
                                 }
                               }
                             ]
-                          );
+                          });
                         }}
                       >
                         <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
@@ -1112,10 +1041,11 @@ export default function ExploreScreen() {
                       <TouchableOpacity
                         style={styles.detailCancelButton}
                         onPress={() => {
-                          Alert.alert(
-                            'Cancel Commission',
-                            'Are you sure you want to cancel this commission?',
-                            [
+                          showAlert({
+                            title: 'Cancel Commission',
+                            message: 'Are you sure you want to cancel this commission?',
+                            type: 'warning',
+                            buttons: [
                               { text: 'No', style: 'cancel' },
                               {
                                 text: 'Yes, Cancel',
@@ -1147,7 +1077,7 @@ export default function ExploreScreen() {
                                 }
                               }
                             ]
-                          );
+                          });
                         }}
                       >
                         <Ionicons name="close-circle-outline" size={20} color="#F44336" />
@@ -1157,13 +1087,15 @@ export default function ExploreScreen() {
                       <TouchableOpacity
                         style={styles.detailCompleteButton}
                         onPress={() => {
-                          Alert.alert(
-                            'Complete Commission',
-                            'Mark this commission as completed?',
-                            [
+                          showAlert({
+                            title: 'Complete Commission',
+                            message: 'Mark this commission as completed?',
+                            type: 'info',
+                            buttons: [
                               { text: 'Not Yet', style: 'cancel' },
                               {
                                 text: 'Complete',
+                                style: 'default',
                                 onPress: async () => {
                                   try {
                                     const response = await axios.patch(
@@ -1216,7 +1148,7 @@ export default function ExploreScreen() {
                                 }
                               }
                             ]
-                          );
+                          });
                         }}
                       >
                         <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
@@ -1806,11 +1738,11 @@ const styles = StyleSheet.create({
   // Commission Detail Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
     justifyContent: 'flex-end',
   },
   commissionDetailModal: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     maxHeight: '92%',
@@ -1822,25 +1754,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '30',
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   modalCloseButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1859,10 +1790,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
-    backgroundColor: colors.surfaceLight,
-    marginBottom: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border + '25',
+    backgroundColor: colors.surface,
+    marginBottom: spacing.lg,
   },
   detailUserHeaderRight: {
     flexDirection: 'row',
@@ -1875,7 +1804,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: borderRadius.full,
     borderWidth: 2,
-    borderColor: colors.primary + '30',
+    borderColor: colors.primary,
     flexShrink: 0,
   },
   detailUserInfo: {
@@ -1892,20 +1821,20 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   detailRoleBadge: {
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.primary + '20',
     paddingHorizontal: spacing.sm - 2,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
     alignSelf: 'flex-start',
     marginTop: 2,
     borderWidth: 1,
-    borderColor: colors.border + '30',
+    borderColor: colors.primary + '50',
   },
   detailUserRole: {
     ...typography.caption,
-    color: colors.text.secondary,
+    color: colors.primary,
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1928,10 +1857,11 @@ const styles = StyleSheet.create({
   detailSectionTitle: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: spacing.sm,
-    letterSpacing: 0.3,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   detailSectionCard: {
     backgroundColor: colors.surface,
@@ -1954,27 +1884,23 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   detailArtwork: {
-    alignItems: 'center',
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.sm + 2,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border + '20',
   },
   detailArtworkImage: {
     width: '100%',
-    height: 200,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+    height: 180,
     backgroundColor: colors.background,
   },
   detailArtworkTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    padding: spacing.sm,
     textAlign: 'center',
+    backgroundColor: colors.surface,
   },
   referenceStrip: {
     flexDirection: 'row',
@@ -2009,10 +1935,9 @@ const styles = StyleSheet.create({
   },
   detailFooterBar: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surfaceLight,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '30',
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background,
     gap: spacing.sm,
   },
   detailFooterButtons: {
@@ -2026,8 +1951,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
   },
   detailItem: {
     flex: 1,
@@ -2051,16 +1974,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.lg,
     gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    ...shadows.large,
   },
   detailMessageButtonText: {
     ...typography.button,
     color: colors.text.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 15,
   },
   detailActions: {
     flexDirection: 'row',
@@ -2073,76 +1996,115 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceLight,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.lg,
     gap: spacing.xs,
-    borderWidth: 1.5,
-    borderColor: '#F44336',
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   detailDeclineButtonText: {
     ...typography.bodyBold,
-    color: '#F44336',
+    color: colors.primary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   detailAcceptButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    paddingVertical: spacing.md,
+    backgroundColor: colors.status.success,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.lg,
     gap: spacing.xs,
+    ...shadows.medium,
   },
   detailAcceptButtonText: {
     ...typography.bodyBold,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   detailCancelButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceLight,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.lg,
     gap: spacing.xs,
-    borderWidth: 1.5,
-    borderColor: '#F44336',
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   detailCancelButtonText: {
     ...typography.bodyBold,
-    color: '#F44336',
+    color: colors.primary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   detailCompleteButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.status.success,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.lg,
     gap: spacing.xs,
+    ...shadows.medium,
   },
   detailCompleteButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   detailNoteBox: {
-    backgroundColor: colors.primary + '10',
+    backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.primary + '35',
+  },
+  detailContentBox: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+  },
+  detailResponseBox: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+  },
+  detailInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  detailInfoCard: {
+    flex: 1,
+    minWidth: 100,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  detailInfoLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailInfoValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
   },
   priceValueContainer: {
     flexDirection: 'row',
