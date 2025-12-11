@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -83,7 +84,12 @@ export default function ClientProfileScreen() {
 
   const handleMessage = async () => {
     if (!token) {
-      Alert.alert('Login Required', 'Please log in to message this user');
+      Toast.show({
+        type: 'info',
+        text1: 'Login Required',
+        text2: 'Please log in to message this user',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -98,12 +104,19 @@ export default function ClientProfileScreen() {
     } catch (error) {
       console.error('Error creating conversation:', error);
       if (error.response?.status === 403) {
-        Alert.alert(
-          'Commission Required',
-          error.response?.data?.error || 'You must have an accepted commission with this user before you can message them.'
-        );
+        Toast.show({
+          type: 'info',
+          text1: 'Commission Required',
+          text2: error.response?.data?.error || 'You must have an accepted commission with this user before you can message them.',
+          visibilityTime: 4000,
+        });
       } else {
-        Alert.alert('Error', error.response?.data?.error || 'Failed to start conversation. Please try again.');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: error.response?.data?.error || 'Failed to start conversation. Please try again.',
+          visibilityTime: 3000,
+        });
       }
     }
   };

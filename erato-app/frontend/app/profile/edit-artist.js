@@ -47,12 +47,22 @@ export default function EditArtistProfileScreen() {
   const handleSave = async () => {
     // Validation
     if (minPrice && maxPrice && parseFloat(minPrice) > parseFloat(maxPrice)) {
-      Alert.alert('Error', 'Minimum price cannot be greater than maximum price');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Minimum price cannot be greater than maximum price',
+        visibilityTime: 2000,
+      });
       return;
     }
 
     if (turnaroundDays && parseInt(turnaroundDays) < 1) {
-      Alert.alert('Error', 'Turnaround days must be at least 1');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Turnaround days must be at least 1',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -144,7 +154,12 @@ export default function EditArtistProfileScreen() {
       router.back();
     } catch (error) {
       console.error('Error updating artist profile:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to update artist profile');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to update artist profile',
+        visibilityTime: 3000,
+      });
     } finally {
       setIsSaving(false);
     }

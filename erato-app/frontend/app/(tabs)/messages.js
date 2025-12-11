@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -155,7 +156,12 @@ export default function MessagesScreen() {
             } catch (error) {
               console.error('Error deleting conversation:', error);
               const msg = error.response?.data?.error || 'Failed to delete conversation';
-              Alert.alert('Error', msg);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: msg,
+                visibilityTime: 3000,
+              });
             }
           },
         },

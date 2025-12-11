@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -196,7 +197,12 @@ export default function ProfileScreen() {
             } catch (error) {
               console.error('Error deleting artwork:', error);
               const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
-              Alert.alert('Error', msg);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: msg,
+                visibilityTime: 3000,
+              });
             }
           },
         },
@@ -234,7 +240,12 @@ export default function ProfileScreen() {
             } catch (error) {
               console.error('Error removing portfolio image:', error);
               const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
-              Alert.alert('Error', msg);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: msg,
+                visibilityTime: 3000,
+              });
             }
           },
         },
@@ -276,7 +287,12 @@ export default function ProfileScreen() {
             } catch (error) {
               console.error('Error removing portfolio image:', error);
               const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
-              Alert.alert('Error', msg);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: msg,
+                visibilityTime: 3000,
+              });
             }
           },
         },

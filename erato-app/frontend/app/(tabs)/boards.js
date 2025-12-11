@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { showAlert } from '../../components/StyledAlert';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +33,8 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 
 export default function BoardsScreen() {
   const insets = useSafeAreaInsets();
-  const { boards, isLoading, fetchBoards, createBoard, deleteBoard } = useBoardStore();
+  const boardStore = useBoardStore();
+  const { boards, isLoading, fetchBoards, createBoard, deleteBoard } = boardStore;
   const { user, token } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -67,22 +69,34 @@ export default function BoardsScreen() {
     }
   }, [activeTab, isArtistUser, token]);
 
-  // Refresh liked artists when screen comes into focus
+  // Refresh boards and liked artists when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      // Always refresh boards when screen comes into focus (e.g., when returning from board detail)
+      // This ensures pin counts are up to date
+      loadBoards();
+      
       if (activeTab === 'liked' && !isArtistUser && token) {
         loadLikedArtists();
       }
     }, [activeTab, isArtistUser, token])
   );
 
-  const loadBoards = async () => {
+  const loadBoards = useCallback(async () => {
     try {
-      await fetchBoards();
+      const fetchedBoards = await fetchBoards();
+      console.log('Boards loaded:', fetchedBoards?.length || 0, 'boards');
+      // Log board counts for debugging
+      fetchedBoards?.forEach(board => {
+        const count = board.board_artworks?.length || board.artworks?.[0]?.count || 0;
+        console.log(`Board "${board.name}": ${count} pins`);
+      });
+      return fetchedBoards;
     } catch (error) {
       console.error('Error loading boards:', error);
+      throw error;
     }
-  };
+  }, [fetchBoards]);
 
   const loadCommissions = async () => {
     setCommissionsLoading(true);
@@ -101,7 +115,7 @@ export default function BoardsScreen() {
     }
   };
 
-  const loadLikedArtists = async () => {
+  const loadLikedArtists = useCallback(async () => {
     setLikedLoading(true);
     try {
       const response = await axios.get(`${API_URL}/swipes/liked`, {
@@ -113,7 +127,7 @@ export default function BoardsScreen() {
     } finally {
       setLikedLoading(false);
     }
-  };
+  }, [token]);
 
   const handleUnlikeArtist = async (artistId) => {
     try {
@@ -123,7 +137,11 @@ export default function BoardsScreen() {
       setLikedArtists(prev => prev.filter(item => item.artist_id !== artistId));
     } catch (error) {
       console.error('Error unliking artist:', error);
-      Alert.alert('Error', 'Failed to remove artist from liked list');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to remove artist from liked list',
+        type: 'error',
+      });
     }
   };
 
@@ -182,7 +200,11 @@ export default function BoardsScreen() {
               }
             } catch (error) {
               console.error('Error completing commission:', error);
-              Alert.alert('Error', 'Failed to complete commission. Please try again.');
+              showAlert({
+                title: 'Error',
+                message: 'Failed to complete commission. Please try again.',
+                type: 'error',
+              });
             }
           }
         }
@@ -207,15 +229,21 @@ export default function BoardsScreen() {
       
       setShowReviewModal(false);
       setReviewTarget(null);
-      Toast.show({
+      showAlert({
+        title: 'Success',
+        message: 'Review submitted successfully!',
         type: 'success',
-        text1: 'Success',
-        text2: 'Review submitted successfully!',
-        visibilityTime: 2000,
       });
     } catch (error) {
       console.error('Error submitting review:', error);
-      throw new Error(error.response?.data?.error || 'Failed to submit review');
+      const errorMessage = error.response?.data?.error || 'Failed to submit review';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMessage,
+        visibilityTime: 3000,
+      });
+      throw new Error(errorMessage);
     }
   };
 
@@ -230,19 +258,53 @@ export default function BoardsScreen() {
 
   const handleCreateBoard = async () => {
     if (!newBoardName.trim()) {
-      Alert.alert('Error', 'Board name is required');
+      showAlert({
+        title: 'Error',
+        message: 'Board name is required',
+        type: 'error',
+      });
       return;
     }
 
     try {
-      await createBoard({
+      const newBoard = await createBoard({
         name: newBoardName.trim(),
         description: newBoardDescription.trim(),
         is_public: isPublic,
       });
 
-      // Refresh boards list after creation
-      await loadBoards();
+      // Verify board was created successfully
+      if (!newBoard || !newBoard.id) {
+        throw new Error('Board creation failed - invalid response');
+      }
+
+      console.log('Board created successfully:', newBoard.id, newBoard.name);
+
+      // Refresh boards list after creation to ensure it persists
+      const refreshedBoards = await loadBoards();
+
+      // Double-check the board is in the list
+      const boardsAfterRefresh = refreshedBoards || boardStore.boards;
+      const boardExists = boardsAfterRefresh.some(b => b.id === newBoard.id);
+      
+      if (!boardExists) {
+        console.warn('Board not found after refresh, forcing another fetch');
+        // Force another fetch with a small delay
+        setTimeout(async () => {
+          try {
+            await loadBoards();
+            const finalBoards = boardStore.boards;
+            const stillMissing = !finalBoards.some(b => b.id === newBoard.id);
+            if (stillMissing) {
+              console.error('Board still missing after second fetch. Board ID:', newBoard.id);
+            }
+          } catch (error) {
+            console.error('Error in delayed board fetch:', error);
+          }
+        }, 500);
+      } else {
+        console.log('Board verified in list after refresh');
+      }
 
       setShowCreateModal(false);
       setNewBoardName('');
@@ -258,7 +320,11 @@ export default function BoardsScreen() {
     } catch (error) {
       console.error('Board creation error:', error);
       const errorMessage = error.message || error.response?.data?.error || 'Failed to create board. Please check your connection and try again.';
-      Alert.alert('Error', errorMessage);
+      showAlert({
+        title: 'Error',
+        message: errorMessage,
+        type: 'error',
+      });
     }
   };
 
@@ -276,15 +342,18 @@ export default function BoardsScreen() {
               await deleteBoard(board.id);
               // Refresh boards list after deletion
               await loadBoards();
-              Toast.show({
+              showAlert({
+                title: 'Success',
+                message: 'Board deleted!',
                 type: 'success',
-                text1: 'Success',
-                text2: 'Board deleted!',
-                visibilityTime: 2000,
               });
             } catch (error) {
               const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
-              Alert.alert('Error', errorMessage);
+              showAlert({
+                title: 'Error',
+                message: errorMessage,
+                type: 'error',
+              });
             }
           },
         },
@@ -317,7 +386,12 @@ export default function BoardsScreen() {
   };
 
   const renderBoard = ({ item }) => {
-    const artworkCount = item.artworks?.[0]?.count || 0;
+    // Calculate artwork count - prefer board_artworks array length as it's most accurate
+    // Fallback to backend count if array is not available
+    const countFromArray = item.board_artworks?.length || 0;
+    const countFromBackend = item.artworks?.[0]?.count;
+    // Use array length if available (more accurate), otherwise use backend count
+    const artworkCount = countFromArray > 0 ? countFromArray : (countFromBackend || 0);
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
     const isCreatedBoard = item.board_type === 'created';
 
@@ -994,15 +1068,18 @@ export default function BoardsScreen() {
                                   );
                                   setShowCommissionModal(false);
                                   await loadCommissions();
-                                  Toast.show({
+                                  showAlert({
+                                    title: 'Success',
+                                    message: 'Commission has been cancelled',
                                     type: 'success',
-                                    text1: 'Success',
-                                    text2: 'Commission has been cancelled',
-                                    visibilityTime: 2000,
                                   });
                                 } catch (error) {
                                   console.error('Error cancelling commission:', error);
-                                  Alert.alert('Error', 'Failed to cancel commission. Please try again.');
+                                  showAlert({
+                                    title: 'Error',
+                                    message: 'Failed to cancel commission. Please try again.',
+                                    type: 'error',
+                                  });
                                 }
                               }
                             }

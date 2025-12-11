@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { showAlert } from '../../components/StyledAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -256,7 +257,12 @@ export default function ExploreScreen() {
     }
     
     if (!token) {
-      Alert.alert('Login Required', 'Please login to like artworks');
+      Toast.show({
+        type: 'info',
+        text1: 'Login Required',
+        text2: 'Please login to like artworks',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -333,7 +339,12 @@ export default function ExploreScreen() {
           : item
       ));
       
-      Alert.alert('Error', 'Failed to update like status');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to update like status',
+        visibilityTime: 2000,
+      });
     }
   };
 
@@ -998,10 +1009,20 @@ export default function ExploreScreen() {
                                     );
                                     setShowCommissionModal(false);
                                     await loadCommissions();
-                                    Alert.alert('Declined', 'Commission request has been declined');
+                                    Toast.show({
+                                      type: 'success',
+                                      text1: 'Declined',
+                                      text2: 'Commission request has been declined',
+                                      visibilityTime: 2000,
+                                    });
                                   } catch (error) {
                                     console.error('Error declining commission:', error);
-                                    Alert.alert('Error', 'Failed to decline commission. Please try again.');
+                                    Toast.show({
+                                      type: 'error',
+                                      text1: 'Error',
+                                      text2: 'Failed to decline commission. Please try again.',
+                                      visibilityTime: 3000,
+                                    });
                                   }
                                 }
                               }
@@ -1032,10 +1053,20 @@ export default function ExploreScreen() {
                                     );
                                     setShowCommissionModal(false);
                                     await loadCommissions();
-                                    Alert.alert('Accepted!', 'Commission request has been accepted. You can now message the client.');
+                                    Toast.show({
+                                      type: 'success',
+                                      text1: 'Accepted!',
+                                      text2: 'Commission request has been accepted. You can now message the client.',
+                                      visibilityTime: 3000,
+                                    });
                                   } catch (error) {
                                     console.error('Error accepting commission:', error);
-                                    Alert.alert('Error', 'Failed to accept commission. Please try again.');
+                                    Toast.show({
+                                      type: 'error',
+                                      text1: 'Error',
+                                      text2: 'Failed to accept commission. Please try again.',
+                                      visibilityTime: 3000,
+                                    });
                                   }
                                 }
                               }
@@ -1080,7 +1111,12 @@ export default function ExploreScreen() {
                                     });
                                   } catch (error) {
                                     console.error('Error cancelling commission:', error);
-                                    Alert.alert('Error', 'Failed to cancel commission. Please try again.');
+                                    Toast.show({
+                                      type: 'error',
+                                      text1: 'Error',
+                                      text2: 'Failed to cancel commission. Please try again.',
+                                      visibilityTime: 3000,
+                                    });
                                   }
                                 }
                               }
@@ -1148,7 +1184,12 @@ export default function ExploreScreen() {
                                     }
                                   } catch (error) {
                                     console.error('Error completing commission:', error);
-                                    Alert.alert('Error', 'Failed to complete commission. Please try again.');
+                                    Toast.show({
+                                      type: 'error',
+                                      text1: 'Error',
+                                      text2: 'Failed to complete commission. Please try again.',
+                                      visibilityTime: 3000,
+                                    });
                                   }
                                 }
                               }

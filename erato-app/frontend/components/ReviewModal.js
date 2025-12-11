@@ -13,6 +13,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
 
@@ -31,7 +32,12 @@ export default function ReviewModal({
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      Alert.alert('Rating Required', 'Please select a star rating');
+      Toast.show({
+        type: 'info',
+        text1: 'Rating Required',
+        text2: 'Please select a star rating',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -44,7 +50,12 @@ export default function ReviewModal({
       setHoveredRating(0);
       onClose();
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to submit review. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.message || 'Failed to submit review. Please try again.',
+        visibilityTime: 3000,
+      });
     } finally {
       setSubmitting(false);
     }

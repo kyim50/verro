@@ -51,7 +51,12 @@ export default function UploadArtworkScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photos');
+      Toast.show({
+        type: 'info',
+        text1: 'Permission needed',
+        text2: 'Please allow access to your photos',
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -70,11 +75,21 @@ export default function UploadArtworkScreen() {
   const handleUpload = async () => {
     // Validation
     if (!imageUri) {
-      Alert.alert('Error', 'Please select an image');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please select an image',
+        visibilityTime: 2000,
+      });
       return;
     }
     if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a title');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please enter a title',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -126,7 +141,12 @@ export default function UploadArtworkScreen() {
       router.replace('/(tabs)/home');
     } catch (error) {
       console.error('Error uploading artwork:', error);
-      Alert.alert('Error', error.message || 'Failed to upload artwork. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.message || 'Failed to upload artwork. Please try again.',
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
       setUploading(false);

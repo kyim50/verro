@@ -148,6 +148,33 @@ export const useBoardStore = create((set, get) => ({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      // Update the board in the store to reflect the new artwork count
+      // Use the most accurate count: from board_artworks array length if available
+      set((state) => ({
+        boards: state.boards.map(board => {
+          if (board.id === boardId) {
+            // Get updated board_artworks from response or use existing
+            const updatedBoardArtworks = response.data.board_artworks || board.board_artworks || [];
+            const newCount = updatedBoardArtworks.length;
+            
+            return {
+              ...board,
+              artworks: [{ count: newCount }],
+              board_artworks: updatedBoardArtworks,
+            };
+          }
+          return board;
+        }),
+        // Also update currentBoard if it's the one being modified
+        currentBoard: state.currentBoard?.id === boardId 
+          ? { 
+              ...state.currentBoard, 
+              artworks: [{ count: (response.data.board_artworks || state.currentBoard.board_artworks || []).length }],
+              board_artworks: response.data.board_artworks || state.currentBoard.board_artworks || [],
+            }
+          : state.currentBoard,
+      }));
+
       return response.data;
     } catch (error) {
       throw error;

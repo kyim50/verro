@@ -13,6 +13,7 @@ import {
   StatusBar,
   Linking,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -119,7 +120,12 @@ export default function ArtistProfileScreen() {
 
   const handleMessage = async () => {
     if (!token) {
-      Alert.alert('Login Required', 'Please log in to message this artist');
+      Toast.show({
+        type: 'info',
+        text1: 'Login Required',
+        text2: 'Please log in to message this artist',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -149,7 +155,12 @@ export default function ArtistProfileScreen() {
           ]
         );
       } else {
-        Alert.alert('Error', error.response?.data?.error || 'Failed to start conversation. Please try again.');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: error.response?.data?.error || 'Failed to start conversation. Please try again.',
+          visibilityTime: 3000,
+        });
       }
     }
   };
@@ -179,18 +190,33 @@ export default function ArtistProfileScreen() {
 
   const handleCommission = () => {
     if (!token) {
-      Alert.alert('Login Required', 'Please log in to request a commission');
+      Toast.show({
+        type: 'info',
+        text1: 'Login Required',
+        text2: 'Please log in to request a commission',
+        visibilityTime: 2000,
+      });
       return;
     }
 
     // Check if current user is an artist
     if (user?.artists) {
-      Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
+      Toast.show({
+        type: 'info',
+        text1: 'Not Available',
+        text2: 'Artists cannot request commissions from other artists. This feature is only available for clients.',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     if (artist?.commission_status !== 'open') {
-      Alert.alert('Commissions Closed', 'This artist is not currently accepting commissions');
+      Toast.show({
+        type: 'info',
+        text1: 'Commissions Closed',
+        text2: 'This artist is not currently accepting commissions',
+        visibilityTime: 3000,
+      });
       return;
     }
 
