@@ -51,6 +51,12 @@ export default function ConversationScreen() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [pendingReviewCommission, setPendingReviewCommission] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [progressUpdates, setProgressUpdates] = useState([]);
+  const [showProgressActions, setShowProgressActions] = useState(false);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionImage, setRevisionImage] = useState(null);
+  const [revisionNotes, setRevisionNotes] = useState('');
+  const [markupPaths, setMarkupPaths] = useState([]);
   const flatListRef = useRef(null);
   const socketRef = useRef(null);
   
@@ -224,6 +230,17 @@ export default function ConversationScreen() {
         const commissionData = commissionResponse.data;
         setCommission(commissionData);
 
+        // Fetch progress updates
+        try {
+          const progressResponse = await axios.get(
+            `${API_URL}/commissions/${response.data.commission_id}/progress`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setProgressUpdates(progressResponse.data.progress_updates || []);
+        } catch (err) {
+          console.error('Error fetching progress updates:', err);
+        }
+
         // Check if commission is completed and if user needs to review
         if (commissionData.status === 'completed') {
           await checkAndPromptReview(commissionData);
@@ -295,7 +312,7 @@ export default function ConversationScreen() {
       });
       const msgs = response.data.messages || [];
       
-      // Filter out commission_update messages
+      // Filter out commission_update messages (but keep progress_update)
       const filteredMsgs = msgs.filter(m => m.message_type !== 'commission_update');
 
       const commissionRequestMsg = filteredMsgs.find(m => m.message_type === 'commission_request');
@@ -319,7 +336,7 @@ export default function ConversationScreen() {
     }
   };
 
-  const handleImagePick = async () => {
+  const handleImagePick = async (forProgressUpdate = false, updateType = null) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Toast.show({
@@ -333,18 +350,25 @@ export default function ConversationScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsEditing: !forProgressUpdate, // Don't allow editing for progress updates (we'll add markup)
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets[0]) {
-      // Optimistic update - add placeholder message immediately
+      if (forProgressUpdate && updateType === 'revision_request') {
+        // For revision requests, open markup modal
+        setRevisionImage(result.assets[0].uri);
+        setShowRevisionModal(true);
+        return;
+      }
+
+      // Regular image or WIP/approval checkpoint
       const tempMessage = {
         id: `temp-img-${Date.now()}`,
         image_url: result.assets[0].uri,
         sender_id: user?.id,
         conversation_id: id,
-        message_type: 'image',
+        message_type: forProgressUpdate ? 'progress_update' : 'image',
         content: '',
         created_at: new Date().toISOString(),
         isPending: true,
@@ -356,17 +380,31 @@ export default function ConversationScreen() {
         const imageUrl = await uploadImage(result.assets[0].uri, 'messages', '', token);
         if (!imageUrl) throw new Error('Upload failed');
 
-        await axios.post(
-          `${API_URL}/messages/conversations/${id}/messages`,
-          {
-            image_url: imageUrl,
-            message_type: 'image',
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        if (forProgressUpdate && updateType) {
+          // Create progress update
+          await axios.post(
+            `${API_URL}/commissions/${commission?.id}/progress`,
+            {
+              update_type: updateType,
+              image_url: imageUrl,
+              requires_approval: updateType === 'approval_checkpoint',
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          await fetchConversationDetails(); // Refresh progress updates
+        } else {
+          // Regular message
+          await axios.post(
+            `${API_URL}/messages/conversations/${id}/messages`,
+            {
+              image_url: imageUrl,
+              message_type: 'image',
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        }
 
         // Socket.io will emit the real message, which will replace the temp one
-        // Remove temp after a short delay if not replaced
         setTimeout(() => {
           setMessages(prev => {
             const stillHasTemp = prev.some(m => m.id === tempMessage.id);
@@ -378,7 +416,6 @@ export default function ConversationScreen() {
         }, 1000);
       } catch (error) {
         console.error('Error sending image:', error);
-        // Remove temp message on error
         setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
         Toast.show({
           type: 'error',
@@ -387,6 +424,161 @@ export default function ConversationScreen() {
           visibilityTime: 3000,
         });
       }
+    }
+  };
+
+  const handleWIPUpload = () => {
+    if (!commission || commission.status !== 'in_progress') {
+      Toast.show({
+        type: 'info',
+        text1: 'Not available',
+        text2: 'Progress updates are only available for active commissions',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+    handleImagePick(true, 'wip_image');
+    setShowProgressActions(false);
+  };
+
+  const handleApprovalCheckpoint = () => {
+    if (!commission || commission.status !== 'in_progress') {
+      Toast.show({
+        type: 'info',
+        text1: 'Not available',
+        text2: 'Progress updates are only available for active commissions',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+    handleImagePick(true, 'approval_checkpoint');
+    setShowProgressActions(false);
+  };
+
+  const handleRequestRevision = () => {
+    if (!commission || commission.status !== 'in_progress') {
+      Toast.show({
+        type: 'info',
+        text1: 'Not available',
+        text2: 'Revisions are only available for active commissions',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+    handleImagePick(true, 'revision_request');
+    setShowProgressActions(false);
+  };
+
+  const handleApproveCheckpoint = async (progressId) => {
+    try {
+      await axios.patch(
+        `${API_URL}/commissions/${commission?.id}/progress/${progressId}/approve`,
+        { approval_status: 'approved' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await fetchConversationDetails();
+      Toast.show({
+        type: 'success',
+        text1: 'Approved',
+        text2: 'Checkpoint has been approved',
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error('Error approving checkpoint:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to approve checkpoint',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const handleRejectCheckpoint = async (progressId) => {
+    showAlert({
+      title: 'Reject Checkpoint',
+      message: 'Are you sure you want to reject this checkpoint?',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await axios.patch(
+                `${API_URL}/commissions/${commission?.id}/progress/${progressId}/approve`,
+                { approval_status: 'rejected' },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              await fetchConversationDetails();
+              Toast.show({
+                type: 'success',
+                text1: 'Rejected',
+                text2: 'Checkpoint has been rejected',
+                visibilityTime: 2000,
+              });
+            } catch (error) {
+              console.error('Error rejecting checkpoint:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: error.response?.data?.error || 'Failed to reject checkpoint',
+                visibilityTime: 3000,
+              });
+            }
+          },
+        },
+      ],
+    });
+  };
+
+  const handleSubmitRevision = async () => {
+    if (!revisionImage) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please select an image',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    try {
+      // Upload image with markup
+      const imageUrl = await uploadImage(revisionImage, 'messages', '', token);
+      if (!imageUrl) throw new Error('Upload failed');
+
+      await axios.post(
+        `${API_URL}/commissions/${commission?.id}/progress`,
+        {
+          update_type: 'revision_request',
+          image_url: imageUrl,
+          revision_notes: revisionNotes,
+          markup_data: markupPaths.length > 0 ? { paths: markupPaths } : null,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setShowRevisionModal(false);
+      setRevisionImage(null);
+      setRevisionNotes('');
+      setMarkupPaths([]);
+      await fetchConversationDetails();
+      Toast.show({
+        type: 'success',
+        text1: 'Revision requested',
+        text2: 'Your revision request has been sent',
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error('Error submitting revision:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to submit revision request',
+        visibilityTime: 3000,
+      });
     }
   };
 
@@ -573,6 +765,113 @@ export default function ConversationScreen() {
     </View>
   );
 
+  const renderProgressUpdate = (item, index) => {
+    const metadata = item.metadata || {};
+    const updateType = metadata.update_type;
+    const isOwn = item.sender_id === user?.id;
+    const progressUpdate = progressUpdates.find(p => p.id === metadata.progress_update_id);
+
+    return (
+      <>
+        {shouldShowDayHeader(item, index) && renderDayHeader(item.created_at)}
+        <View style={[styles.progressUpdateCard, isOwn && styles.progressUpdateCardOwn]}>
+          {updateType === 'wip_image' && (
+            <>
+              <View style={styles.progressUpdateHeader}>
+                <Ionicons name="image-outline" size={18} color={colors.primary} />
+                <Text style={styles.progressUpdateTitle}>Work in Progress</Text>
+              </View>
+              {item.image_url && (
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={styles.progressUpdateImage}
+                  contentFit="contain"
+                />
+              )}
+            </>
+          )}
+          {updateType === 'approval_checkpoint' && (
+            <>
+              <View style={styles.progressUpdateHeader}>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.status.warning} />
+                <Text style={styles.progressUpdateTitle}>Approval Checkpoint</Text>
+              </View>
+              {item.image_url && (
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={styles.progressUpdateImage}
+                  contentFit="contain"
+                />
+              )}
+              {progressUpdate && progressUpdate.approval_status === 'pending' && !isOwn && commission?.client_id === user?.id && (
+                <View style={styles.approvalActions}>
+                  <TouchableOpacity
+                    style={[styles.approvalButton, styles.approveButton]}
+                    onPress={() => handleApproveCheckpoint(progressUpdate.id)}
+                  >
+                    <Ionicons name="checkmark" size={16} color={colors.text.primary} />
+                    <Text style={styles.approvalButtonText}>Approve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.approvalButton, styles.rejectButton]}
+                    onPress={() => handleRejectCheckpoint(progressUpdate.id)}
+                  >
+                    <Ionicons name="close" size={16} color={colors.text.primary} />
+                    <Text style={styles.approvalButtonText}>Reject</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {progressUpdate && progressUpdate.approval_status === 'approved' && (
+                <View style={styles.approvalStatus}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.status.success} />
+                  <Text style={styles.approvalStatusText}>Approved</Text>
+                </View>
+              )}
+              {progressUpdate && progressUpdate.approval_status === 'rejected' && (
+                <View style={styles.approvalStatus}>
+                  <Ionicons name="close-circle" size={16} color={colors.status.error} />
+                  <Text style={styles.approvalStatusText}>Rejected</Text>
+                </View>
+              )}
+            </>
+          )}
+          {updateType === 'revision_request' && (
+            <>
+              <View style={styles.progressUpdateHeader}>
+                <Ionicons name="refresh-outline" size={18} color={colors.status.warning} />
+                <Text style={styles.progressUpdateTitle}>
+                  Revision Request #{progressUpdate?.revision_number || '?'}
+                </Text>
+              </View>
+              {item.image_url && (
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={styles.progressUpdateImage}
+                  contentFit="contain"
+                />
+              )}
+              {progressUpdate?.revision_notes && (
+                <Text style={styles.revisionNotes}>{progressUpdate.revision_notes}</Text>
+              )}
+            </>
+          )}
+          {updateType === 'approval_response' && (
+            <View style={styles.progressUpdateHeader}>
+              <Ionicons 
+                name={metadata.approval_status === 'approved' ? 'checkmark-circle' : 'close-circle'} 
+                size={18} 
+                color={metadata.approval_status === 'approved' ? colors.status.success : colors.status.error} 
+              />
+              <Text style={styles.progressUpdateTitle}>
+                Checkpoint {metadata.approval_status === 'approved' ? 'approved' : 'rejected'}
+              </Text>
+            </View>
+          )}
+        </View>
+      </>
+    );
+  };
+
   const renderCommissionRequest = (item, index) => {
     const metadata = item.metadata || {};
     const isArtist = user?.id !== item.sender_id;
@@ -633,6 +932,10 @@ export default function ConversationScreen() {
   const renderMessage = ({ item, index }) => {
     if (item.message_type === 'commission_request') {
       return renderCommissionRequest(item, index);
+    }
+
+    if (item.message_type === 'progress_update') {
+      return renderProgressUpdate(item, index);
     }
 
     const isOwn = item.sender_id === user?.id;
@@ -902,6 +1205,70 @@ export default function ConversationScreen() {
         }
       />
 
+      {/* Revision Markup Modal */}
+      <Modal
+        visible={showRevisionModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => {
+          setShowRevisionModal(false);
+          setRevisionImage(null);
+          setRevisionNotes('');
+          setMarkupPaths([]);
+        }}
+      >
+        <View style={styles.revisionModalContainer}>
+          <View style={styles.revisionModalHeader}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowRevisionModal(false);
+                setRevisionImage(null);
+                setRevisionNotes('');
+                setMarkupPaths([]);
+              }}
+            >
+              <Ionicons name="close" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={styles.revisionModalTitle}>Request Revision</Text>
+            <TouchableOpacity onPress={handleSubmitRevision}>
+              <Text style={styles.revisionModalSubmit}>Submit</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {revisionImage && (
+            <View style={styles.revisionImageContainer}>
+              <Image
+                source={{ uri: revisionImage }}
+                style={styles.revisionImage}
+                contentFit="contain"
+              />
+              <View style={styles.revisionMarkupOverlay} pointerEvents="box-none">
+                {/* Simple markup instructions */}
+                <View style={styles.markupInstructions}>
+                  <Ionicons name="information-circle-outline" size={20} color={colors.text.secondary} />
+                  <Text style={styles.markupInstructionsText}>
+                    Tap and drag to mark areas that need changes
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.revisionNotesContainer}>
+            <Text style={styles.revisionNotesLabel}>Revision Notes</Text>
+            <TextInput
+              style={styles.revisionNotesInput}
+              value={revisionNotes}
+              onChangeText={setRevisionNotes}
+              placeholder="Describe what needs to be changed..."
+              placeholderTextColor={colors.text.disabled}
+              multiline
+              maxLength={500}
+            />
+          </View>
+        </View>
+      </Modal>
+
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -985,6 +1352,30 @@ export default function ConversationScreen() {
           }
         />
 
+        {/* Progress Actions Menu */}
+        {showProgressActions && commission && commission.status === 'in_progress' && (
+          <View style={styles.progressActionsMenu}>
+            {commission.artist_id === user?.id && (
+              <>
+                <TouchableOpacity style={styles.progressActionButton} onPress={handleWIPUpload}>
+                  <Ionicons name="image-outline" size={20} color={colors.primary} />
+                  <Text style={styles.progressActionText}>Share WIP</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.progressActionButton} onPress={handleApprovalCheckpoint}>
+                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.status.warning} />
+                  <Text style={styles.progressActionText}>Request Approval</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {commission.client_id === user?.id && (
+              <TouchableOpacity style={styles.progressActionButton} onPress={handleRequestRevision}>
+                <Ionicons name="refresh-outline" size={20} color={colors.status.warning} />
+                <Text style={styles.progressActionText}>Request Revision</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Input */}
         <Animated.View
           style={[
@@ -1002,6 +1393,14 @@ export default function ConversationScreen() {
             },
           ]}
         >
+          {commission && commission.status === 'in_progress' && (
+            <TouchableOpacity 
+              style={styles.progressButton} 
+              onPress={() => setShowProgressActions(!showProgressActions)}
+            >
+              <Ionicons name="layers-outline" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.attachButton} onPress={handleImagePick}>
             <Ionicons name="add-circle" size={28} color={colors.primary} />
           </TouchableOpacity>
@@ -1413,5 +1812,195 @@ const styles = StyleSheet.create({
   },
   pendingMessage: {
     opacity: 0.5,
+  },
+  // Progress Updates
+  progressUpdateCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  progressUpdateCardOwn: {
+    backgroundColor: colors.primary + '15',
+    borderColor: colors.primary + '40',
+  },
+  progressUpdateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  progressUpdateTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+  },
+  progressUpdateImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  approvalActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  approvalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+  approveButton: {
+    backgroundColor: colors.status.success,
+  },
+  rejectButton: {
+    backgroundColor: colors.status.error,
+  },
+  approvalButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+  },
+  approvalStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  approvalStatusText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  revisionNotes: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    marginTop: spacing.xs,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.sm,
+  },
+  // Progress Actions Menu
+  progressActionsMenu: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  progressActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  progressActionText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 13,
+  },
+  progressButton: {
+    width: IS_SMALL_SCREEN ? 36 : 40,
+    height: IS_SMALL_SCREEN ? 36 : 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: borderRadius.full,
+    backgroundColor: 'transparent',
+  },
+  // Revision Modal
+  revisionModalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  revisionModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: STATUS_BAR_HEIGHT + spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  revisionModalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+  },
+  revisionModalSubmit: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 16,
+  },
+  revisionImageContainer: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    position: 'relative',
+  },
+  revisionImage: {
+    width: '100%',
+    height: '100%',
+  },
+  revisionMarkupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  markupInstructions: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.background + 'E6',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  markupInstructionsText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+    flex: 1,
+  },
+  revisionNotesContainer: {
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  revisionNotesLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    marginBottom: spacing.sm,
+  },
+  revisionNotesInput: {
+    ...typography.body,
+    color: colors.text.primary,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    minHeight: 100,
+    maxHeight: 150,
+    textAlignVertical: 'top',
   },
 });

@@ -1,7 +1,22 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import Constants from 'expo-constants';
+
+// Optional SecureStore import with fallback
+let SecureStore = null;
+try {
+  // Use require with error handling
+  const secureStoreModule = require('expo-secure-store');
+  SecureStore = secureStoreModule.default || secureStoreModule;
+} catch (e) {
+  // Fallback if module not available
+  console.warn('expo-secure-store not available, using fallback storage');
+  SecureStore = {
+    setItemAsync: async () => {},
+    getItemAsync: async () => null,
+    deleteItemAsync: async () => {},
+  };
+}
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || 
                 process.env.EXPO_PUBLIC_API_URL || 
@@ -779,12 +794,17 @@ export const useSearchStore = create((set, get) => ({
   isLoading: false,
   error: null,
   activeTab: 'artworks', // 'artworks' or 'artists'
+  filters: {}, // Enhanced filters for artists
 
   setQuery: (query) => set({ query }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  search: async (searchQuery) => {
+  setFilters: (filters) => set({ filters }),
+
+  search: async (searchQuery, filters = null) => {
+    const currentFilters = filters || get().filters;
+    
     if (!searchQuery || searchQuery.trim().length < 2) {
       set({ artworks: [], artists: [], query: searchQuery });
       return;
@@ -793,10 +813,32 @@ export const useSearchStore = create((set, get) => ({
     set({ isLoading: true, error: null, query: searchQuery });
 
     try {
+      // Build artist search params with filters
+      const artistParams = new URLSearchParams({
+        search: searchQuery,
+        limit: '20'
+      });
+      
+      if (currentFilters.styles?.length > 0) {
+        artistParams.append('styles', currentFilters.styles.join(','));
+      }
+      if (currentFilters.price_min !== undefined) {
+        artistParams.append('price_min', currentFilters.price_min);
+      }
+      if (currentFilters.price_max !== undefined) {
+        artistParams.append('price_max', currentFilters.price_max);
+      }
+      if (currentFilters.turnaround_max !== undefined) {
+        artistParams.append('turnaround_max', currentFilters.turnaround_max);
+      }
+      if (currentFilters.language) {
+        artistParams.append('language', currentFilters.language);
+      }
+
       // Search both artworks and artists in parallel
       const [artworksResponse, artistsResponse] = await Promise.all([
         axios.get(`${API_URL}/artworks?search=${encodeURIComponent(searchQuery)}&limit=20`),
-        axios.get(`${API_URL}/artists?search=${encodeURIComponent(searchQuery)}&limit=10`)
+        axios.get(`${API_URL}/artists?${artistParams.toString()}`)
       ]);
 
       set({
@@ -815,11 +857,50 @@ export const useSearchStore = create((set, get) => ({
     }
   },
 
+  searchArtistsWithFilters: async (filters = null) => {
+    const currentFilters = filters || get().filters;
+    set({ isLoading: true, error: null });
+
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      
+      if (currentFilters.styles?.length > 0) {
+        params.append('styles', currentFilters.styles.join(','));
+      }
+      if (currentFilters.price_min !== undefined) {
+        params.append('price_min', currentFilters.price_min);
+      }
+      if (currentFilters.price_max !== undefined) {
+        params.append('price_max', currentFilters.price_max);
+      }
+      if (currentFilters.turnaround_max !== undefined) {
+        params.append('turnaround_max', currentFilters.turnaround_max);
+      }
+      if (currentFilters.language) {
+        params.append('language', currentFilters.language);
+      }
+
+      const response = await axios.get(`${API_URL}/artists?${params.toString()}`);
+      set({
+        artists: response.data.artists || [],
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error('Filter search error:', error);
+      set({
+        error: error.response?.data?.error || 'Search failed',
+        isLoading: false,
+        artists: [],
+      });
+    }
+  },
+
   clearSearch: () => set({
     query: '',
     artworks: [],
     artists: [],
     error: null,
     activeTab: 'artworks',
+    filters: {},
   }),
 }));

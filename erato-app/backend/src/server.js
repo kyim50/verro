@@ -20,6 +20,7 @@ import uploadRoutes from './routes/uploads.js';
 import reviewRoutes from './routes/reviews.js';
 import notificationRoutes from './routes/notifications.js';
 import commissionPackageRoutes from './routes/commissionPackages.js';
+import commissionRequestRoutes from './routes/commissionRequests.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -140,6 +141,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/commission-packages', commissionPackageRoutes);
+app.use('/api/commission-requests', commissionRequestRoutes);
 
 // 404 handler
 app.use((req, res) => {

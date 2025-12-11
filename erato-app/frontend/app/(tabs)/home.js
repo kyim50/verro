@@ -31,6 +31,8 @@ import { showAlert } from '../../components/StyledAlert';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
+import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
+import ArtistFilters from '../../components/ArtistFilters';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -65,6 +67,12 @@ export default function HomeScreen() {
   const [showCreateBoard, setShowCreateBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showStyleQuiz, setShowStyleQuiz] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showDiscoverArtists, setShowDiscoverArtists] = useState(false);
+  const [discoverArtists, setDiscoverArtists] = useState([]);
+  const [loadingArtists, setLoadingArtists] = useState(false);
+  const [artistFilters, setArtistFilters] = useState({});
   const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
   const [forYouArtworks, setForYouArtworks] = useState([]);
   const [forYouPage, setForYouPage] = useState(1);
@@ -102,6 +110,53 @@ export default function HomeScreen() {
       loadLikedArtworks(false);
     }
   }, [token, boards.length]);
+
+  // Load filtered artists
+  const loadFilteredArtists = useCallback(async (filters = null) => {
+    const currentFilters = filters || artistFilters;
+    if (Object.keys(currentFilters).length === 0) {
+      setDiscoverArtists([]);
+      setShowDiscoverArtists(false);
+      return;
+    }
+
+    setLoadingArtists(true);
+    setShowDiscoverArtists(true);
+    try {
+      const params = new URLSearchParams({ limit: '20' });
+      
+      if (currentFilters.styles?.length > 0) {
+        params.append('styles', currentFilters.styles.join(','));
+      }
+      if (currentFilters.price_min !== undefined) {
+        params.append('price_min', currentFilters.price_min);
+      }
+      if (currentFilters.price_max !== undefined) {
+        params.append('price_max', currentFilters.price_max);
+      }
+      if (currentFilters.turnaround_max !== undefined) {
+        params.append('turnaround_max', currentFilters.turnaround_max);
+      }
+      if (currentFilters.language) {
+        params.append('language', currentFilters.language);
+      }
+
+      const response = await axios.get(`${API_URL}/artists?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setDiscoverArtists(response.data.artists || []);
+    } catch (error) {
+      console.error('Error loading filtered artists:', error);
+      setDiscoverArtists([]);
+    } finally {
+      setLoadingArtists(false);
+    }
+  }, [artistFilters, token]);
+
+  const handleApplyFilters = (newFilters) => {
+    setArtistFilters(newFilters);
+    loadFilteredArtists(newFilters);
+  };
 
   // Load For You artworks
   const loadForYouArtworks = useCallback(async (reset = false) => {
@@ -776,6 +831,17 @@ export default function HomeScreen() {
         </View>
         
         <View style={styles.headerRight}>
+          {!isArtist && token && (
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setShowFilters(true)}
+            >
+              <Ionicons name="filter" size={22} color={colors.text.primary} />
+              {Object.keys(artistFilters).length > 0 && (
+                <View style={styles.filterBadge} />
+              )}
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => setShowSearchModal(true)}
@@ -807,6 +873,149 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Active Filters Bar */}
+      {!isArtist && token && Object.keys(artistFilters).length > 0 && (
+        <View style={styles.activeFiltersBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
+            {artistFilters.styles?.length > 0 && (
+              <View style={styles.activeFilterChip}>
+                <Text style={styles.activeFilterText}>
+                  {artistFilters.styles.length} style{artistFilters.styles.length > 1 ? 's' : ''}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newFilters = { ...artistFilters };
+                    delete newFilters.styles;
+                    setArtistFilters(newFilters);
+                    loadFilteredArtists(newFilters);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            {artistFilters.price_min !== undefined && (
+              <View style={styles.activeFilterChip}>
+                <Text style={styles.activeFilterText}>Min: ${artistFilters.price_min}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newFilters = { ...artistFilters };
+                    delete newFilters.price_min;
+                    setArtistFilters(newFilters);
+                    loadFilteredArtists(newFilters);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            {artistFilters.price_max !== undefined && (
+              <View style={styles.activeFilterChip}>
+                <Text style={styles.activeFilterText}>Max: ${artistFilters.price_max}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newFilters = { ...artistFilters };
+                    delete newFilters.price_max;
+                    setArtistFilters(newFilters);
+                    loadFilteredArtists(newFilters);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            {artistFilters.turnaround_max !== undefined && (
+              <View style={styles.activeFilterChip}>
+                <Text style={styles.activeFilterText}>Max {artistFilters.turnaround_max} days</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newFilters = { ...artistFilters };
+                    delete newFilters.turnaround_max;
+                    setArtistFilters(newFilters);
+                    loadFilteredArtists(newFilters);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            {artistFilters.language && (
+              <View style={styles.activeFilterChip}>
+                <Text style={styles.activeFilterText}>{artistFilters.language}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newFilters = { ...artistFilters };
+                    delete newFilters.language;
+                    setArtistFilters(newFilters);
+                    loadFilteredArtists(newFilters);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.clearAllFilters}
+              onPress={() => {
+                setArtistFilters({});
+                setShowDiscoverArtists(false);
+                setDiscoverArtists([]);
+              }}
+            >
+              <Text style={styles.clearAllText}>Clear All</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Discover Artists Section */}
+      {!isArtist && token && showDiscoverArtists && discoverArtists.length > 0 && (
+        <View style={styles.discoverSection}>
+          <View style={styles.discoverHeader}>
+            <Text style={styles.discoverTitle}>Discover Artists</Text>
+            <TouchableOpacity onPress={() => setShowDiscoverArtists(false)}>
+              <Ionicons name="close" size={20} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+          {loadingArtists ? (
+            <View style={styles.discoverLoading}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.discoverScroll}>
+              {discoverArtists.map((artist) => (
+                <TouchableOpacity
+                  key={artist.id}
+                  style={styles.discoverArtistCard}
+                  onPress={() => router.push(`/artist/${artist.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <Image
+                    source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/100' }}
+                    style={styles.discoverArtistAvatar}
+                    contentFit="cover"
+                  />
+                  <Text style={styles.discoverArtistName} numberOfLines={1}>
+                    {artist.users?.full_name || artist.users?.username}
+                  </Text>
+                  <View style={styles.discoverArtistStats}>
+                    <Ionicons name="star" size={12} color={colors.primary} />
+                    <Text style={styles.discoverArtistRating}>
+                      {artist.rating?.toFixed(1) || '0.0'}
+                    </Text>
+                  </View>
+                  {artist.min_price && artist.max_price && (
+                    <Text style={styles.discoverArtistPrice}>
+                      ${artist.min_price}-${artist.max_price}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
 
       {/* Content based on active tab */}
       {activeTab === 'explore' ? (
@@ -1001,6 +1210,26 @@ export default function HomeScreen() {
         visible={showSearchModal}
         onClose={() => setShowSearchModal(false)}
       />
+      
+      {!isArtist && (
+        <>
+          <StylePreferenceQuiz
+            visible={showStyleQuiz}
+            onClose={() => setShowStyleQuiz(false)}
+            token={token}
+            onComplete={() => {
+              // Optionally refresh or navigate
+            }}
+          />
+          <ArtistFilters
+            visible={showFilters}
+            onClose={() => setShowFilters(false)}
+            filters={artistFilters}
+            onApplyFilters={handleApplyFilters}
+            token={token}
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -1455,5 +1684,129 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '700',
+  },
+  // Filter styles
+  filterBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  activeFiltersBar: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.sm,
+  },
+  filtersScroll: {
+    paddingHorizontal: spacing.md,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + '20',
+    borderRadius: borderRadius.full,
+    marginRight: spacing.sm,
+  },
+  activeFilterText: {
+    ...typography.small,
+    color: colors.primary,
+    fontSize: 12,
+  },
+  clearAllFilters: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    justifyContent: 'center',
+  },
+  clearAllText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  // Discover Artists Section
+  discoverSection: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+  },
+  discoverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  discoverTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+  },
+  discoverLoading: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  discoverEmpty: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  discoverEmptyText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  discoverEmptySubtext: {
+    ...typography.small,
+    color: colors.text.disabled,
+    marginTop: spacing.xs,
+  },
+  discoverScroll: {
+    paddingLeft: spacing.md,
+  },
+  discoverArtistCard: {
+    width: 120,
+    marginRight: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  discoverArtistAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.sm,
+  },
+  discoverArtistName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  discoverArtistStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  discoverArtistRating: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  discoverArtistPrice: {
+    ...typography.small,
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

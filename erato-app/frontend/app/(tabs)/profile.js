@@ -18,6 +18,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = (width - spacing.md * 4) / 3;
@@ -31,6 +32,7 @@ export default function ProfileScreen() {
   const feedStore = useFeedStore();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [avatarKey, setAvatarKey] = useState(0);
+  const [showStyleQuiz, setShowStyleQuiz] = useState(false);
   const insets = useSafeAreaInsets();
 
   // Auto-refresh when screen comes into focus to get latest profile data
@@ -702,7 +704,7 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={styles.quickActionItem}
-                onPress={() => router.push('/(tabs)/boards?tab=commissions')}
+                onPress={() => router.push('/(tabs)/explore')}
               >
                 <View style={styles.quickActionIcon}>
                   <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
@@ -724,6 +726,34 @@ export default function ProfileScreen() {
                 <View style={styles.quickActionText}>
                   <Text style={styles.quickActionTitle}>Messages</Text>
                   <Text style={styles.quickActionSubtitle}>Chat with artists</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => setShowStyleQuiz(true)}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="color-palette-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Style Preference Quiz</Text>
+                  <Text style={styles.quickActionSubtitle}>Get personalized artist matches</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/commission-requests')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Commission Requests</Text>
+                  <Text style={styles.quickActionSubtitle}>Post requests & get bids</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
               </TouchableOpacity>
@@ -761,6 +791,18 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Style Preference Quiz Modal */}
+      {!isArtist && (
+        <StylePreferenceQuiz
+          visible={showStyleQuiz}
+          onClose={() => setShowStyleQuiz(false)}
+          token={token}
+          onComplete={() => {
+            // Quiz completed, user can now use smart matches
+          }}
+        />
+      )}
     </View>
   );
 }

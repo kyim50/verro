@@ -16,8 +16,14 @@ import {
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSearchStore } from '../store';
+import { useSearchStore, useAuthStore } from '../store';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
+import ArtistFilters from './ArtistFilters';
+import StylePreferenceQuiz from './StylePreferenceQuiz';
+import Constants from 'expo-constants';
+import axios from 'axios';
+
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 const { width } = Dimensions.get('window');
 const SPACING = 4;
@@ -31,26 +37,64 @@ export default function SearchModal({ visible, onClose }) {
     artists,
     isLoading,
     activeTab,
+    filters,
     setQuery,
     setActiveTab,
+    setFilters,
     search,
+    searchArtistsWithFilters,
     clearSearch,
   } = useSearchStore();
-
+  
+  const { token, user } = useAuthStore();
+  const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+  
   const [localQuery, setLocalQuery] = useState(query);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showStyleQuiz, setShowStyleQuiz] = useState(false);
+  const [loadingSmartMatches, setLoadingSmartMatches] = useState(false);
 
   useEffect(() => {
     // Debounce search
     const timeoutId = setTimeout(() => {
       if (localQuery.trim().length >= 2) {
-        search(localQuery);
+        search(localQuery, filters);
       } else if (localQuery.trim().length === 0) {
         clearSearch();
       }
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [localQuery]);
+  }, [localQuery, filters]);
+
+  const handleApplyFilters = (newFilters) => {
+    setFilters(newFilters);
+    if (activeTab === 'artists') {
+      if (localQuery.trim().length >= 2) {
+        search(localQuery, newFilters);
+      } else {
+        searchArtistsWithFilters(newFilters);
+      }
+    }
+  };
+
+  const handleSmartMatch = async () => {
+    if (!token) {
+      return;
+    }
+    setLoadingSmartMatches(true);
+    try {
+      const response = await axios.get(`${API_URL}/artists/matches/smart?limit=20`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setActiveTab('artists');
+      useSearchStore.setState({ artists: response.data.artists || [] });
+    } catch (error) {
+      console.error('Error loading smart matches:', error);
+    } finally {
+      setLoadingSmartMatches(false);
+    }
+  };
 
   const handleClose = () => {
     clearSearch();
@@ -147,6 +191,32 @@ export default function SearchModal({ visible, onClose }) {
           <Text style={styles.emptyText}>
             Find amazing art or discover talented artists
           </Text>
+          
+          {activeTab === 'artists' && !isArtist && token && (
+            <View style={styles.emptyActions}>
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={handleSmartMatch}
+                disabled={loadingSmartMatches}
+              >
+                {loadingSmartMatches ? (
+                  <ActivityIndicator size="small" color={colors.text.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={20} color={colors.text.primary} />
+                    <Text style={styles.emptyActionText}>Smart Matches</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={() => setShowStyleQuiz(true)}
+              >
+                <Ionicons name="color-palette" size={20} color={colors.text.primary} />
+                <Text style={styles.emptyActionText}>Style Quiz</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       );
     }
@@ -207,6 +277,17 @@ export default function SearchModal({ visible, onClose }) {
               </TouchableOpacity>
             )}
           </View>
+          {activeTab === 'artists' && (
+            <TouchableOpacity
+              style={styles.filterButton}
+              onPress={() => setShowFilters(true)}
+            >
+              <Ionicons name="filter" size={20} color={colors.primary} />
+              {Object.keys(filters).length > 0 && (
+                <View style={styles.filterBadge} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Tabs */}
@@ -263,6 +344,27 @@ export default function SearchModal({ visible, onClose }) {
         </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Filters Modal */}
+      <ArtistFilters
+        visible={showFilters}
+        onClose={() => setShowFilters(false)}
+        filters={filters}
+        onApplyFilters={handleApplyFilters}
+        token={token}
+      />
+
+      {/* Style Quiz Modal */}
+      {!isArtist && (
+        <StylePreferenceQuiz
+          visible={showStyleQuiz}
+          onClose={() => setShowStyleQuiz(false)}
+          token={token}
+          onComplete={() => {
+            handleSmartMatch();
+          }}
+        />
+      )}
     </Modal>
   );
 }
@@ -447,5 +549,45 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  filterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  emptyActions: {
+    marginTop: spacing.xl,
+    gap: spacing.md,
+    width: '100%',
+    paddingHorizontal: spacing.lg,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyActionText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
   },
 });
