@@ -27,6 +27,18 @@ router.get('/artist/:artistId', async (req, res) => {
       .eq('artist_id', artistId)
       .eq('is_active', true)
       .order('display_order', { ascending: true });
+    
+    // Ensure thumbnail_url is set from example_image_urls if available
+    if (packages) {
+      packages.forEach(pkg => {
+        if (!pkg.thumbnail_url && pkg.example_image_urls && pkg.example_image_urls.length > 0) {
+          pkg.thumbnail_url = pkg.example_image_urls[0];
+        }
+        if (!pkg.image_url && pkg.example_image_urls && pkg.example_image_urls.length > 0) {
+          pkg.image_url = pkg.example_image_urls[0];
+        }
+      });
+    }
 
     if (error) throw error;
 

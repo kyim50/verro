@@ -298,14 +298,7 @@ router.get('/artist/:artistId/with-responses', async (req, res) => {
 
     let query = supabaseAdmin
       .from('reviews')
-      .select(`
-        *,
-        clients:client_id (
-          id,
-          username,
-          profile_picture
-        )
-      `)
+      .select('*')
       .eq('artist_id', artistId)
       .eq('review_type', 'client_to_artist')
       .order('created_at', { ascending: false })
@@ -318,6 +311,17 @@ router.get('/artist/:artistId/with-responses', async (req, res) => {
     const { data: reviews, error } = await query;
 
     if (error) throw error;
+
+    // Fetch client user data for all reviews
+    const clientIds = [...new Set(reviews.map(r => r.client_id).filter(Boolean))];
+    const { data: clientUsers } = clientIds.length > 0
+      ? await supabaseAdmin
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .in('id', clientIds)
+      : { data: [] };
+    
+    const clientUserMap = new Map(clientUsers?.map(u => [u.id, u]) || []);
 
     // Get helpful status for current user if authenticated
     let userHelpfulReviews = [];
@@ -332,9 +336,10 @@ router.get('/artist/:artistId/with-responses', async (req, res) => {
       userHelpfulReviews = helpful?.map(h => h.review_id) || [];
     }
 
-    // Add user helpful status to each review
+    // Add user helpful status and client data to each review
     const enrichedReviews = reviews.map(review => ({
       ...review,
+      client: clientUserMap.get(review.client_id) || null,
       userMarkedHelpful: userHelpfulReviews.includes(review.id)
     }));
 
@@ -383,7 +388,7 @@ router.get('/:reviewId/helpful-users', async (req, res) => {
         users:user_id (
           id,
           username,
-          profile_picture
+          avatar_url
         )
       `)
       .eq('review_id', reviewId)

@@ -140,14 +140,14 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
         <View style={styles.reviewHeader}>
           <View style={styles.reviewerInfo}>
             <Image
-              source={{ uri: review.clients?.avatar_url || review.clients?.profile_picture || DEFAULT_AVATAR }}
+              source={{ uri: review.client?.avatar_url || review.clients?.avatar_url || review.clients?.profile_picture || DEFAULT_AVATAR }}
               style={styles.avatar}
               contentFit="cover"
             />
             <View style={styles.reviewerDetails}>
               <View style={styles.reviewerNameRow}>
                 <Text style={styles.reviewerName}>
-                  {review.clients?.full_name || review.clients?.username || 'Anonymous'}
+                  {review.client?.full_name || review.client?.username || review.clients?.full_name || review.clients?.username || 'Anonymous'}
                 </Text>
                 {review.verified_commission && (
                   <View style={styles.verifiedBadge}>

@@ -11,13 +11,14 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Toast from 'react-native-toast-message';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -165,7 +166,11 @@ export default function CreateCommissionScreen() {
               This artist hasn't published packages yet. You can still send a custom request.
             </Text>
           ) : (
-            <View style={styles.packageList}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.packageScrollContent}
+            >
               {packages.map((pkg) => {
                 const isSelected = selectedPackageId === pkg.id;
                 return (
@@ -178,72 +183,77 @@ export default function CreateCommissionScreen() {
                     onPress={() => setSelectedPackageId(isSelected ? null : pkg.id)}
                     activeOpacity={0.85}
                   >
-                    <View style={styles.packageOptionHeader}>
+                    {/* Package Image - Compact */}
+                    {pkg.thumbnail_url || pkg.image_url ? (
+                      <Image
+                        source={{ uri: pkg.thumbnail_url || pkg.image_url }}
+                        style={styles.packageImage}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={styles.packageImagePlaceholder}>
+                        <Ionicons name="cube-outline" size={24} color={colors.text.disabled} />
+                      </View>
+                    )}
+                    
+                    {/* Selected Indicator */}
+                    {isSelected && (
+                      <View style={styles.packageSelectedBadge}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+                      </View>
+                    )}
+                    
+                    {/* Compact Info */}
+                    <View style={styles.packageContent}>
                       <Text style={styles.packageOptionTitle} numberOfLines={1}>{pkg.name}</Text>
                       <Text style={styles.packageOptionPrice}>${pkg.base_price}</Text>
-                    </View>
-                    {pkg.description ? (
-                      <Text style={styles.packageOptionDescription} numberOfLines={2}>
-                        {pkg.description}
-                      </Text>
-                    ) : (
-                      <Text style={styles.packageOptionDescriptionMuted}>No description</Text>
-                    )}
-                    <View style={styles.packageOptionMeta}>
-                      {pkg.estimated_delivery_days ? (
-                        <View style={styles.packageMetaItem}>
-                          <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
-                          <Text style={styles.packageMetaText}>{pkg.estimated_delivery_days} days</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.packageMetaItem}>
-                          <Ionicons name="sparkles-outline" size={14} color={colors.text.secondary} />
-                          <Text style={styles.packageMetaText}>Delivery TBD</Text>
+                      {pkg.estimated_delivery_days && (
+                        <View style={styles.packageMetaCompact}>
+                          <Ionicons name="time-outline" size={12} color={colors.text.secondary} />
+                          <Text style={styles.packageMetaTextCompact}>{pkg.estimated_delivery_days}d</Text>
                         </View>
                       )}
-                      <View style={styles.packageMetaItem}>
-                        <Ionicons name="refresh-outline" size={14} color={colors.text.secondary} />
-                        <Text style={styles.packageMetaText}>{pkg.revision_count || 0} revisions</Text>
-                      </View>
                     </View>
                   </TouchableOpacity>
                 );
               })}
-              {selectedPackage?.addons?.length ? (
-                <View style={styles.addonList}>
-                  <Text style={styles.addonHeader}>Add-ons</Text>
-                  {selectedPackage.addons.map((addon) => {
-                    const isChecked = selectedAddons.includes(addon.id);
-                    return (
-                      <TouchableOpacity
-                        key={addon.id}
-                        style={styles.addonRow}
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setSelectedAddons((prev) =>
-                            prev.includes(addon.id)
-                              ? prev.filter((id) => id !== addon.id)
-                              : [...prev, addon.id]
-                          );
-                        }}
-                      >
-                        <View style={[styles.addonCheckbox, isChecked && styles.addonCheckboxChecked]}>
-                          {isChecked && <Ionicons name="checkmark" size={14} color={colors.text.primary} />}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.addonName}>{addon.name}</Text>
-                          {addon.description ? (
-                            <Text style={styles.addonDesc} numberOfLines={2}>{addon.description}</Text>
-                          ) : null}
-                        </View>
-                        <Text style={styles.addonPrice}>+${addon.price}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : null}
-            </View>
+            </ScrollView>
           )}
+          
+          {/* Add-ons Section - Outside ScrollView */}
+          {selectedPackage?.addons?.length ? (
+            <View style={styles.addonList}>
+              <Text style={styles.addonHeader}>Add-ons</Text>
+              {selectedPackage.addons.map((addon) => {
+                const isChecked = selectedAddons.includes(addon.id);
+                return (
+                  <TouchableOpacity
+                    key={addon.id}
+                    style={styles.addonRow}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSelectedAddons((prev) =>
+                        prev.includes(addon.id)
+                          ? prev.filter((id) => id !== addon.id)
+                          : [...prev, addon.id]
+                      );
+                    }}
+                  >
+                    <View style={[styles.addonCheckbox, isChecked && styles.addonCheckboxChecked]}>
+                      {isChecked && <Ionicons name="checkmark" size={14} color={colors.text.primary} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addonName}>{addon.name}</Text>
+                      {addon.description ? (
+                        <Text style={styles.addonDesc} numberOfLines={2}>{addon.description}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.addonPrice}>+${addon.price}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
         {/* Title */}
@@ -373,19 +383,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
-  packageList: {
+  packageScrollContent: {
+    paddingRight: spacing.md,
     gap: spacing.sm,
   },
   packageOption: {
+    width: 140,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
+    overflow: 'hidden',
+    borderWidth: 2,
     borderColor: colors.border,
+    marginRight: spacing.sm,
+    position: 'relative',
   },
   packageOptionSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
+  },
+  packageImage: {
+    width: '100%',
+    height: 100,
+    backgroundColor: colors.surfaceLight,
+  },
+  packageImagePlaceholder: {
+    width: '100%',
+    height: 100,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  packageSelectedBadge: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  packageContent: {
+    padding: spacing.sm,
+  },
+  packageMetaCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  packageMetaTextCompact: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
   },
   packageOptionHeader: {
     flexDirection: 'row',
