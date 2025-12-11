@@ -248,32 +248,36 @@ router.get(
         console.log('Excluding current user:', req.user.id);
         artistQuery = artistQuery.neq('id', req.user.id);
 
-        // Exclude swiped artists
-        const { data: swipedArtists } = await supabaseAdmin
-          .from('swipes')
-          .select('artist_id')
-          .eq('user_id', req.user.id);
+        // Exclude swiped artists - BUT NOT when searching (users should be able to find swiped artists by name)
+        if (!searchQuery || searchQuery.trim().length === 0) {
+          const { data: swipedArtists } = await supabaseAdmin
+            .from('swipes')
+            .select('artist_id')
+            .eq('user_id', req.user.id);
 
-        const swipedIds = swipedArtists?.map(s => s.artist_id) || [];
-        console.log('Swiped artist IDs to exclude:', swipedIds.length, swipedIds);
-        if (swipedIds.length > 0) {
-          // Filter out swiped artists - if we have ID filters, remove them from finalArtistIds
-          // Otherwise use .not() with proper Supabase syntax
-          if (artistIdFilters.length > 0 && finalArtistIds) {
-            // Remove swiped IDs from finalArtistIds
-            finalArtistIds = finalArtistIds.filter(id => !swipedIds.includes(id));
-            console.log('After removing swiped artists, remaining IDs:', finalArtistIds.length);
-            // Re-apply the filter
-            if (finalArtistIds.length > 0) {
-              artistQuery = artistQuery.in('id', finalArtistIds);
+          const swipedIds = swipedArtists?.map(s => s.artist_id) || [];
+          console.log('Swiped artist IDs to exclude:', swipedIds.length, swipedIds);
+          if (swipedIds.length > 0) {
+            // Filter out swiped artists - if we have ID filters, remove them from finalArtistIds
+            // Otherwise use .not() with proper Supabase syntax
+            if (artistIdFilters.length > 0 && finalArtistIds) {
+              // Remove swiped IDs from finalArtistIds
+              finalArtistIds = finalArtistIds.filter(id => !swipedIds.includes(id));
+              console.log('After removing swiped artists, remaining IDs:', finalArtistIds.length);
+              // Re-apply the filter
+              if (finalArtistIds.length > 0) {
+                artistQuery = artistQuery.in('id', finalArtistIds);
+              } else {
+                console.log('All artists were swiped, returning empty');
+                return res.json({ artists: [] });
+              }
             } else {
-              console.log('All artists were swiped, returning empty');
-              return res.json({ artists: [] });
+              // Use .not() with array syntax for Supabase
+              artistQuery = artistQuery.not('id', 'in', `(${swipedIds.join(',')})`);
             }
-          } else {
-            // Use .not() with array syntax for Supabase
-            artistQuery = artistQuery.not('id', 'in', `(${swipedIds.join(',')})`);
           }
+        } else {
+          console.log('Search query present - not excluding swiped artists');
         }
       }
 
