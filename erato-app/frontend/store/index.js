@@ -505,9 +505,21 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
       
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+      
       const response = await axios.post(`${API_URL}/boards`, boardData, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000, // 15 second timeout
       });
+      
+      if (!response.data) {
+        throw new Error('Invalid response from server');
+      }
       
       set((state) => ({
         boards: [response.data, ...state.boards],
@@ -516,8 +528,13 @@ export const useBoardStore = create((set, get) => ({
       
       return response.data;
     } catch (error) {
-      set({ error: error.response?.data?.error || error.message, isLoading: false });
-      throw error;
+      console.error('Error creating board:', error);
+      const errorMessage = error.response?.data?.error 
+        || (error.code === 'ECONNABORTED' ? 'Request timed out. Please check your connection.' : 'Network error. Please check your connection.')
+        || error.message 
+        || 'Failed to create board';
+      set({ error: errorMessage, isLoading: false });
+      throw new Error(errorMessage);
     }
   },
 

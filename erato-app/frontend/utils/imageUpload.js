@@ -1,6 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import axios from 'axios';
 import Constants from 'expo-constants';
+import { getFormattedFileUri, verifyFileAccess } from './androidUploadFix';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api';
 
@@ -18,10 +20,16 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       throw new Error('Authentication token required for upload');
     }
 
-    // Get file info
+    // Verify file exists and is accessible
+    const fileExists = await verifyFileAccess(uri);
+    if (!fileExists) {
+      throw new Error('File does not exist or is not accessible');
+    }
+
+    // Get file info for size validation
     const fileInfo = await FileSystem.getInfoAsync(uri);
-    if (!fileInfo.exists) {
-      throw new Error('File does not exist');
+    if (fileInfo.size === 0) {
+      throw new Error('File is empty');
     }
 
     // Determine content type
@@ -44,13 +52,29 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       fieldName = 'file';
     }
 
-    // Create form data with proper React Native format and correct field name
+    // Create form data with proper React Native format
+    // Use helper function to get correctly formatted URI
     const formData = new FormData();
-    formData.append(fieldName, {
-      uri,
+    const fileUri = getFormattedFileUri(uri);
+    
+    // React Native FormData file object format: { uri, type, name }
+    // The 'name' field is important for backend to identify the file
+    const fileData = {
+      uri: fileUri,
       type: contentType,
-      name: `upload.${ext}`,
+      name: `image.${ext}`, // Use 'image' prefix for better compatibility
+    };
+    
+    console.log('FormData file object:', {
+      uri: fileUri.substring(0, 50) + '...',
+      type: contentType,
+      name: fileData.name,
+      platform: Platform.OS,
+      hasFilePrefix: fileUri.startsWith('file://'),
+      fieldName,
     });
+    
+    formData.append(fieldName, fileData);
 
     // Upload to backend API
     // Note: Don't set Content-Type header manually - axios will set it with proper boundary
@@ -58,12 +82,37 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await axios.post(endpoint, formData, {
+    
+    // Log for debugging
+    console.log('Uploading image:', {
+      endpoint,
+      fieldName,
+      uri: uri.substring(0, 50) + '...',
+      contentType,
+      platform: Platform.OS,
+    });
+    
+    // For Android, ensure we're using the correct axios config
+    const axiosConfig = {
       headers: {
         ...headers,
-        // Axios will automatically set Content-Type: multipart/form-data with boundary
+        // CRITICAL: Don't set Content-Type manually - axios will set it with boundary
+        // Setting it manually breaks multipart/form-data on Android
       },
-    });
+      timeout: 30000, // 30 second timeout for uploads
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      transformRequest: (data, headers) => {
+        // Ensure Content-Type is not set manually
+        // Let axios handle it automatically
+        if (headers['Content-Type']) {
+          delete headers['Content-Type'];
+        }
+        return data;
+      },
+    };
+    
+    const response = await axios.post(endpoint, formData, axiosConfig);
 
     if (!response.data || !response.data.success) {
       throw new Error(response.data?.error || 'Upload failed');
@@ -106,25 +155,51 @@ export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '
       throw new Error('Authentication token required for upload');
     }
 
-    // For portfolio, use the multi-file endpoint
-    if (bucket === 'portfolios') {
-      const formData = new FormData();
-      for (const uri of uris) {
-        const ext = uri.split('.').pop();
-        const contentType = getContentType(ext);
-        formData.append('files', {
-          uri,
-          type: contentType,
-          name: `upload.${ext}`,
-        });
-      }
+      // For portfolio, use the multi-file endpoint
+      if (bucket === 'portfolios') {
+        const formData = new FormData();
+        for (const uri of uris) {
+          // Verify each file before adding
+          const fileExists = await verifyFileAccess(uri);
+          if (!fileExists) {
+            console.warn('Skipping invalid file:', uri);
+            continue;
+          }
+          
+          const ext = uri.split('.').pop();
+          const contentType = getContentType(ext);
+          const fileUri = getFormattedFileUri(uri);
+          
+          const fileData = {
+            uri: fileUri,
+            type: contentType,
+            name: `image.${ext}`,
+          };
+          formData.append('files', fileData);
+        }
+        
+        if (formData._parts.length === 0) {
+          throw new Error('No valid files to upload');
+        }
 
-      const response = await axios.post(`${API_URL}/uploads/portfolio`, formData, {
+      const axiosConfig = {
         headers: {
           'Authorization': `Bearer ${token}`,
-          // Axios will automatically set Content-Type: multipart/form-data with boundary
+          // CRITICAL: Don't set Content-Type manually
         },
-      });
+        timeout: 30000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        transformRequest: (data, headers) => {
+          // Ensure Content-Type is not set manually
+          if (headers['Content-Type']) {
+            delete headers['Content-Type'];
+          }
+          return data;
+        },
+      };
+      
+      const response = await axios.post(`${API_URL}/uploads/portfolio`, formData, axiosConfig);
 
       if (!response.data.success) {
         throw new Error(response.data.error || 'Upload failed');

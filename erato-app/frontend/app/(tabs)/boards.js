@@ -10,6 +10,12 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
@@ -248,7 +254,9 @@ export default function BoardsScreen() {
         visibilityTime: 2000,
       });
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to create board');
+      console.error('Board creation error:', error);
+      const errorMessage = error.message || error.response?.data?.error || 'Failed to create board. Please check your connection and try again.';
+      Alert.alert('Error', errorMessage);
     }
   };
 
@@ -717,78 +725,97 @@ export default function BoardsScreen() {
         transparent={true}
         onRequestClose={() => setShowCreateModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Board</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalContent}>
+                  <SafeAreaView edges={['bottom']}>
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Create Board</Text>
+                      <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                        <Ionicons name="close" size={24} color={colors.text.primary} />
+                      </TouchableOpacity>
+                    </View>
 
-            <View style={styles.modalBody}>
-              <Text style={styles.label}>Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="My Favorite Art"
-                placeholderTextColor={colors.text.disabled}
-                value={newBoardName}
-                onChangeText={setNewBoardName}
-                autoFocus
-              />
+                    <ScrollView
+                      style={styles.modalBody}
+                      keyboardShouldPersistTaps="handled"
+                      showsVerticalScrollIndicator={false}
+                    >
+                      <Text style={styles.label}>Name</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="My Favorite Art"
+                        placeholderTextColor={colors.text.disabled}
+                        value={newBoardName}
+                        onChangeText={setNewBoardName}
+                        autoFocus
+                        returnKeyType="next"
+                      />
 
-              <Text style={styles.label}>Description (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="What's this board about?"
-                placeholderTextColor={colors.text.disabled}
-                value={newBoardDescription}
-                onChangeText={setNewBoardDescription}
-                multiline
-                numberOfLines={3}
-              />
+                      <Text style={styles.label}>Description (optional)</Text>
+                      <TextInput
+                        style={[styles.input, styles.textArea]}
+                        placeholder="What's this board about?"
+                        placeholderTextColor={colors.text.disabled}
+                        value={newBoardDescription}
+                        onChangeText={setNewBoardDescription}
+                        multiline
+                        numberOfLines={3}
+                        returnKeyType="done"
+                        blurOnSubmit={true}
+                      />
 
-              <TouchableOpacity
-                style={styles.publicToggle}
-                onPress={() => setIsPublic(!isPublic)}
-              >
-                <View style={styles.toggleLeft}>
-                  <Ionicons
-                    name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
-                    size={20}
-                    color={colors.text.primary}
-                  />
-                  <View>
-                    <Text style={styles.toggleLabel}>
-                      {isPublic ? 'Public' : 'Private'}
-                    </Text>
-                    <Text style={styles.toggleDescription}>
-                      {isPublic ? 'Anyone can see this board' : 'Only you can see this board'}
-                    </Text>
-                  </View>
+                      <TouchableOpacity
+                        style={styles.publicToggle}
+                        onPress={() => setIsPublic(!isPublic)}
+                      >
+                        <View style={styles.toggleLeft}>
+                          <Ionicons
+                            name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
+                            size={20}
+                            color={colors.text.primary}
+                          />
+                          <View>
+                            <Text style={styles.toggleLabel}>
+                              {isPublic ? 'Public' : 'Private'}
+                            </Text>
+                            <Text style={styles.toggleDescription}>
+                              {isPublic ? 'Anyone can see this board' : 'Only you can see this board'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={[styles.switch, isPublic && styles.switchActive]}>
+                          <View style={[styles.switchThumb, isPublic && styles.switchThumbActive]} />
+                        </View>
+                      </TouchableOpacity>
+                    </ScrollView>
+
+                    <View style={styles.modalFooter}>
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={() => setShowCreateModal(false)}
+                      >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.saveButton}
+                        onPress={handleCreateBoard}
+                      >
+                        <Text style={styles.saveButtonText}>Create</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </SafeAreaView>
                 </View>
-                <View style={[styles.switch, isPublic && styles.switchActive]}>
-                  <View style={[styles.switchThumb, isPublic && styles.switchThumbActive]} />
-                </View>
-              </TouchableOpacity>
+              </TouchableWithoutFeedback>
             </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowCreateModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleCreateBoard}
-              >
-                <Text style={styles.saveButtonText}>Create</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Commission Detail Modal */}
@@ -798,8 +825,16 @@ export default function BoardsScreen() {
         transparent={true}
         onRequestClose={() => setShowCommissionModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.commissionDetailModal}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={styles.commissionDetailModal}>
+                  <SafeAreaView edges={['bottom']}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Commission Details</Text>
               <TouchableOpacity onPress={() => setShowCommissionModal(false)}>
@@ -986,8 +1021,12 @@ export default function BoardsScreen() {
                 )}
               </ScrollView>
             )}
-          </View>
-        </View>
+                  </SafeAreaView>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Review Modal */}
@@ -1347,7 +1386,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '70%',
+    maxHeight: Dimensions.get('window').height * 0.85,
+    width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1363,6 +1403,7 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: spacing.lg,
+    flexGrow: 1,
   },
   label: {
     ...typography.bodyBold,
@@ -1509,7 +1550,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
+    maxHeight: Dimensions.get('window').height * 0.9,
     width: '100%',
   },
   commissionDetailContent: {

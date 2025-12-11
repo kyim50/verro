@@ -9,6 +9,9 @@ import {
   FlatList,
   ActivityIndicator,
   Dimensions,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -166,9 +169,15 @@ export default function SearchModal({ visible, onClose }) {
       presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleClose}
@@ -251,7 +260,9 @@ export default function SearchModal({ visible, onClose }) {
             />
           )}
         </View>
-      </View>
+        </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }
