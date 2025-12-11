@@ -366,7 +366,7 @@ export default function ArtworkDetailScreen() {
                 {artwork.artists?.users?.full_name || artwork.artists?.users?.username || 'Unknown Artist'}
               </Text>
               <Text style={styles.artistBio} numberOfLines={2}>
-                {artwork.artists?.users?.bio || 'Artist on Verro'}
+                {artwork.artists?.users?.bio || 'Artist'}
               </Text>
             </View>
             {!isOwnArtwork && (
