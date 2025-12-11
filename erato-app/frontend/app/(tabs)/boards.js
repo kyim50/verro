@@ -56,11 +56,18 @@ export default function BoardsScreen() {
                        (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
   useEffect(() => {
-    loadBoards();
+    loadBoards(true);
     if (!isArtistUser) {
       loadLikedArtists();
     }
   }, []);
+
+  // Safety: if any stale state sets activeTab to commissions, reset to boards
+  useEffect(() => {
+    if (activeTab === 'commissions') {
+      setActiveTab('boards');
+    }
+  }, [activeTab]);
 
   // Refresh liked artists when tab changes or screen comes into focus
   useEffect(() => {
@@ -81,7 +88,7 @@ export default function BoardsScreen() {
     }, [activeTab, isArtistUser, token])
   );
 
-  const loadBoards = useCallback(async (skipCache = false) => {
+  const loadBoards = useCallback(async (skipCache = true) => {
     try {
       const fetchedBoards = await fetchBoards(null, { skipCache });
       console.log('Boards loaded:', fetchedBoards?.length || 0, 'boards');
@@ -268,8 +275,9 @@ export default function BoardsScreen() {
     try {
       const newBoard = await createBoard({
         name: newBoardName.trim(),
-        description: newBoardDescription.trim(),
+        description: newBoardDescription.trim() || null,
         is_public: isPublic,
+        board_type: 'created',
       });
 
       // Verify board was created successfully
@@ -279,8 +287,8 @@ export default function BoardsScreen() {
 
       console.log('Board created successfully:', newBoard.id, newBoard.name);
 
-      // Refresh boards list after creation to ensure it persists
-      const refreshedBoards = await loadBoards();
+      // Force refresh boards list (skip cache) so it appears immediately
+      const refreshedBoards = await loadBoards(true);
 
       // Double-check the board is in the list
       const boardsAfterRefresh = refreshedBoards || boardStore.boards;
@@ -385,12 +393,13 @@ export default function BoardsScreen() {
   };
 
   const renderBoard = ({ item }) => {
-    // Calculate artwork count - prefer board_artworks array length as it's most accurate
-    // Fallback to backend count if array is not available
-    const countFromArray = item.board_artworks?.length || 0;
+    // Calculate artwork count - backend provides total count in artworks[0].count
+    // board_artworks only includes a preview slice (up to 4), so use backend count when available
+    const countFromArray = item.board_artworks?.length || 0; // preview length (<=4)
     const countFromBackend = item.artworks?.[0]?.count;
-    // Use array length if available (more accurate), otherwise use backend count
-    const artworkCount = countFromArray > 0 ? countFromArray : (countFromBackend || 0);
+    const artworkCount = (typeof countFromBackend === 'number' && countFromBackend > 0)
+      ? countFromBackend
+      : countFromArray;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
     const isCreatedBoard = item.board_type === 'created';
 
@@ -651,114 +660,7 @@ export default function BoardsScreen() {
     return null;
   };
 
-  // Removed commissions and liked tab content - keeping old code commented for reference
-  const renderTabContentOld = () => {
-    if (activeTab === 'boards') {
-      return (
-        <FlatList
-          key="boards-list"
-          data={boards.sort((a, b) => {
-            // Pin "Created" board at top
-            if (a.board_type === 'created') return -1;
-            if (b.board_type === 'created') return 1;
-            // Sort rest by creation date (newest first)
-            return new Date(b.created_at) - new Date(a.created_at);
-          })}
-          renderItem={renderBoard}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: Math.max(insets.bottom, 20) + 80 }
-          ]}
-          ListEmptyComponent={!isLoading && renderEmpty}
-          showsVerticalScrollIndicator={false}
-        />
-      );
-    } else if (activeTab === 'commissions') {
-      // Check if user is an artist
-      const isArtist = !!user?.artists;
-      console.log('Is artist?', isArtist, 'User has artists:', user?.artists);
-
-      // Filter commissions based on user type
-      // Artists: only show in_progress and completed commissions (pending requests are in messages)
-      // Clients: show all commissions
-      const filteredCommissions = isArtist
-        ? commissions.filter(c => c.status === 'in_progress' || c.status === 'completed')
-        : commissions;
-
-      console.log('Filtered commissions:', filteredCommissions.length, 'out of', commissions.length);
-      console.log('Filtered statuses:', filteredCommissions.map(c => c.status));
-
-      return (
-        <FlatList
-          key="commissions-list"
-          data={filteredCommissions}
-          renderItem={renderCommission}
-          keyExtractor={(item) => item.id}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingHorizontal: spacing.md, paddingBottom: Math.max(insets.bottom, 20) + 80 }
-          ]}
-          ListEmptyComponent={!commissionsLoading && renderEmpty}
-          showsVerticalScrollIndicator={false}
-        />
-      );
-    } else if (activeTab === 'liked') {
-      // Sort liked artists by timestamp
-      const sortedLikedArtists = [...likedArtists].sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
-        return likedSortOrder === 'newest' ? dateB - dateA : dateA - dateB;
-      });
-
-      return (
-        <FlatList
-          key="liked-artists-list"
-          data={sortedLikedArtists}
-          renderItem={renderLikedArtist}
-          keyExtractor={(item) => item.artist_id}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingHorizontal: spacing.md, paddingBottom: Math.max(insets.bottom, 20) + 80 }
-          ]}
-          ListEmptyComponent={!likedLoading && (
-            <View style={styles.emptyState}>
-              <Ionicons name="heart-outline" size={64} color={colors.text.disabled} />
-              <Text style={styles.emptyTitle}>No Liked Artists</Text>
-              <Text style={styles.emptyText}>
-                Artists you like will appear here. Start exploring!
-              </Text>
-            </View>
-          )}
-          showsVerticalScrollIndicator={false}
-        />
-      );
-    }
-    return null;
-  };
+  // Removed commissions tab entirely; old code deleted
 
   return (
     <View style={styles.container}>

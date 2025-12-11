@@ -1,4 +1,4 @@
-package com.erato.app
+package com.kyim50.erato
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

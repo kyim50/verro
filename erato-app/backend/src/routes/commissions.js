@@ -2,6 +2,7 @@ import express from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authenticate } from '../middleware/auth.js';
 import { NotificationService } from '../utils/redisServices.js';
+import { sendPushToUser } from '../utils/pushNotifications.js';
 
 const router = express.Router();
 
@@ -144,6 +145,28 @@ router.post('/request', authenticate, async (req, res) => {
       commission,
       conversation
     });
+
+    // Fire-and-forget push to artist (new commission)
+    (async () => {
+      try {
+        const { data: clientInfo } = await supabaseAdmin
+          .from('users')
+          .select('username, full_name')
+          .eq('id', req.user.id)
+          .single();
+
+        const title = 'New commission request';
+        const message = `${clientInfo?.username || 'A client'} sent you a commission request`;
+
+        await sendPushToUser(artist_id, {
+          title,
+          body: message,
+          data: { type: 'commission', commissionId: commission.id },
+        });
+      } catch (error) {
+        console.error('Push error on commission request:', error?.message || error);
+      }
+    })();
   } catch (error) {
     console.error('Error creating commission request:', error);
     res.status(500).json({ error: error.message });
@@ -495,6 +518,11 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         action: { type: 'view_commission', id: req.params.id },
         priority: 'high',
       });
+      await sendPushToUser(commission.client_id, {
+        title: 'Commission accepted',
+        body: `${artistInfo?.username || 'An artist'} accepted your request`,
+        data: { type: 'commission', commissionId: req.params.id },
+      });
     } else if (status === 'declined' && isArtist) {
       // Commission declined - notify client
       await NotificationService.publish(commission.client_id, {
@@ -503,6 +531,11 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         message: `${artistInfo?.username || 'An artist'} has declined your commission request`,
         action: { type: 'view_commissions' },
         priority: 'normal',
+      });
+      await sendPushToUser(commission.client_id, {
+        title: 'Commission declined',
+        body: `${artistInfo?.username || 'An artist'} declined your request`,
+        data: { type: 'commissions' },
       });
     } else if (finalStatus === 'completed' && isArtist) {
       // Commission completed - notify client
@@ -513,6 +546,11 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         action: { type: 'view_commission', id: req.params.id },
         priority: 'high',
       });
+      await sendPushToUser(commission.client_id, {
+        title: 'Commission completed',
+        body: `Your commission from ${artistInfo?.username || 'an artist'} is done`,
+        data: { type: 'commission', commissionId: req.params.id },
+      });
     } else if (finalStatus === 'cancelled' && isClient) {
       // Commission cancelled - notify artist
       await NotificationService.publish(commission.artist_id, {
@@ -521,6 +559,11 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         message: `${clientInfo?.username || 'A client'} has cancelled their commission request`,
         action: { type: 'view_commission', id: req.params.id },
         priority: 'normal',
+      });
+      await sendPushToUser(commission.artist_id, {
+        title: 'Commission cancelled',
+        body: `${clientInfo?.username || 'A client'} cancelled their request`,
+        data: { type: 'commission', commissionId: req.params.id },
       });
     }
 

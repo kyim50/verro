@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/', authenticate, async (req, res) => {
   try {
     const { type, parent_id, skipCache } = req.query;
-    const bypassCache = skipCache === 'true';
+    const bypassCache = skipCache === 'true' || skipCache === true;
     
     // Try to get from cache unless explicitly bypassed
     const cacheKey = cacheKeys.userBoards(req.user.id);

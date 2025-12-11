@@ -2,6 +2,7 @@ import express from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authenticate } from '../middleware/auth.js';
 import { MessageCountService, NotificationService } from '../utils/redisServices.js';
+import { sendPushToUser } from '../utils/pushNotifications.js';
 
 const router = express.Router();
 
@@ -506,6 +507,13 @@ router.post('/conversations/:id/messages', authenticate, async (req, res) => {
               message: notificationMessage,
               action: { type: 'view_conversation', id: req.params.id },
               priority: 'normal',
+            });
+
+            // Push notification (foreground/background)
+            await sendPushToUser(participant.user_id, {
+              title: `New message from ${senderInfo?.username || 'Someone'}`,
+              body: notificationMessage || 'New message',
+              data: { type: 'message', conversationId: req.params.id },
             });
           }
         }
