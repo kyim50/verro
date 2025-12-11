@@ -105,6 +105,7 @@ router.get(
 
       // Collect all artist ID filters to combine them properly
       let artistIdFilters = [];
+      let finalArtistIds = null; // Will hold the final combined artist IDs
 
       // Text search filter - search directly on users via the join
       if (searchQuery && searchQuery.trim().length > 0) {
@@ -192,13 +193,14 @@ router.get(
       // Combine all ID filters (intersection - artist must match ALL filters)
       if (artistIdFilters.length > 0) {
         // Find intersection of all ID arrays
-        let finalArtistIds = artistIdFilters[0];
+        finalArtistIds = artistIdFilters[0];
         for (let i = 1; i < artistIdFilters.length; i++) {
           finalArtistIds = finalArtistIds.filter(id => artistIdFilters[i].includes(id));
         }
         
         console.log('Combined artist ID filters:', artistIdFilters.length);
         console.log('Final artist IDs after intersection:', finalArtistIds.length);
+        console.log('Final artist IDs:', finalArtistIds);
         
         if (finalArtistIds.length > 0) {
           artistQuery = artistQuery.in('id', finalArtistIds);
@@ -243,6 +245,7 @@ router.get(
 
       // Exclude current user if authenticated
       if (req.user) {
+        console.log('Excluding current user:', req.user.id);
         artistQuery = artistQuery.neq('id', req.user.id);
 
         // Exclude swiped artists
@@ -252,12 +255,31 @@ router.get(
           .eq('user_id', req.user.id);
 
         const swipedIds = swipedArtists?.map(s => s.artist_id) || [];
+        console.log('Swiped artist IDs to exclude:', swipedIds.length, swipedIds);
         if (swipedIds.length > 0) {
-          artistQuery = artistQuery.not('id', 'in', `(${swipedIds.join(',')})`);
+          // Filter out swiped artists - if we have ID filters, remove them from finalArtistIds
+          // Otherwise use .not() with proper Supabase syntax
+          if (artistIdFilters.length > 0 && finalArtistIds) {
+            // Remove swiped IDs from finalArtistIds
+            finalArtistIds = finalArtistIds.filter(id => !swipedIds.includes(id));
+            console.log('After removing swiped artists, remaining IDs:', finalArtistIds.length);
+            // Re-apply the filter
+            if (finalArtistIds.length > 0) {
+              artistQuery = artistQuery.in('id', finalArtistIds);
+            } else {
+              console.log('All artists were swiped, returning empty');
+              return res.json({ artists: [] });
+            }
+          } else {
+            // Use .not() with array syntax for Supabase
+            artistQuery = artistQuery.not('id', 'in', `(${swipedIds.join(',')})`);
+          }
         }
       }
 
       console.log('Executing artist query with filters...');
+      console.log('Final query will filter by artist IDs (if any) and other filters');
+      
       const { data: artists, error } = await artistQuery
         .order('rating', { ascending: false })
         .limit(parseInt(limit));
@@ -265,10 +287,45 @@ router.get(
       console.log('Raw query result - artists count:', artists?.length || 0);
       if (error) {
         console.error('Query error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
       }
       if (artists && artists.length > 0) {
         console.log('Sample artist IDs from query:', artists.slice(0, 3).map(a => a.id));
         console.log('Sample artist commission_status:', artists.slice(0, 3).map(a => a.commission_status));
+      } else {
+        console.log('No artists returned from query - checking if IDs were filtered out');
+        // Let's verify the artist IDs exist
+        if (finalArtistIds && finalArtistIds.length > 0) {
+          console.log('Verifying artist IDs exist in database...');
+          const { data: verifyArtists, error: verifyError } = await supabaseAdmin
+            .from('artists')
+            .select('id, commission_status')
+            .in('id', finalArtistIds);
+          
+          console.log('Verified artists found:', verifyArtists?.length || 0);
+          if (verifyArtists && verifyArtists.length > 0) {
+            console.log('Verified artist IDs:', verifyArtists.map(a => a.id));
+            console.log('Verified artist statuses:', verifyArtists.map(a => a.commission_status));
+            
+            // Also check if users exist for these artists
+            const { data: verifyUsers, error: userError } = await supabaseAdmin
+              .from('users')
+              .select('id, username, full_name')
+              .in('id', verifyArtists.map(a => a.id));
+            
+            console.log('Verified users found:', verifyUsers?.length || 0);
+            if (verifyUsers && verifyUsers.length > 0) {
+              console.log('Verified user IDs:', verifyUsers.map(u => u.id));
+              console.log('Verified usernames:', verifyUsers.map(u => u.username));
+            }
+            if (userError) {
+              console.error('User verification error:', userError);
+            }
+          }
+          if (verifyError) {
+            console.error('Verification error:', verifyError);
+          }
+        }
       }
       
       // Filter by commission_status after search if we have search results
