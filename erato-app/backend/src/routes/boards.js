@@ -8,13 +8,16 @@ const router = express.Router();
 // Get all boards for current user
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { type, parent_id } = req.query;
+    const { type, parent_id, skipCache } = req.query;
+    const bypassCache = skipCache === 'true';
     
-    // Try to get from cache
+    // Try to get from cache unless explicitly bypassed
     const cacheKey = cacheKeys.userBoards(req.user.id);
-    const cached = await cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
+    if (!bypassCache) {
+      const cached = await cache.get(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
     }
 
     // Simple query - just get boards
@@ -94,8 +97,10 @@ router.get('/', authenticate, async (req, res) => {
       };
     });
 
-    // Cache for 5 minutes
-    await cache.set(cacheKey, boardsWithData, 300);
+    // Cache for 5 minutes (unless bypassed)
+    if (!bypassCache) {
+      await cache.set(cacheKey, boardsWithData, 300);
+    }
 
     res.json(boardsWithData);
   } catch (error) {
