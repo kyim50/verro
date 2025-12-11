@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -29,6 +30,13 @@ import { uploadImage } from '../../utils/imageUpload';
 import ReviewModal from '../../components/ReviewModal';
 import { initSocket, getSocket, disconnectSocket } from '../../lib/socket';
 import { showAlert } from '../../components/StyledAlert';
+import PaymentOptions from '../../components/PaymentOptions';
+import StripeCheckout from '../../components/StripeCheckout';
+import EscrowStatus from '../../components/EscrowStatus';
+import MilestoneTracker from '../../components/MilestoneTracker';
+import TipJar from '../../components/TipJar';
+import TransactionHistory from '../../components/TransactionHistory';
+import ReferenceBoard from '../../components/ReferenceBoard';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -57,6 +65,11 @@ export default function ConversationScreen() {
   const [revisionImage, setRevisionImage] = useState(null);
   const [revisionNotes, setRevisionNotes] = useState('');
   const [markupPaths, setMarkupPaths] = useState([]);
+  const [showReferences, setShowReferences] = useState(false);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [showStripeCheckout, setShowStripeCheckout] = useState(false);
+  const [showTipJar, setShowTipJar] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
   const flatListRef = useRef(null);
   const socketRef = useRef(null);
   
@@ -1043,31 +1056,209 @@ export default function ConversationScreen() {
                 <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
-            {selectedCommissionDetails && (
-              <View style={styles.modalBody}>
-                {selectedCommissionDetails.title && (
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {selectedCommissionDetails && (
+                <>
+                  {selectedCommissionDetails.title && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Title</Text>
+                      <Text style={styles.modalValue}>{selectedCommissionDetails.title}</Text>
+                    </View>
+                  )}
                   <View style={styles.modalSection}>
-                    <Text style={styles.modalLabel}>Title</Text>
-                    <Text style={styles.modalValue}>{selectedCommissionDetails.title}</Text>
+                    <Text style={styles.modalLabel}>Description</Text>
+                    <Text style={styles.modalValue}>{selectedCommissionDetails.description}</Text>
                   </View>
+                  {selectedCommissionDetails.budget && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Budget</Text>
+                      <Text style={styles.modalValue}>${selectedCommissionDetails.budget}</Text>
+                    </View>
+                  )}
+                  {selectedCommissionDetails.deadline && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Deadline</Text>
+                      <Text style={styles.modalValue}>{selectedCommissionDetails.deadline}</Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Payment Information */}
+              {commission && (
+                <>
+                  {/* Escrow Status */}
+                  {commission.escrow_status && (
+                    <View style={styles.modalSection}>
+                      <EscrowStatus
+                        commission={commission}
+                        isClient={commission.client_id === user?.id}
+                        onRelease={async () => {
+                          try {
+                            await axios.post(
+                              `${API_URL}/payments/release-escrow`,
+                              { commissionId: commission.id },
+                              { headers: { Authorization: `Bearer ${token}` } }
+                            );
+                            await fetchConversationDetails();
+                            Toast.show({
+                              type: 'success',
+                              text1: 'Success',
+                              text2: 'Funds released to artist',
+                            });
+                          } catch (error) {
+                            console.error('Error releasing escrow:', error);
+                            Toast.show({
+                              type: 'error',
+                              text1: 'Error',
+                              text2: error.response?.data?.error || 'Failed to release funds',
+                            });
+                          }
+                        }}
+                      />
+                    </View>
+                  )}
+
+                  {/* Milestone Tracker */}
+                  {commission.payment_type === 'milestone' && (
+                    <View style={styles.modalSection}>
+                      <MilestoneTracker
+                        commissionId={commission.id}
+                        isClient={commission.client_id === user?.id}
+                        onPayMilestone={async (milestone) => {
+                          setPaymentData({
+                            commissionId: commission.id,
+                            amount: milestone.amount,
+                            paymentType: 'milestone',
+                            milestoneId: milestone.id,
+                          });
+                          setShowDetailsModal(false);
+                          setShowStripeCheckout(true);
+                        }}
+                      />
+                    </View>
+                  )}
+
+                  {/* Payment Options for Pending Commissions */}
+                  {commission.status === 'pending' && commission.client_id === user?.id && (
+                    <View style={styles.modalSection}>
+                      <TouchableOpacity
+                        style={styles.paymentButton}
+                        onPress={() => {
+                          setShowDetailsModal(false);
+                          setShowPaymentOptions(true);
+                        }}
+                      >
+                        <Ionicons name="card-outline" size={20} color={colors.text.primary} />
+                        <Text style={styles.paymentButtonText}>Make Payment</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Transaction History */}
+                  {commission.payment_status && commission.payment_status !== 'unpaid' && (
+                    <View style={styles.modalSection}>
+                      <TransactionHistory commissionId={commission.id} />
+                    </View>
+                  )}
+
+                  {/* Tip Jar for Completed Commissions */}
+                  {commission.status === 'completed' && commission.client_id === user?.id && (
+                    <View style={styles.modalSection}>
+                      <TouchableOpacity
+                        style={styles.tipButton}
+                        onPress={() => {
+                          setShowDetailsModal(false);
+                          setShowTipJar(true);
+                        }}
+                      >
+                        <Ionicons name="heart" size={20} color={colors.status.error} />
+                        <Text style={styles.tipButtonText}>Tip Artist</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              )}
+            </ScrollView>
+
+            {/* Payment Information */}
+            {commission && (
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                {/* Escrow Status */}
+                {commission.escrow_status && (
+                  <EscrowStatus
+                    commission={commission}
+                    isClient={commission.client_id === user?.id}
+                    onRelease={async () => {
+                      try {
+                        await axios.post(
+                          `${API_URL}/payments/release-escrow`,
+                          { commissionId: commission.id },
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                        await fetchConversationDetails();
+                        Toast.show({
+                          type: 'success',
+                          text1: 'Success',
+                          text2: 'Funds released to artist',
+                        });
+                      } catch (error) {
+                        console.error('Error releasing escrow:', error);
+                        Toast.show({
+                          type: 'error',
+                          text1: 'Error',
+                          text2: error.response?.data?.error || 'Failed to release funds',
+                        });
+                      }
+                    }}
+                  />
                 )}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>Description</Text>
-                  <Text style={styles.modalValue}>{selectedCommissionDetails.description}</Text>
-                </View>
-                {selectedCommissionDetails.budget && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalLabel}>Budget</Text>
-                    <Text style={styles.modalValue}>${selectedCommissionDetails.budget}</Text>
-                  </View>
+
+                {/* Milestone Tracker */}
+                {commission.payment_type === 'milestone' && (
+                  <MilestoneTracker
+                    commissionId={commission.id}
+                    isClient={commission.client_id === user?.id}
+                    onPayMilestone={async (milestone) => {
+                      setPaymentData({
+                        commissionId: commission.id,
+                        amount: milestone.amount,
+                        paymentType: 'milestone',
+                        milestoneId: milestone.id,
+                      });
+                      setShowPaymentOptions(false);
+                      setShowStripeCheckout(true);
+                    }}
+                  />
                 )}
-                {selectedCommissionDetails.deadline && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalLabel}>Deadline</Text>
-                    <Text style={styles.modalValue}>{selectedCommissionDetails.deadline}</Text>
-                  </View>
+
+                {/* Payment Options for Pending Commissions */}
+                {commission.status === 'pending' && commission.client_id === user?.id && (
+                  <TouchableOpacity
+                    style={styles.paymentButton}
+                    onPress={() => setShowPaymentOptions(true)}
+                  >
+                    <Ionicons name="card-outline" size={20} color={colors.text.primary} />
+                    <Text style={styles.paymentButtonText}>Make Payment</Text>
+                  </TouchableOpacity>
                 )}
-              </View>
+
+                {/* Transaction History */}
+                {commission.payment_status && commission.payment_status !== 'unpaid' && (
+                  <TransactionHistory commissionId={commission.id} />
+                )}
+
+                {/* Tip Jar for Completed Commissions */}
+                {commission.status === 'completed' && commission.client_id === user?.id && (
+                  <TouchableOpacity
+                    style={styles.tipButton}
+                    onPress={() => setShowTipJar(true)}
+                  >
+                    <Ionicons name="heart" size={20} color={colors.status.error} />
+                    <Text style={styles.tipButtonText}>Tip Artist</Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
             )}
 
             {/* Action Buttons for In-Progress Commissions */}
@@ -1205,6 +1396,27 @@ export default function ConversationScreen() {
         }
       />
 
+      {/* References Modal */}
+      <Modal
+        visible={showReferences}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowReferences(false)}
+      >
+        {commission && (
+          <ReferenceBoard
+            commissionId={commission.id}
+            onReferenceAdded={() => {
+              // Optionally refresh conversation details
+            }}
+            onReferenceRemoved={() => {
+              // Optionally refresh conversation details
+            }}
+            onClose={() => setShowReferences(false)}
+          />
+        )}
+      </Modal>
+
       {/* Revision Markup Modal */}
       <Modal
         visible={showRevisionModal}
@@ -1320,6 +1532,14 @@ export default function ConversationScreen() {
               </>
             )}
           </TouchableOpacity>
+          {commission && (
+            <TouchableOpacity
+              style={styles.referencesButton}
+              onPress={() => setShowReferences(true)}
+            >
+              <Ionicons name="images-outline" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Messages List */}
@@ -1698,6 +1918,35 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: spacing.lg,
+    maxHeight: 500,
+  },
+  paymentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  paymentButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  tipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.status.error + '20',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.status.error,
+  },
+  tipButtonText: {
+    ...typography.bodyBold,
+    color: colors.status.error,
   },
   modalSection: {
     marginBottom: spacing.lg,
@@ -1945,6 +2194,26 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.text.primary,
     fontSize: 18,
+  },
+  referencesButton: {
+    padding: spacing.xs,
+    marginLeft: spacing.sm,
+  },
+  referencesModalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  referencesModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  referencesModalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
   },
   revisionModalSubmit: {
     ...typography.bodyBold,

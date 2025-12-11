@@ -166,6 +166,7 @@ router.post('/create', authenticate, verifyArtist, async (req, res) => {
       estimated_delivery_days,
       revision_count,
       example_image_urls,
+      custom_form_fields,
       is_active = true,
       display_order = 0
     } = req.body;
@@ -188,6 +189,7 @@ router.post('/create', authenticate, verifyArtist, async (req, res) => {
         estimated_delivery_days,
         revision_count: revision_count || 2,
         example_image_urls: example_image_urls || [],
+        custom_form_fields: custom_form_fields || null,
         is_active,
         display_order
       })
@@ -223,6 +225,7 @@ router.put('/:packageId', authenticate, verifyArtist, async (req, res) => {
       estimated_delivery_days,
       revision_count,
       example_image_urls,
+      custom_form_fields,
       is_active,
       display_order
     } = req.body;
@@ -255,6 +258,7 @@ router.put('/:packageId', authenticate, verifyArtist, async (req, res) => {
     if (estimated_delivery_days !== undefined) updates.estimated_delivery_days = estimated_delivery_days;
     if (revision_count !== undefined) updates.revision_count = revision_count;
     if (example_image_urls !== undefined) updates.example_image_urls = example_image_urls;
+    if (custom_form_fields !== undefined) updates.custom_form_fields = custom_form_fields || null;
     if (is_active !== undefined) updates.is_active = is_active;
     if (display_order !== undefined) updates.display_order = display_order;
 
