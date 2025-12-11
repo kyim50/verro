@@ -406,7 +406,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
                   >
                     <Ionicons
                       name={type.icon}
-                      size={24}
+                      size={28}
                       color={selectedType === type.id ? colors.primary : colors.text.secondary}
                     />
                     <Text style={[
@@ -571,7 +571,7 @@ function LinkCard({ reference, onDelete }) {
   );
 }
 
-function ColorPaletteBuilder({ colors, onChange }) {
+function ColorPaletteBuilder({ colors: paletteColors, onChange }) {
   const [colorInput, setColorInput] = useState('');
 
   const addColor = () => {
@@ -588,12 +588,12 @@ function ColorPaletteBuilder({ colors, onChange }) {
       return;
     }
 
-    onChange([...colors, { hex, name: hex }]);
+    onChange([...paletteColors, { hex, name: hex }]);
     setColorInput('');
   };
 
   const removeColor = (index) => {
-    onChange(colors.filter((_, i) => i !== index));
+    onChange(paletteColors.filter((_, i) => i !== index));
   };
 
   return (
@@ -618,15 +618,23 @@ function ColorPaletteBuilder({ colors, onChange }) {
         </TouchableOpacity>
       </View>
 
-      {colors.length > 0 && (
+      {paletteColors.length > 0 && (
         <View style={styles.colorList}>
-          {colors.map((color, index) => (
+          {paletteColors.map((color, index) => (
             <View key={index} style={styles.colorItem}>
-              <View style={[styles.colorSwatch, { backgroundColor: color.hex || color }]} />
-              <Text style={styles.colorText}>{color.hex || color}</Text>
-              <TouchableOpacity onPress={() => removeColor(index)}>
-                <Ionicons name="close-circle" size={20} color={colors.status.error} />
-              </TouchableOpacity>
+              {(() => {
+                const colorValue = color.hex || color || '';
+                const hexColor = colorValue.startsWith('#') ? colorValue : `#${colorValue}`;
+                return (
+                  <>
+                    <View style={[styles.colorSwatch, { backgroundColor: hexColor }]} />
+                    <Text style={styles.colorText}>{colorValue}</Text>
+                    <TouchableOpacity onPress={() => removeColor(index)} style={styles.removeColorButton}>
+                      <Ionicons name="close-circle" size={20} color={colors.status.error} />
+                    </TouchableOpacity>
+                  </>
+                );
+              })()}
             </View>
           ))}
         </View>
@@ -755,10 +763,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   colorSwatch: {
-    width: 30,
-    height: 30,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
     borderColor: colors.border,
   },
   paletteTitle: {
@@ -840,8 +848,10 @@ const styles = StyleSheet.create({
     width: (width - spacing.md * 2 - spacing.sm * 2) / 3,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -852,17 +862,22 @@ const styles = StyleSheet.create({
   typeLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    marginTop: spacing.xs,
+    fontSize: 13,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   typeLabelActive: {
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 13,
   },
   inputLabel: {
     ...typography.body,
     color: colors.text.secondary,
-    marginBottom: spacing.xs,
-    marginTop: spacing.md,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+    marginTop: spacing.lg,
   },
   input: {
     backgroundColor: colors.surface,
@@ -870,12 +885,15 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...typography.body,
     color: colors.text.primary,
+    fontSize: 15,
     borderWidth: 1,
     borderColor: colors.border,
+    minHeight: 44,
   },
   textarea: {
-    minHeight: 80,
+    minHeight: 100,
     textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   modalFooter: {
     flexDirection: 'row',
@@ -914,43 +932,55 @@ const styles = StyleSheet.create({
   },
   colorInputRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
   colorPreviewContainer: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   colorPreview: {
-    width: 30,
-    height: 30,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
     borderColor: colors.border,
   },
   colorInput: {
     flex: 1,
+    minHeight: 44,
   },
   addColorButton: {
-    padding: spacing.md,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
   },
   colorList: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   colorItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     backgroundColor: colors.surface,
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    minHeight: 48,
   },
   colorText: {
     ...typography.body,
     color: colors.text.primary,
     flex: 1,
+    fontSize: 14,
+  },
+  removeColorButton: {
+    padding: spacing.xs,
   },
 });

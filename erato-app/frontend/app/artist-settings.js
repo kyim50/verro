@@ -54,12 +54,12 @@ export default function ArtistSettings() {
 
       const settings = response.data.settings || {};
 
-      setQueueSlots(settings.queue_slots?.toString() || '3');
-      setWaitlistEnabled(settings.waitlist_enabled || false);
+      setQueueSlots(settings.max_queue_slots?.toString() || settings.queue_slots?.toString() || '5');
+      setWaitlistEnabled(settings.allow_waitlist || settings.waitlist_enabled || false);
       setAutoDecline(settings.auto_decline_when_full || false);
-      setCommissionsPaused(settings.commissions_paused || false);
-      setWillDraw(settings.will_draw || '');
-      setWontDraw(settings.wont_draw || '');
+      setCommissionsPaused(!settings.is_open || settings.commissions_paused || false);
+      setWillDraw(Array.isArray(settings.will_draw) ? settings.will_draw.join(', ') : (settings.will_draw || ''));
+      setWontDraw(Array.isArray(settings.wont_draw) ? settings.wont_draw.join(', ') : (settings.wont_draw || ''));
       setTermsOfService(settings.terms_of_service || '');
       setRevisionLimit(settings.revision_limit?.toString() || '2');
       setTurnaroundTime(settings.turnaround_time || '7-14');
@@ -81,15 +81,14 @@ export default function ArtistSettings() {
       setSaving(true);
 
       const settings = {
-        queue_slots: parseInt(queueSlots) || 3,
-        waitlist_enabled: waitlistEnabled,
-        auto_decline_when_full: autoDecline,
-        commissions_paused: commissionsPaused,
-        will_draw: willDraw.trim(),
-        wont_draw: wontDraw.trim(),
-        terms_of_service: termsOfService.trim(),
-        revision_limit: parseInt(revisionLimit) || 2,
-        turnaround_time: turnaroundTime.trim(),
+        max_queue_slots: parseInt(queueSlots) || 5,
+        allow_waitlist: waitlistEnabled,
+        is_open: !commissionsPaused,
+        will_draw: willDraw.trim() ? willDraw.split(',').map(s => s.trim()).filter(Boolean) : [],
+        wont_draw: wontDraw.trim() ? wontDraw.split(',').map(s => s.trim()).filter(Boolean) : [],
+        terms_of_service: termsOfService.trim() || null,
+        status_message: null,
+        avg_response_hours: null,
       };
 
       await axios.put(
