@@ -121,7 +121,29 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       },
     };
     
-    const response = await axios.post(endpoint, formData, axiosConfig);
+    let response;
+    try {
+      response = await axios.post(endpoint, formData, axiosConfig);
+    } catch (err) {
+      // Fallback to fetch on Android if axios returns a generic network error with no response
+      if (err.code === 'ERR_NETWORK' && !err.response) {
+        console.warn('Axios network error, retrying upload with fetch fallback...');
+        const fetchResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        if (!fetchResponse.ok) {
+          const text = await fetchResponse.text();
+          throw new Error(text || 'Upload failed (fetch fallback)');
+        }
+        response = {
+          data: await fetchResponse.json(),
+        };
+      } else {
+        throw err;
+      }
+    }
 
     // Log response for debugging
     console.log('📥 Upload response:', {
@@ -260,7 +282,26 @@ export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '
         },
       };
       
-      const response = await axios.post(`${API_URL}/uploads/portfolio`, formData, axiosConfig);
+      let response;
+      try {
+        response = await axios.post(`${API_URL}/uploads/portfolio`, formData, axiosConfig);
+      } catch (err) {
+        if (err.code === 'ERR_NETWORK' && !err.response) {
+          console.warn('Axios network error (portfolio), retrying with fetch fallback...');
+          const fetchResponse = await fetch(`${API_URL}/uploads/portfolio`, {
+            method: 'POST',
+            headers: axiosConfig.headers,
+            body: formData,
+          });
+          if (!fetchResponse.ok) {
+            const text = await fetchResponse.text();
+            throw new Error(text || 'Portfolio upload failed (fetch fallback)');
+          }
+          response = { data: await fetchResponse.json() };
+        } else {
+          throw err;
+        }
+      }
 
       console.log('📥 Portfolio upload response:', {
         success: response.data?.success,

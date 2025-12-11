@@ -141,6 +141,15 @@ export default function ProfileScreen() {
     return null;
   }
 
+  // Prevent flash while initial profile load is in progress
+  if (isInitialLoad && isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   const isArtist = profile?.artist !== null && profile?.artist !== undefined;
   const artworks = profile?.artist?.artworks || [];
   const artistId = profile?.artist?.id || profile?.id;

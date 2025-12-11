@@ -39,17 +39,9 @@ export default function MessagesScreen() {
       const response = await axios.get(`${API_URL}/messages/conversations`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // Filter out conversations that are commission requests (they go to Library now)
+      // Show all conversations, including commission-linked ones so new requests appear immediately
       const allConversations = response.data.conversations || [];
-      // Only show conversations that are NOT commission requests
-      const regularConversations = allConversations.filter(conv => {
-        // If conversation has a commission_id and commission status is pending, hide it from messages
-        if (conv.commissions) {
-          return conv.commissions.status !== 'pending';
-        }
-        return true; // Show conversations without commission association
-      });
-      setConversations(regularConversations);
+      setConversations(allConversations);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
@@ -222,7 +214,15 @@ export default function MessagesScreen() {
     return (
             <TouchableOpacity
               style={styles.conversationCard}
-              onPress={() => router.push(`/messages/${item.id}`)}
+              onPress={() => {
+                // Optimistically clear unread count locally when opening
+                setConversations((prev) =>
+                  prev.map((c) =>
+                    c.id === item.id ? { ...c, unread_count: 0 } : c
+                  )
+                );
+                router.push(`/messages/${item.id}`);
+              }}
               onLongPress={() => handleDeleteConversation(item.id)}
               activeOpacity={0.7}
             >
