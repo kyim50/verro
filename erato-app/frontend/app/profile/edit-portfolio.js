@@ -163,7 +163,7 @@ export default function EditPortfolioScreen() {
 
       // Save to backend
       const response = await fetch(
-        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me/artist`,
+        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.verrocio.com/api'}/users/me/artist`,
         {
           method: 'PUT',
           headers: {

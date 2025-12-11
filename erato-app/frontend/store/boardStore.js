@@ -3,7 +3,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from './authStore';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api';
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.verrocio.com/api';
 
 export const useBoardStore = create((set, get) => ({
   boards: [],

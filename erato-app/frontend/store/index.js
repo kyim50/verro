@@ -3,10 +3,14 @@ import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import Constants from 'expo-constants';
 
-// Temporarily hardcoded for EC2 testing - remove this after confirming it works
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || 
                 process.env.EXPO_PUBLIC_API_URL || 
-                'http://3.18.213.189:3000/api';
+                'https://api.verrocio.com/api';
+
+// Log API URL for debugging (first 30 chars only for security)
+if (__DEV__) {
+  console.log('📡 API URL configured:', API_URL ? API_URL.substring(0, 30) + '...' : 'NOT SET');
+}
 
 // Configure axios defaults
 axios.defaults.timeout = 15000; // 15 second timeout for all requests
