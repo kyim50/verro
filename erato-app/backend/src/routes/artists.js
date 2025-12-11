@@ -103,7 +103,10 @@ router.get(
           art_styles:artist_art_styles(style:art_styles(id, name, slug))
         `);
 
-      // Text search filter
+      // Collect all artist ID filters to combine them properly
+      let artistIdFilters = [];
+
+      // Text search filter - search directly on users via the join
       if (searchQuery && searchQuery.trim().length > 0) {
         const trimmedQuery = searchQuery.trim();
         const searchPattern = `%${trimmedQuery}%`;
@@ -112,25 +115,16 @@ router.get(
         console.log('Search pattern:', searchPattern);
         
         // Search users table for matching usernames or full names
-        // Use separate queries and combine results (more reliable than .or())
-        // Note: artists.id = users.id (artists table uses user_id as primary key)
-        const usernameQuery = supabaseAdmin
+        // Then filter artists by those user IDs
+        const { data: usersByUsername, error: usernameError } = await supabaseAdmin
           .from('users')
           .select('id, username')
           .ilike('username', searchPattern);
         
-        const nameQuery = supabaseAdmin
+        const { data: usersByName, error: nameError } = await supabaseAdmin
           .from('users')
           .select('id, full_name')
           .ilike('full_name', searchPattern);
-        
-        const [usernameResult, nameResult] = await Promise.all([
-          usernameQuery,
-          nameQuery
-        ]);
-        
-        const { data: usersByUsername, error: usernameError } = usernameResult;
-        const { data: usersByName, error: nameError } = nameResult;
 
         console.log('Username search results:', usersByUsername?.length || 0);
         if (usernameError) {
@@ -150,37 +144,12 @@ router.get(
         
         console.log('Found matching users:', uniqueUserIds.length);
         console.log('User IDs:', uniqueUserIds);
-        if (usersByUsername?.length > 0) {
-          console.log('Sample usernames found:', usersByUsername.slice(0, 3).map(u => u.username));
-        }
-        if (usersByName?.length > 0) {
-          console.log('Sample names found:', usersByName.slice(0, 3).map(u => u.full_name));
-        }
         
         if (uniqueUserIds.length > 0) {
-          // Verify these users are actually artists
-          const { data: existingArtists, error: artistCheckError } = await supabaseAdmin
-            .from('artists')
-            .select('id')
-            .in('id', uniqueUserIds);
-          
-          console.log('Artists found for user IDs:', existingArtists?.length || 0);
-          if (artistCheckError) {
-            console.error('Error checking artists:', artistCheckError);
-          }
-          
-          const artistIds = existingArtists?.map(a => a.id) || [];
-          console.log('Valid artist IDs:', artistIds);
-          
-          if (artistIds.length > 0) {
-            // artists.id = users.id, so we can directly filter
-            artistQuery = artistQuery.in('id', artistIds);
-            console.log('Filtering artists by user IDs:', artistIds.length);
-          } else {
-            // Users found but they're not artists
-            console.log('Users found but none are artists, returning empty');
-            return res.json({ artists: [] });
-          }
+          // artists.id = users.id (artists table primary key is user_id)
+          // Add to filter collection
+          artistIdFilters.push(uniqueUserIds);
+          console.log('Added search filter with', uniqueUserIds.length, 'artist IDs');
         } else {
           // No matching users, return empty
           console.log('No matching users found, returning empty artists array');
@@ -198,7 +167,7 @@ router.get(
 
         const styleArtistIds = styleArtists?.map(s => s.artist_id) || [];
         if (styleArtistIds.length > 0) {
-          artistQuery = artistQuery.in('id', styleArtistIds);
+          artistIdFilters.push(styleArtistIds);
         } else {
           return res.json({ artists: [] });
         }
@@ -213,10 +182,30 @@ router.get(
 
           const styleArtistIds = [...new Set(styleArtists?.map(s => s.artist_id) || [])];
           if (styleArtistIds.length > 0) {
-            artistQuery = artistQuery.in('id', styleArtistIds);
+            artistIdFilters.push(styleArtistIds);
           } else {
             return res.json({ artists: [] });
           }
+        }
+      }
+
+      // Combine all ID filters (intersection - artist must match ALL filters)
+      if (artistIdFilters.length > 0) {
+        // Find intersection of all ID arrays
+        let finalArtistIds = artistIdFilters[0];
+        for (let i = 1; i < artistIdFilters.length; i++) {
+          finalArtistIds = finalArtistIds.filter(id => artistIdFilters[i].includes(id));
+        }
+        
+        console.log('Combined artist ID filters:', artistIdFilters.length);
+        console.log('Final artist IDs after intersection:', finalArtistIds.length);
+        
+        if (finalArtistIds.length > 0) {
+          artistQuery = artistQuery.in('id', finalArtistIds);
+        } else {
+          // No artists match all filters
+          console.log('No artists match all filters, returning empty');
+          return res.json({ artists: [] });
         }
       }
 
@@ -268,9 +257,19 @@ router.get(
         }
       }
 
+      console.log('Executing artist query with filters...');
       const { data: artists, error } = await artistQuery
         .order('rating', { ascending: false })
         .limit(parseInt(limit));
+      
+      console.log('Raw query result - artists count:', artists?.length || 0);
+      if (error) {
+        console.error('Query error:', error);
+      }
+      if (artists && artists.length > 0) {
+        console.log('Sample artist IDs from query:', artists.slice(0, 3).map(a => a.id));
+        console.log('Sample artist commission_status:', artists.slice(0, 3).map(a => a.commission_status));
+      }
       
       // Filter by commission_status after search if we have search results
       let filteredArtists = artists || [];
