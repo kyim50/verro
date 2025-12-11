@@ -718,4 +718,390 @@ router.patch('/:id', authenticate, async (req, res) => {
   }
 });
 
+// Save artist note for commission (artist only)
+router.post('/:id/notes', authenticate, async (req, res) => {
+  try {
+    const { note } = req.body;
+
+    if (!note || !note.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    // Get commission to verify artist
+    const { data: commission } = await supabaseAdmin
+      .from('commissions')
+      .select('artist_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!commission) {
+      return res.status(404).json({ error: 'Commission not found' });
+    }
+
+    if (commission.artist_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the artist can add notes' });
+    }
+
+    // Update commission with artist note
+    const { data: updated, error } = await supabaseAdmin
+      .from('commissions')
+      .update({
+        artist_notes: note.trim(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ message: 'Note saved successfully', commission: updated });
+  } catch (error) {
+    console.error('Error saving note:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get artist note for commission (artist only)
+router.get('/:id/notes', authenticate, async (req, res) => {
+  try {
+    // Get commission to verify artist
+    const { data: commission } = await supabaseAdmin
+      .from('commissions')
+      .select('artist_id, artist_notes')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!commission) {
+      return res.status(404).json({ error: 'Commission not found' });
+    }
+
+    if (commission.artist_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the artist can view notes' });
+    }
+
+    res.json({ note: commission.artist_notes || '' });
+  } catch (error) {
+    console.error('Error fetching note:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== PROGRESS UPDATES ==========
+
+// Create a progress update (WIP image, approval checkpoint, or revision request)
+router.post('/:id/progress', authenticate, async (req, res) => {
+  try {
+    const { update_type, image_url, notes, requires_approval, revision_notes, markup_data } = req.body;
+
+    if (!['wip_image', 'approval_checkpoint', 'revision_request'].includes(update_type)) {
+      return res.status(400).json({ error: 'Invalid update_type' });
+    }
+
+    // Get commission to verify access
+    const { data: commission } = await supabaseAdmin
+      .from('commissions')
+      .select('artist_id, client_id, status, max_revision_count, current_revision_count')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!commission) {
+      return res.status(404).json({ error: 'Commission not found' });
+    }
+
+    const isArtist = String(commission.artist_id) === String(req.user.id);
+    const isClient = String(commission.client_id) === String(req.user.id);
+
+    if (!isArtist && !isClient) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Validation based on update type
+    if (update_type === 'wip_image' && !image_url) {
+      return res.status(400).json({ error: 'image_url is required for WIP images' });
+    }
+
+    if (update_type === 'approval_checkpoint' && !image_url) {
+      return res.status(400).json({ error: 'image_url is required for approval checkpoints' });
+    }
+
+    if (update_type === 'revision_request') {
+      if (!isClient) {
+        return res.status(403).json({ error: 'Only clients can request revisions' });
+      }
+      if (commission.current_revision_count >= (commission.max_revision_count || 2)) {
+        return res.status(400).json({ error: 'Maximum revision count reached' });
+      }
+    }
+
+    // Prepare progress update data
+    const progressData = {
+      commission_id: req.params.id,
+      update_type,
+      created_by: req.user.id,
+      notes: notes || null,
+    };
+
+    if (image_url) {
+      progressData.image_url = image_url;
+    }
+
+    if (update_type === 'approval_checkpoint') {
+      progressData.requires_approval = requires_approval !== false; // Default to true
+      progressData.approval_status = 'pending';
+    }
+
+    if (update_type === 'revision_request') {
+      progressData.revision_number = (commission.current_revision_count || 0) + 1;
+      progressData.revision_notes = revision_notes || null;
+      if (markup_data) {
+        progressData.markup_data = markup_data;
+      }
+    }
+
+    // Create progress update
+    const { data: progressUpdate, error: progressError } = await supabaseAdmin
+      .from('commission_progress_updates')
+      .insert(progressData)
+      .select()
+      .single();
+
+    if (progressError) throw progressError;
+
+    // Update commission revision count if this is a revision request
+    if (update_type === 'revision_request') {
+      await supabaseAdmin
+        .from('commissions')
+        .update({ 
+          current_revision_count: progressData.revision_number,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', req.params.id);
+    }
+
+    // Create a message in the conversation
+    const { data: conversation } = await supabaseAdmin
+      .from('conversations')
+      .select('id')
+      .eq('commission_id', req.params.id)
+      .single();
+
+    if (conversation) {
+      let messageContent = '';
+      if (update_type === 'wip_image') {
+        messageContent = '📸 Work in progress update';
+      } else if (update_type === 'approval_checkpoint') {
+        messageContent = '✅ Approval checkpoint - Please review';
+      } else if (update_type === 'revision_request') {
+        messageContent = `🔄 Revision request #${progressData.revision_number}`;
+      }
+
+      await supabaseAdmin.from('messages').insert({
+        conversation_id: conversation.id,
+        sender_id: req.user.id,
+        message_type: 'progress_update',
+        content: messageContent,
+        image_url: image_url || null,
+        metadata: {
+          progress_update_id: progressUpdate.id,
+          update_type,
+          commission_id: req.params.id
+        }
+      });
+
+      // Emit socket event
+      const io = req.app.locals.io;
+      if (io) {
+        io.to(conversation.id).emit('new-message', {
+          conversation_id: conversation.id,
+          sender_id: req.user.id,
+          message_type: 'progress_update',
+          content: messageContent,
+          image_url: image_url || null,
+          metadata: {
+            progress_update_id: progressUpdate.id,
+            update_type,
+            commission_id: req.params.id
+          },
+          created_at: new Date().toISOString()
+        });
+      }
+    }
+
+    // Send notifications
+    if (update_type === 'approval_checkpoint' && isArtist) {
+      await NotificationService.publish(commission.client_id, {
+        type: 'approval_requested',
+        title: 'Approval Needed',
+        message: 'The artist has requested your approval on a checkpoint',
+        action: { type: 'view_commission', id: req.params.id },
+        priority: 'high',
+      });
+    } else if (update_type === 'revision_request' && isClient) {
+      await NotificationService.publish(commission.artist_id, {
+        type: 'revision_requested',
+        title: 'Revision Requested',
+        message: `Revision #${progressData.revision_number} requested`,
+        action: { type: 'view_commission', id: req.params.id },
+        priority: 'high',
+      });
+    }
+
+    res.json(progressUpdate);
+  } catch (error) {
+    console.error('Error creating progress update:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all progress updates for a commission
+router.get('/:id/progress', authenticate, async (req, res) => {
+  try {
+    // Get commission to verify access
+    const { data: commission } = await supabaseAdmin
+      .from('commissions')
+      .select('artist_id, client_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!commission) {
+      return res.status(404).json({ error: 'Commission not found' });
+    }
+
+    const isArtist = String(commission.artist_id) === String(req.user.id);
+    const isClient = String(commission.client_id) === String(req.user.id);
+
+    if (!isArtist && !isClient) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { data: progressUpdates, error } = await supabaseAdmin
+      .from('commission_progress_updates')
+      .select(`
+        *,
+        created_by_user:users!commission_progress_updates_created_by_fkey(id, username, full_name, avatar_url)
+      `)
+      .eq('commission_id', req.params.id)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    res.json({ progress_updates: progressUpdates || [] });
+  } catch (error) {
+    console.error('Error fetching progress updates:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve or reject an approval checkpoint
+router.patch('/:id/progress/:progressId/approve', authenticate, async (req, res) => {
+  try {
+    const { approval_status, approval_notes } = req.body;
+
+    if (!['approved', 'rejected'].includes(approval_status)) {
+      return res.status(400).json({ error: 'Invalid approval_status' });
+    }
+
+    // Get progress update
+    const { data: progressUpdate, error: progressError } = await supabaseAdmin
+      .from('commission_progress_updates')
+      .select('*, commission:commissions!inner(artist_id, client_id)')
+      .eq('id', req.params.progressId)
+      .eq('commission_id', req.params.id)
+      .single();
+
+    if (progressError || !progressUpdate) {
+      return res.status(404).json({ error: 'Progress update not found' });
+    }
+
+    if (progressUpdate.update_type !== 'approval_checkpoint') {
+      return res.status(400).json({ error: 'This is not an approval checkpoint' });
+    }
+
+    const commission = progressUpdate.commission;
+    const isClient = String(commission.client_id) === String(req.user.id);
+
+    if (!isClient) {
+      return res.status(403).json({ error: 'Only the client can approve/reject checkpoints' });
+    }
+
+    if (progressUpdate.approval_status !== 'pending') {
+      return res.status(400).json({ error: 'This checkpoint has already been reviewed' });
+    }
+
+    // Update approval status
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('commission_progress_updates')
+      .update({
+        approval_status,
+        approval_notes: approval_notes || null,
+        approved_at: new Date().toISOString(),
+        approved_by: req.user.id
+      })
+      .eq('id', req.params.progressId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // Create a message in the conversation
+    const { data: conversation } = await supabaseAdmin
+      .from('conversations')
+      .select('id')
+      .eq('commission_id', req.params.id)
+      .single();
+
+    if (conversation) {
+      const messageContent = approval_status === 'approved' 
+        ? '✅ Checkpoint approved'
+        : '❌ Checkpoint rejected';
+
+      await supabaseAdmin.from('messages').insert({
+        conversation_id: conversation.id,
+        sender_id: req.user.id,
+        message_type: 'progress_update',
+        content: messageContent,
+        metadata: {
+          progress_update_id: updated.id,
+          update_type: 'approval_response',
+          approval_status,
+          commission_id: req.params.id
+        }
+      });
+
+      // Emit socket event
+      const io = req.app.locals.io;
+      if (io) {
+        io.to(conversation.id).emit('new-message', {
+          conversation_id: conversation.id,
+          sender_id: req.user.id,
+          message_type: 'progress_update',
+          content: messageContent,
+          metadata: {
+            progress_update_id: updated.id,
+            update_type: 'approval_response',
+            approval_status,
+            commission_id: req.params.id
+          },
+          created_at: new Date().toISOString()
+        });
+      }
+    }
+
+    // Send notification to artist
+    await NotificationService.publish(commission.artist_id, {
+      type: approval_status === 'approved' ? 'checkpoint_approved' : 'checkpoint_rejected',
+      title: approval_status === 'approved' ? 'Checkpoint Approved' : 'Checkpoint Rejected',
+      message: `Your checkpoint has been ${approval_status}`,
+      action: { type: 'view_commission', id: req.params.id },
+      priority: 'high',
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating approval status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

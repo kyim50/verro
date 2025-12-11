@@ -22,7 +22,7 @@ import { colors, spacing, typography, borderRadius } from '../../constants/theme
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function CreateCommissionScreen() {
-  const { artistId } = useLocalSearchParams();
+  const { artistId, packageId: initialPackageId } = useLocalSearchParams();
   const { token, user } = useAuthStore();
 
   const [title, setTitle] = useState('');
@@ -42,7 +42,10 @@ export default function CreateCommissionScreen() {
       try {
         const response = await axios.get(`${API_URL}/artists/${artistId}/packages`);
         setPackages(response.data || []);
-        if ((response.data || []).length === 1) {
+        if (initialPackageId) {
+          const match = (response.data || []).find((p) => String(p.id) === String(initialPackageId));
+          setSelectedPackageId(match ? match.id : null);
+        } else if ((response.data || []).length === 1) {
           setSelectedPackageId(response.data[0].id);
         }
         setSelectedAddons([]);
@@ -55,7 +58,7 @@ export default function CreateCommissionScreen() {
     };
 
     fetchPackages();
-  }, [artistId]);
+  }, [artistId, initialPackageId]);
 
   const handleSubmit = async () => {
     // Check if current user is an artist

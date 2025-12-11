@@ -47,6 +47,11 @@ export default function ArtistProfileScreen() {
   const [isModalClosing, setIsModalClosing] = useState(false);
   const [columns, setColumns] = useState([[], []]);
   const [createdColumns, setCreatedColumns] = useState([[], []]);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
+  const [showSimilarArtists, setShowSimilarArtists] = useState(false);
+  const [similarArtists, setSimilarArtists] = useState([]);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
   const portfolioFlatListRef = useRef(null);
   const isClosingModal = useRef(false);
   const lastClosedIndex = useRef(null);
@@ -54,7 +59,90 @@ export default function ArtistProfileScreen() {
 
   useEffect(() => {
     fetchArtistProfile();
+    if (token && user) {
+      checkFavoriteStatus();
+    }
   }, [id]);
+
+  const checkFavoriteStatus = async () => {
+    if (!token || !user) return;
+    try {
+      const response = await axios.get(
+        `${API_URL}/artists/${id}/favorite/status`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setIsFavorited(response.data.is_favorited);
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!token || !user) {
+      Toast.show({
+        type: 'info',
+        text1: 'Login Required',
+        text2: 'Please log in to favorite artists',
+      });
+      return;
+    }
+
+    setIsFavoriteLoading(true);
+    try {
+      if (isFavorited) {
+        await axios.delete(
+          `${API_URL}/artists/${id}/favorite`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setIsFavorited(false);
+        Toast.show({
+          type: 'success',
+          text1: 'Removed from favorites',
+        });
+      } else {
+        await axios.post(
+          `${API_URL}/artists/${id}/favorite`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setIsFavorited(true);
+        Toast.show({
+          type: 'success',
+          text1: 'Added to favorites',
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to update favorites',
+      });
+    } finally {
+      setIsFavoriteLoading(false);
+    }
+  };
+
+  const handleFindSimilar = async () => {
+    setShowSimilarArtists(true);
+    setLoadingSimilar(true);
+    try {
+      const response = await axios.get(
+        `${API_URL}/artists?similar_to=${id}&limit=20`,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : {}
+      );
+      setSimilarArtists(response.data.artists || []);
+    } catch (error) {
+      console.error('Error fetching similar artists:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load similar artists',
+      });
+    } finally {
+      setLoadingSimilar(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedPackage?.id) {
@@ -488,7 +576,24 @@ export default function ArtistProfileScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Artist Profile</Text>
-        <View style={{ width: 40 }} />
+        {!isOwnProfile && token && user && (
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={toggleFavorite}
+            disabled={isFavoriteLoading}
+          >
+            {isFavoriteLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons
+                name={isFavorited ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isFavorited ? colors.primary : colors.text.primary}
+              />
+            )}
+          </TouchableOpacity>
+        )}
+        {(isOwnProfile || !token || !user) && <View style={{ width: 40 }} />}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -512,6 +617,7 @@ export default function ArtistProfileScreen() {
               @{artist.users?.username}
             </Text>
           </View>
+
 
           {/* Rating (if available) */}
           {artist.average_rating && artist.average_rating > 0 && (
@@ -566,96 +672,30 @@ export default function ArtistProfileScreen() {
             )}
           </View>
 
-          {/* Commission Status */}
-          <View style={[styles.statusBadge, artist.commission_status === 'open' ? styles.statusOpen : styles.statusClosed]}>
-            <Ionicons
-              name={artist.commission_status === 'open' ? 'checkmark-circle' : 'close-circle'}
-              size={14}
-              color={artist.commission_status === 'open' ? colors.success : colors.error}
-            />
-            <Text style={[styles.statusText, artist.commission_status === 'open' ? styles.statusOpenText : styles.statusClosedText]}>
-              Commissions {artist.commission_status === 'open' ? 'Open' : 'Closed'}
-            </Text>
-          </View>
-          {queueStatus && (
-            <View style={styles.queueBadge}>
-              <Ionicons name="people-outline" size={14} color={colors.text.primary} />
-              <Text style={styles.queueText}>
-                {Math.max(0, queueStatus.current || 0)}/{queueStatus.max || 0} slots filled
+          {/* Commission Status & Slots - Right under stats */}
+          <View style={styles.statusAndQueueCentered}>
+            <View style={[styles.statusBadge, artist.commission_status === 'open' ? styles.statusOpen : styles.statusClosed]}>
+              <Ionicons
+                name={artist.commission_status === 'open' ? 'checkmark-circle' : 'close-circle'}
+                size={14}
+                color={artist.commission_status === 'open' ? colors.success : colors.error}
+              />
+              <Text style={[styles.statusText, artist.commission_status === 'open' ? styles.statusOpenText : styles.statusClosedText]}>
+                Commissions {artist.commission_status === 'open' ? 'Open' : 'Closed'}
               </Text>
-              {queueStatus.is_full && queueStatus.allow_waitlist && (
-                <Text style={styles.queueWaitlist}>Waitlist available</Text>
-              )}
             </View>
-          )}
-
-          {/* Social Links */}
-          {artist.social_links && Object.keys(artist.social_links).length > 0 && (
-            <View style={styles.socialLinksContainer}>
-              {artist.social_links.instagram && (
-                <TouchableOpacity
-                  style={styles.socialLink}
-                  onPress={async () => {
-                    const url = artist.social_links.instagram.startsWith('http')
-                      ? artist.social_links.instagram
-                      : `https://instagram.com/${artist.social_links.instagram}`;
-                    await Linking.openURL(url);
-                  }}
-                >
-                  <Ionicons name="logo-instagram" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-              )}
-              {artist.social_links.twitter && (
-                <TouchableOpacity
-                  style={styles.socialLink}
-                  onPress={async () => {
-                    const url = artist.social_links.twitter.startsWith('http')
-                      ? artist.social_links.twitter
-                      : `https://twitter.com/${artist.social_links.twitter}`;
-                    await Linking.openURL(url);
-                  }}
-                >
-                  <Ionicons name="logo-twitter" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-              )}
-              {artist.social_links.tiktok && (
-                <TouchableOpacity
-                  style={styles.socialLink}
-                  onPress={async () => {
-                    const url = artist.social_links.tiktok.startsWith('http')
-                      ? artist.social_links.tiktok
-                      : `https://tiktok.com/@${artist.social_links.tiktok}`;
-                    await Linking.openURL(url);
-                  }}
-                >
-                  <Ionicons name="logo-tiktok" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-              )}
-              {artist.social_links.youtube && (
-                <TouchableOpacity
-                  style={styles.socialLink}
-                  onPress={async () => {
-                    const url = artist.social_links.youtube.startsWith('http')
-                      ? artist.social_links.youtube
-                      : `https://youtube.com/@${artist.social_links.youtube}`;
-                    await Linking.openURL(url);
-                  }}
-                >
-                  <Ionicons name="logo-youtube" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-              )}
-              {artist.social_links.website && (
-                <TouchableOpacity
-                  style={styles.socialLink}
-                  onPress={async () => {
-                    await Linking.openURL(artist.social_links.website);
-                  }}
-                >
-                  <Ionicons name="globe-outline" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+            {queueStatus && (
+              <View style={styles.queueBadge}>
+                <Ionicons name="people-outline" size={14} color={colors.text.primary} />
+                <Text style={styles.queueText}>
+                  {Math.max(0, queueStatus.current || 0)}/{queueStatus.max || 0} slots filled
+                </Text>
+                {queueStatus.is_full && queueStatus.allow_waitlist && (
+                  <Text style={styles.queueWaitlist}>Waitlist available</Text>
+                )}
+              </View>
+            )}
+          </View>
 
           {/* Action Buttons */}
           {!isOwnProfile && (
@@ -692,6 +732,15 @@ export default function ArtistProfileScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
+              {/* Find Similar Artists button */}
+              <TouchableOpacity
+                style={[styles.actionButton, styles.similarButton]}
+                onPress={handleFindSimilar}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="people-outline" size={20} color={colors.text.primary} />
+                <Text style={styles.similarButtonText}>Find Similar</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -819,12 +868,16 @@ export default function ArtistProfileScreen() {
                   {selectedPackage?.estimated_delivery_days ? (
                     <View style={styles.packageMetaItem}>
                       <Ionicons name="time-outline" size={16} color={colors.text.secondary} />
-                      <Text style={styles.packageMetaText}>{selectedPackage.estimated_delivery_days} days</Text>
+                      <Text style={[styles.packageMetaText, styles.packageMetaTextBold]}>
+                        {selectedPackage.estimated_delivery_days} days
+                      </Text>
                     </View>
                   ) : null}
                   <View style={styles.packageMetaItem}>
                     <Ionicons name="refresh-outline" size={16} color={colors.text.secondary} />
-                    <Text style={styles.packageMetaText}>{selectedPackage?.revision_count || 0} revisions</Text>
+                    <Text style={[styles.packageMetaText, styles.packageMetaTextBold]}>
+                      {selectedPackage?.revision_count || 0} revisions
+                    </Text>
                   </View>
                 </View>
 
@@ -850,7 +903,120 @@ export default function ArtistProfileScreen() {
                     <Text style={styles.pkgAddonDesc}>No add-ons for this package.</Text>
                   </View>
                 )}
+                {!isOwnProfile && (
+                  <TouchableOpacity
+                    style={[
+                      styles.pkgCtaButton,
+                      (queueStatus?.is_full && !queueStatus?.allow_waitlist) && styles.pkgCtaDisabled
+                    ]}
+                    activeOpacity={0.9}
+                    disabled={queueStatus?.is_full && !queueStatus?.allow_waitlist}
+                    onPress={() => {
+                      const pkgId = selectedPackage?.id ? `&packageId=${selectedPackage.id}` : '';
+                      setSelectedPackage(null);
+                      router.push(`/commission/create?artistId=${id}${pkgId}`);
+                    }}
+                  >
+                    <Ionicons
+                      name="brush-outline"
+                      size={18}
+                      color={queueStatus?.is_full && !queueStatus?.allow_waitlist ? colors.text.secondary : colors.text.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.pkgCtaText,
+                        queueStatus?.is_full && !queueStatus?.allow_waitlist && styles.pkgCtaTextDisabled
+                      ]}
+                    >
+                      {queueStatus?.is_full && !queueStatus?.allow_waitlist
+                        ? 'Slots full'
+                        : 'Request with this package'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Similar Artists Modal */}
+        <Modal
+          visible={showSimilarArtists}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowSimilarArtists(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.similarModalContent}>
+              <View style={styles.similarModalHeader}>
+                <Text style={styles.similarModalTitle}>Similar Artists</Text>
+                <TouchableOpacity
+                  onPress={() => setShowSimilarArtists(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {loadingSimilar ? (
+                <View style={styles.similarLoadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              ) : similarArtists.length === 0 ? (
+                <View style={styles.similarEmptyContainer}>
+                  <Ionicons name="people-outline" size={64} color={colors.text.disabled} />
+                  <Text style={styles.similarEmptyText}>No similar artists found</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={similarArtists}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.similarArtistCard}
+                      onPress={() => {
+                        setShowSimilarArtists(false);
+                        router.push(`/artist/${item.id}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={{ uri: item.users?.avatar_url || DEFAULT_AVATAR }}
+                        style={styles.similarArtistAvatar}
+                        contentFit="cover"
+                      />
+                      <View style={styles.similarArtistInfo}>
+                        <Text style={styles.similarArtistName}>
+                          {item.users?.full_name || item.users?.username}
+                        </Text>
+                        <Text style={styles.similarArtistUsername}>
+                          @{item.users?.username}
+                        </Text>
+                        {item.primary_style && (
+                          <View style={styles.similarStyleTag}>
+                            <Text style={styles.similarStyleText}>{item.primary_style.name}</Text>
+                          </View>
+                        )}
+                        <View style={styles.similarArtistStats}>
+                          <View style={styles.similarStatItem}>
+                            <Ionicons name="star" size={14} color={colors.primary} />
+                            <Text style={styles.similarStatText}>
+                              {item.rating?.toFixed(1) || '0.0'}
+                            </Text>
+                          </View>
+                          {item.min_price && item.max_price && (
+                            <Text style={styles.similarPriceText}>
+                              ${item.min_price} - ${item.max_price}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                    </TouchableOpacity>
+                  )}
+                  contentContainerStyle={styles.similarListContent}
+                />
+              )}
             </View>
           </View>
         </Modal>
@@ -1148,6 +1314,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border + '20',
   },
+  favoriteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+  },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
@@ -1215,7 +1391,7 @@ const styles = StyleSheet.create({
   },
   nameContainer: {
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 0,
     width: '100%',
   },
   artistName: {
@@ -1254,7 +1430,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     lineHeight: IS_SMALL_SCREEN ? 20 : 22,
     paddingHorizontal: spacing.md,
   },
@@ -1266,7 +1442,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     width: '100%',
     gap: spacing.xs,
   },
@@ -1304,7 +1480,7 @@ const styles = StyleSheet.create({
     paddingVertical: IS_SMALL_SCREEN ? spacing.xs + 2 : spacing.sm,
     borderRadius: borderRadius.full,
     gap: spacing.xs,
-    marginBottom: spacing.sm,
+    marginBottom: 0,
   },
   statusOpen: {
     backgroundColor: colors.success + '15',
@@ -1329,9 +1505,19 @@ const styles = StyleSheet.create({
   statusClosedText: {
     color: colors.error,
   },
-  queueBadge: {
-    marginTop: spacing.xs,
+  statusAndQueue: {
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  statusAndQueueCentered: {
+    marginTop: 0,
     marginBottom: spacing.sm,
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  queueBadge: {
+    marginTop: 0,
+    marginBottom: 0,
     padding: spacing.sm,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
@@ -1357,7 +1543,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     flexWrap: 'wrap',
   },
   socialLink: {
@@ -1372,7 +1558,8 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     width: '100%',
-    marginTop: 0,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   actionButton: {
     flexDirection: 'row',
@@ -1409,6 +1596,119 @@ const styles = StyleSheet.create({
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
   commissionButtonTextDisabled: {
+    color: colors.text.secondary,
+  },
+  similarButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border + '50',
+    marginTop: spacing.sm,
+  },
+  similarButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+  },
+  similarModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '90%',
+  },
+  similarModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  similarModalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 20,
+  },
+  closeButton: {
+    padding: spacing.xs,
+  },
+  similarLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  similarEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  similarEmptyText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  similarListContent: {
+    padding: spacing.md,
+  },
+  similarArtistCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  similarArtistAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.full,
+  },
+  similarArtistInfo: {
+    flex: 1,
+  },
+  similarArtistName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  similarArtistUsername: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+  similarStyleTag: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + '20',
+    borderRadius: borderRadius.sm,
+  },
+  similarStyleText: {
+    ...typography.small,
+    color: colors.primary,
+    fontSize: 11,
+  },
+  similarArtistStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  similarStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  similarStatText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  similarPriceText: {
+    ...typography.caption,
     color: colors.text.secondary,
   },
   section: {
@@ -1586,6 +1886,9 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 12,
   },
+  packageMetaTextBold: {
+    fontWeight: '700',
+  },
   packageEmpty: {
     backgroundColor: colors.surface,
     padding: spacing.md,
@@ -1682,6 +1985,29 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary,
     fontWeight: '700',
+  },
+  pkgCtaButton: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  pkgCtaDisabled: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pkgCtaText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  pkgCtaTextDisabled: {
+    color: colors.text.secondary,
   },
   boardCard: {
     width: ITEM_WIDTH,
