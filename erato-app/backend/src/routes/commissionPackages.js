@@ -178,7 +178,7 @@ router.post('/create', authenticate, verifyArtist, async (req, res) => {
       return res.status(400).json({ error: 'base_price must be positive' });
     }
 
-    const { data: package, error } = await supabaseAdmin
+    const { data: newPackage, error } = await supabaseAdmin
       .from('commission_packages')
       .insert({
         artist_id: req.artistId,
@@ -205,7 +205,7 @@ router.post('/create', authenticate, verifyArtist, async (req, res) => {
     const cacheKey = `artist:${req.artistId}:packages`;
     await cache.del(cacheKey);
 
-    res.status(201).json(package);
+    res.status(201).json(newPackage);
   } catch (error) {
     console.error('Error creating package:', error);
     res.status(500).json({ error: error.message });
@@ -336,17 +336,17 @@ router.post('/:packageId/addons', authenticate, verifyArtist, async (req, res) =
     }
 
     // Verify package ownership
-    const { data: package, error: packageError } = await supabaseAdmin
+    const { data: pkg, error: packageError } = await supabaseAdmin
       .from('commission_packages')
       .select('artist_id')
       .eq('id', packageId)
       .maybeSingle();
 
-    if (packageError || !package) {
+    if (packageError || !pkg) {
       return res.status(404).json({ error: 'Package not found' });
     }
 
-    if (package.artist_id !== req.artistId) {
+    if (pkg.artist_id !== req.artistId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
