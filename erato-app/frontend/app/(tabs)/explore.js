@@ -23,10 +23,132 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import ReviewModal from '../../components/ReviewModal';
+import ProgressTracker from '../../components/ProgressTracker';
+import MilestoneTracker from '../../components/MilestoneTracker';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+
+// Commission Files Tab Component
+function CommissionFilesTab({ commissionId, token, isArtist }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadFiles();
+  }, [commissionId]);
+
+  const loadFiles = async () => {
+    try {
+      setLoading(true);
+      // Get all progress updates with images
+      const response = await axios.get(
+        `${API_URL}/commissions/${commissionId}/progress`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const updates = response.data.updates || [];
+      
+      // Extract all images from progress updates
+      const allFiles = [];
+      updates.forEach(update => {
+        if (update.images && update.images.length > 0) {
+          update.images.forEach((imageUrl, index) => {
+            allFiles.push({
+              id: `${update.id}-${index}`,
+              url: imageUrl,
+              type: 'image',
+              createdAt: update.created_at,
+              note: update.note,
+              updateId: update.id,
+            });
+          });
+        }
+      });
+      
+      setFiles(allFiles);
+    } catch (error) {
+      console.error('Error loading files:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load files',
+        visibilityTime: 2000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.filesTabContent}>
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.emptyText}>Loading files...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (files.length === 0) {
+    return (
+      <ScrollView 
+        contentContainerStyle={styles.filesEmptyContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.emptyState}>
+          <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
+          <Text style={styles.emptyTitle}>No Files Yet</Text>
+          <Text style={styles.emptyText}>
+            Progress updates and deliverables will appear here
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView 
+      style={styles.filesTabContent}
+      contentContainerStyle={styles.filesGrid}
+      showsVerticalScrollIndicator={false}
+    >
+      {files.map((file) => (
+        <TouchableOpacity
+          key={file.id}
+          style={styles.fileCard}
+          onPress={() => {
+            // TODO: Open image viewer
+            Toast.show({
+              type: 'info',
+              text1: 'Image Viewer',
+              text2: 'Full screen viewer coming soon',
+              visibilityTime: 2000,
+            });
+          }}
+          activeOpacity={0.9}
+        >
+          <Image
+            source={{ uri: file.url }}
+            style={styles.fileImage}
+            contentFit="cover"
+          />
+          {file.note && (
+            <View style={styles.fileNoteOverlay}>
+              <Text style={styles.fileNoteText} numberOfLines={2}>{file.note}</Text>
+            </View>
+          )}
+          <View style={styles.fileDateBadge}>
+            <Text style={styles.fileDateText}>
+              {new Date(file.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
 
 export default function CommissionDashboard() {
   const { token, user } = useAuthStore();
@@ -41,7 +163,7 @@ export default function CommissionDashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState(isArtist ? 'kanban' : 'list');
+  const [viewMode] = useState('list'); // Always use list view
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [currentNote, setCurrentNote] = useState('');
@@ -51,8 +173,8 @@ export default function CommissionDashboard() {
   const [selectedCommissions, setSelectedCommissions] = useState(new Set());
   const [batchMode, setBatchMode] = useState(false);
   const [totalSpent, setTotalSpent] = useState(0);
-  const [currentKanbanPage, setCurrentKanbanPage] = useState(0);
-  const kanbanFlatListRef = useRef(null);
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [detailTab, setDetailTab] = useState('details'); // details, progress, files
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -79,6 +201,11 @@ export default function CommissionDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const allCommissions = response.data.commissions || [];
+      
+      // Debug: Log commission data structure
+      if (allCommissions.length > 0) {
+        console.log('Sample commission data:', JSON.stringify(allCommissions[0], null, 2));
+      }
 
       // Fetch missing artist data
       const missingArtistIds = allCommissions
@@ -204,12 +331,6 @@ export default function CommissionDashboard() {
     }
   };
 
-  const kanbanColumns = {
-    pending: commissions.filter(c => c.status === 'pending'),
-    in_progress: commissions.filter(c => c.status === 'in_progress' || c.status === 'accepted'),
-    review: commissions.filter(c => c.status === 'review'),
-    completed: commissions.filter(c => c.status === 'completed'),
-  };
 
   const commissionStats = {
     pending: commissions.filter(c => c.status === 'pending').length,
@@ -229,12 +350,30 @@ export default function CommissionDashboard() {
 
   const handleUpdateStatus = async (commissionId, newStatus) => {
     try {
-      await axios.patch(
+      const response = await axios.patch(
         `${API_URL}/commissions/${commissionId}/status`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
+      // Reload commissions list
       await loadCommissions();
+      
+      // Update selected commission if it's the one being updated
+      if (selectedCommission && selectedCommission.id === commissionId) {
+        // Fetch updated commission details
+        try {
+          const updatedResponse = await axios.get(`${API_URL}/commissions/${commissionId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setSelectedCommission(updatedResponse.data);
+        } catch (fetchError) {
+          console.error('Error fetching updated commission:', fetchError);
+          // Update status locally as fallback
+          setSelectedCommission({ ...selectedCommission, status: newStatus });
+        }
+      }
+      
       Toast.show({
         type: 'success',
         text1: 'Success',
@@ -243,11 +382,12 @@ export default function CommissionDashboard() {
       });
     } catch (error) {
       console.error('Error updating status:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to update status',
-        visibilityTime: 2000,
+        text2: errorMessage,
+        visibilityTime: 3000,
       });
     }
   };
@@ -369,62 +509,68 @@ export default function CommissionDashboard() {
     return (
       <TouchableOpacity
         key={item.id}
-        style={[styles.kanbanCard, { borderColor: statusColor }]}
+        style={[
+          styles.commissionCard,
+          styles.kanbanCardMargin,
+          { borderWidth: 1.5, borderColor: statusColor + '60' }
+        ]}
         onPress={() => {
           setSelectedCommission(item);
           setShowCommissionModal(true);
         }}
         activeOpacity={0.95}
       >
-        {/* Status indicator at top */}
-        <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
-
-        <View style={styles.kanbanCardHeader}>
-          <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-              style={styles.kanbanAvatar}
-              contentFit="cover"
-            />
-          </View>
-          <View style={styles.kanbanUserInfo}>
-            <Text style={styles.kanbanUsername} numberOfLines={1}>
-              {otherUser?.username || otherUser?.full_name || 'Unknown'}
+        {/* Ultra Compact Card - Same as List View */}
+        <View style={styles.compactCardContent}>
+          <Image
+            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+            style={styles.compactAvatar}
+            contentFit="cover"
+          />
+          <View style={styles.compactInfo}>
+            <Text style={styles.compactUsername} numberOfLines={1}>
+              {otherUser?.username || otherUser?.full_name || (isArtist ? 'Unknown Client' : 'Unknown Artist')}
             </Text>
-            <Text style={styles.kanbanDate}>
-              {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </Text>
-          </View>
-          {isArtist && (
-            <TouchableOpacity
-              onPress={async (e) => {
-                e.stopPropagation();
-                setNoteCommissionId(item.id);
-                await loadNote(item.id);
-                setShowNotesModal(true);
-              }}
-              style={styles.noteIconButton}
-            >
-              <Ionicons name="document-text-outline" size={18} color={colors.primary} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {(item.client_note || item.details) && (
-          <Text style={styles.kanbanDetails} numberOfLines={3}>
-            {item.client_note || item.details}
-          </Text>
-        )}
-
-        <View style={styles.kanbanFooter}>
-          {item.final_price ? (
-            <View style={styles.kanbanPriceBadge}>
-              <Ionicons name="cash" size={14} color={colors.primary} />
-              <Text style={styles.kanbanPriceText}>${item.final_price}</Text>
+            <View style={styles.compactMetaRow}>
+              <View style={[styles.compactStatusDot, { backgroundColor: statusColor }]} />
+              <Text style={styles.compactDate}>
+                {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </Text>
             </View>
-          ) : (
-            <View style={styles.kanbanNoPriceBadge}>
-              <Text style={styles.kanbanNoPriceText}>No price set</Text>
+          </View>
+          <View style={styles.compactPrice}>
+            {item.final_price || item.price ? (
+              <Text style={styles.compactPriceText}>${item.final_price || item.price}</Text>
+            ) : item.budget ? (
+              <Text style={styles.compactBudgetText}>${item.budget}</Text>
+            ) : null}
+          </View>
+          {item.status === 'pending' && isArtist && (
+            <View style={styles.compactActions}>
+              <TouchableOpacity
+                style={styles.compactAcceptButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  showAlert({
+                    title: 'Accept Commission',
+                    message: 'Accept this commission request?',
+                    type: 'info',
+                    buttons: [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Accept',
+                        style: 'default',
+                        onPress: async () => {
+                          await handleUpdateStatus(item.id, 'accepted');
+                        }
+                      }
+                    ]
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -473,15 +619,27 @@ export default function CommissionDashboard() {
       <TouchableOpacity
         style={[
           styles.commissionCard,
+          { borderWidth: 1.5, borderColor: statusColor + '60' },
           item.status === 'pending' && styles.pendingCommissionCard,
           isSelected && styles.selectedCommissionCard,
         ]}
-        onPress={() => {
+        onPress={async () => {
           if (batchMode) {
             toggleCommissionSelection(item.id);
           } else {
+            // Set item immediately for faster UI response
             setSelectedCommission(item);
             setShowCommissionModal(true);
+            // Then fetch full commission details in background
+            try {
+              const response = await axios.get(`${API_URL}/commissions/${item.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              setSelectedCommission(response.data);
+            } catch (error) {
+              console.error('Error fetching commission details:', error);
+              // Keep using item data if fetch fails
+            }
           }
         }}
         onLongPress={() => {
@@ -500,57 +658,58 @@ export default function CommissionDashboard() {
           </View>
         )}
 
-        <View style={styles.commissionHeaderRow}>
-          <View style={styles.headerLeft}>
-            <View style={[styles.avatarFrame, { borderColor: statusColor + '40' }]}>
-              <Image
-                source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-                style={styles.commissionAvatar}
-                contentFit="cover"
-              />
-            </View>
-            <View style={styles.headerTextBlock}>
-              <Text style={styles.commissionUsername} numberOfLines={1}>
-                {otherUser?.username || otherUser?.full_name || (isArtist ? 'Unknown Client' : 'Unknown Artist')}
-              </Text>
-              <Text style={styles.subMeta} numberOfLines={1}>
+        {/* Ultra Compact Card - Minimal Info */}
+        <View style={styles.compactCardContent}>
+          <Image
+            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+            style={styles.compactAvatar}
+            contentFit="cover"
+          />
+          <View style={styles.compactInfo}>
+            <Text style={styles.compactUsername} numberOfLines={1}>
+              {otherUser?.username || otherUser?.full_name || (isArtist ? 'Unknown Client' : 'Unknown Artist')}
+            </Text>
+            <View style={styles.compactMetaRow}>
+              <View style={[styles.compactStatusDot, { backgroundColor: statusColor }]} />
+              <Text style={styles.compactDate}>
                 {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </Text>
             </View>
           </View>
-          <View style={[styles.statusPill, { backgroundColor: statusColor + '15', borderColor: statusColor + '40' }]}>
-            <Ionicons name={getStatusIcon(item.status)} size={14} color={statusColor} />
-            <Text style={[styles.statusPillText, { color: statusColor }]}>{formatStatus(item.status)}</Text>
-          </View>
-        </View>
-
-        {(item.client_note || item.details) && (
-          <Text style={styles.commissionDetails} numberOfLines={2}>
-            {item.client_note || item.details}
-          </Text>
-        )}
-
-        <View style={styles.commissionFooter}>
-          <View style={styles.metaChips}>
+          <View style={styles.compactPrice}>
             {item.final_price || item.price ? (
-              <View style={styles.priceChip}>
-                <Ionicons name="cash" size={12} color={colors.primary} />
-                <Text style={styles.priceText}>${item.final_price || item.price}</Text>
-              </View>
+              <Text style={styles.compactPriceText}>${item.final_price || item.price}</Text>
             ) : item.budget ? (
-              <View style={styles.budgetChip}>
-                <Ionicons name="wallet-outline" size={11} color={colors.text.secondary} />
-                <Text style={styles.budgetText}>Budget: ${item.budget}</Text>
-              </View>
-            ) : (
-              <View style={styles.budgetChip}>
-                <Ionicons name="help-circle-outline" size={11} color={colors.text.disabled} />
-                <Text style={styles.budgetText}>No price</Text>
-              </View>
-            )}
+              <Text style={styles.compactBudgetText}>${item.budget}</Text>
+            ) : null}
           </View>
-          {!batchMode && (
-            <Ionicons name="chevron-forward" size={16} color={colors.text.disabled} />
+          {item.status === 'pending' && isArtist && !batchMode && (
+            <View style={styles.compactActions}>
+              <TouchableOpacity
+                style={styles.compactAcceptButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  showAlert({
+                    title: 'Accept Commission',
+                    message: 'Accept this commission request?',
+                    type: 'info',
+                    buttons: [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Accept',
+                        style: 'default',
+                        onPress: async () => {
+                          await handleUpdateStatus(item.id, 'accepted');
+                        }
+                      }
+                    ]
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -559,143 +718,81 @@ export default function CommissionDashboard() {
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
-        <View style={styles.titleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>
-              {isArtist ? 'Dashboard' : 'My Commissions'}
-            </Text>
-            <Text style={styles.subtitle}>
-              {isArtist ? 'Manage your pipeline' : 'Track your requests'}
-            </Text>
+      {/* Clean Compact Header with Safe Area */}
+      <View style={[styles.compactHeader, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
+        <View style={styles.compactHeaderTop}>
+          <Text style={styles.compactTitle}>
+            {isArtist ? 'Commissions' : 'My Commissions'}
+          </Text>
+          <View style={styles.compactHeaderActions}>
+            <TouchableOpacity
+              style={styles.compactHeaderButton}
+              onPress={() => setShowStatsModal(true)}
+            >
+              <Ionicons name="stats-chart" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+            {isArtist && (
+              <TouchableOpacity
+                style={styles.compactHeaderButton}
+                onPress={() => setShowTemplatesModal(true)}
+              >
+                <Ionicons name="chatbox-ellipses-outline" size={22} color={colors.text.primary} />
+              </TouchableOpacity>
+            )}
+            {isArtist && (
+              <TouchableOpacity
+                style={styles.compactHeaderButton}
+                onPress={() => router.push('/artist-settings')}
+              >
+                <Ionicons name="settings-outline" size={22} color={colors.text.primary} />
+              </TouchableOpacity>
+            )}
+            {!isArtist && (
+              <TouchableOpacity
+                style={styles.compactHeaderButton}
+                onPress={() => router.push('/commission-requests')}
+              >
+                <Ionicons name="add-circle-outline" size={22} color={colors.text.primary} />
+              </TouchableOpacity>
+            )}
           </View>
-          {!isArtist && (
-            <TouchableOpacity
-              style={styles.commissionRequestsButton}
-              onPress={() => router.push('/commission-requests')}
-            >
-              <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-            </TouchableOpacity>
-          )}
-          {isArtist && batchMode && (
-            <TouchableOpacity
-              style={styles.cancelBatchButton}
-              onPress={() => {
-                setBatchMode(false);
-                setSelectedCommissions(new Set());
-              }}
-            >
-              <Text style={styles.cancelBatchText}>Cancel</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsContainer}
-        >
-          <View style={[styles.statCard, { borderColor: colors.primary }]}>
-            <View style={[styles.statIconBg, { backgroundColor: colors.primary + '20' }]}>
-              <Ionicons name="time-outline" size={22} color={colors.primary} />
-            </View>
-            <Text style={styles.statValue}>{commissionStats.pending}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </View>
-          <View style={[styles.statCard, { borderColor: colors.status.info }]}>
-            <View style={[styles.statIconBg, { backgroundColor: colors.status.info + '20' }]}>
-              <Ionicons name="hourglass-outline" size={22} color={colors.status.info} />
-            </View>
-            <Text style={styles.statValue}>{commissionStats.in_progress}</Text>
-            <Text style={styles.statLabel}>Active</Text>
-          </View>
-          <View style={[styles.statCard, { borderColor: colors.status.success }]}>
-            <View style={[styles.statIconBg, { backgroundColor: colors.status.success + '20' }]}>
-              <Ionicons name="checkmark-done-outline" size={22} color={colors.status.success} />
-            </View>
-            <Text style={styles.statValue}>{commissionStats.completed}</Text>
-            <Text style={styles.statLabel}>Done</Text>
-          </View>
-          {isArtist ? (
-            <View style={[styles.statCard, { borderColor: '#FFD700' }]}>
-              <View style={[styles.statIconBg, { backgroundColor: '#FFD700' + '20' }]}>
-                <Ionicons name="trending-up-outline" size={22} color="#FFD700" />
-              </View>
-              <Text style={styles.statValue}>${commissionStats.totalRevenue.toFixed(0)}</Text>
-              <Text style={styles.statLabel}>Revenue</Text>
-            </View>
-          ) : (
-            <View style={[styles.statCard, { borderColor: colors.primary }]}>
-              <View style={[styles.statIconBg, { backgroundColor: colors.primary + '20' }]}>
-                <Ionicons name="wallet-outline" size={22} color={colors.primary} />
-              </View>
-              <Text style={styles.statValue}>${totalSpent.toFixed(0)}</Text>
-              <Text style={styles.statLabel}>Spent</Text>
-            </View>
-          )}
-        </ScrollView>
-
-        {isArtist && (
-          <View style={styles.viewModeToggle}>
-            <TouchableOpacity
-              style={[styles.viewModeButton, viewMode === 'kanban' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('kanban')}
-            >
-              <Ionicons name="grid-outline" size={18} color={viewMode === 'kanban' ? colors.text.primary : colors.text.secondary} />
-              <Text style={[styles.viewModeText, viewMode === 'kanban' && styles.viewModeTextActive]}>Board</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('list')}
-            >
-              <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? colors.text.primary : colors.text.secondary} />
-              <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>List</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.templatesButton}
-              onPress={() => setShowTemplatesModal(true)}
-            >
-              <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {viewMode === 'list' && (
+        {/* Pinterest-style Filter Tabs */}
+        <View style={styles.pinterestFilterBar}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.statusTabsContainer}
+            contentContainerStyle={styles.pinterestFilterContent}
           >
-            {['all', 'pending', 'active', 'completed'].map((status) => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.statusTab,
-                  selectedFilter === status && styles.statusTabActive,
-                ]}
-                onPress={() => setSelectedFilter(status)}
-              >
-                <Text
-                  style={[
-                    styles.statusTabText,
-                    selectedFilter === status && styles.statusTabTextActive,
-                  ]}
+            {['all', 'pending', 'active', 'completed'].map((status) => {
+              const isSelected = selectedFilter === status;
+              const statusLabels = {
+                all: 'All',
+                pending: 'Pending',
+                active: 'Active',
+                completed: 'Completed'
+              };
+              return (
+                <TouchableOpacity
+                  key={status}
+                  style={styles.pinterestFilterItem}
+                  onPress={() => setSelectedFilter(status)}
+                  activeOpacity={0.7}
                 >
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text style={[
+                    styles.pinterestFilterText,
+                    isSelected && styles.pinterestFilterTextActive
+                  ]}>
+                    {statusLabels[status]}
+                  </Text>
+                  {isSelected && <View style={styles.pinterestFilterUnderline} />}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
-        )}
-      </Animated.View>
+        </View>
+      </View>
 
       {batchMode && isArtist && (
         <View style={styles.batchActionsBar}>
@@ -723,65 +820,6 @@ export default function CommissionDashboard() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading commissions...</Text>
-        </View>
-      ) : viewMode === 'kanban' && isArtist ? (
-        <View style={{ flex: 1 }}>
-          <FlatList
-            ref={kanbanFlatListRef}
-            data={[
-              { key: 'pending', title: 'Pending', items: kanbanColumns.pending, icon: 'time-outline', color: colors.primary },
-              { key: 'in_progress', title: 'In Progress', items: kanbanColumns.in_progress, icon: 'hourglass-outline', color: colors.status.info },
-              { key: 'review', title: 'Review', items: kanbanColumns.review, icon: 'eye-outline', color: colors.status.warning },
-              { key: 'completed', title: 'Completed', items: kanbanColumns.completed, icon: 'checkmark-done-outline', color: colors.status.success }
-            ]}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            bounces={false}
-            scrollEnabled={true}
-            directionalLockEnabled={true}
-            alwaysBounceHorizontal={false}
-            alwaysBounceVertical={false}
-            decelerationRate="fast"
-            snapToAlignment="start"
-            snapToInterval={width}
-            scrollEventThrottle={16}
-            disableIntervalMomentum={true}
-            onMomentumScrollEnd={(event) => {
-              const pageIndex = Math.round(event.nativeEvent.contentOffset.x / width);
-              setCurrentKanbanPage(pageIndex);
-            }}
-            getItemLayout={(data, index) => ({
-              length: width,
-              offset: width * index,
-              index,
-            })}
-            renderItem={({ item }) => renderKanbanColumn(item.title, item.key, item.items, item.icon, item.color)}
-            keyExtractor={(item) => item.key}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary}
-              />
-            }
-          />
-          {/* Pagination Dots */}
-          <View style={styles.paginationDots}>
-            {[0, 1, 2, 3].map((index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => {
-                  kanbanFlatListRef.current?.scrollToIndex({ index, animated: true });
-                  setCurrentKanbanPage(index);
-                }}
-                style={[
-                  styles.dot,
-                  currentKanbanPage === index && styles.activeDot
-                ]}
-              />
-            ))}
-          </View>
         </View>
       ) : (
         <FlatList
@@ -815,6 +853,117 @@ export default function CommissionDashboard() {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Statistics Modal */}
+      <Modal
+        visible={showStatsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowStatsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.statsModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Statistics</Text>
+              <TouchableOpacity
+                onPress={() => setShowStatsModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
+              {/* Overview Stats */}
+              <View style={styles.statsSection}>
+                <Text style={styles.statsSectionTitle}>Overview</Text>
+                <View style={styles.statsGrid}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statBoxValue}>{commissionStats.total}</Text>
+                    <Text style={styles.statBoxLabel}>Total</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statBoxValue}>{commissionStats.pending}</Text>
+                    <Text style={styles.statBoxLabel}>Pending</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statBoxValue}>{commissionStats.in_progress}</Text>
+                    <Text style={styles.statBoxLabel}>Active</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statBoxValue}>{commissionStats.completed}</Text>
+                    <Text style={styles.statBoxLabel}>Completed</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Financial Stats */}
+              {isArtist ? (
+                <View style={styles.statsSection}>
+                  <Text style={styles.statsSectionTitle}>Revenue</Text>
+                  <View style={styles.statCard}>
+                    <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                      <Text style={styles.statCardLabel}>Total Revenue</Text>
+                      <Text style={styles.statCardValue}>${commissionStats.totalRevenue.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.statCardRow}>
+                      <Text style={styles.statCardLabel}>Average per Commission</Text>
+                      <Text style={styles.statCardValue}>
+                        ${commissionStats.completed > 0 
+                          ? (commissionStats.totalRevenue / commissionStats.completed).toFixed(2)
+                          : '0.00'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.statsSection}>
+                  <Text style={styles.statsSectionTitle}>Spending</Text>
+                  <View style={styles.statCard}>
+                    <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                      <Text style={styles.statCardLabel}>Total Spent</Text>
+                      <Text style={styles.statCardValue}>${totalSpent.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.statCardRow}>
+                      <Text style={styles.statCardLabel}>Average per Commission</Text>
+                      <Text style={styles.statCardValue}>
+                        ${commissions.length > 0 
+                          ? (totalSpent / commissions.length).toFixed(2)
+                          : '0.00'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Performance Metrics */}
+              {isArtist && (
+                <View style={styles.statsSection}>
+                  <Text style={styles.statsSectionTitle}>Performance</Text>
+                  <View style={styles.statCard}>
+                    <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                      <Text style={styles.statCardLabel}>Completion Rate</Text>
+                      <Text style={styles.statCardValue}>
+                        {commissionStats.total > 0 
+                          ? ((commissionStats.completed / commissionStats.total) * 100).toFixed(1)
+                          : '0'}%
+                      </Text>
+                    </View>
+                    <View style={styles.statCardRow}>
+                      <Text style={styles.statCardLabel}>Active Rate</Text>
+                      <Text style={styles.statCardValue}>
+                        {commissionStats.total > 0 
+                          ? ((commissionStats.in_progress / commissionStats.total) * 100).toFixed(1)
+                          : '0'}%
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Templates Modal */}
       <Modal
@@ -916,78 +1065,212 @@ export default function CommissionDashboard() {
           <View style={styles.modalOverlay}>
             <View style={styles.commissionDetailModal}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Details</Text>
+                <Text style={styles.modalTitle}>Commission</Text>
                 <TouchableOpacity
-                  onPress={() => setShowCommissionModal(false)}
+                  onPress={() => {
+                    setShowCommissionModal(false);
+                    setDetailTab('details');
+                  }}
                   style={styles.modalCloseButton}
                 >
                   <Ionicons name="close" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView
-                style={styles.commissionDetailContent}
-                contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={styles.detailUserHeader}>
-                  <Image
-                    source={{
-                      uri: isArtist
-                        ? (selectedCommission.client?.avatar_url || DEFAULT_AVATAR)
-                        : (selectedCommission.artist?.users?.avatar_url || artistCache[selectedCommission.artist_id]?.avatar_url || DEFAULT_AVATAR)
-                    }}
-                    style={styles.detailAvatar}
-                    contentFit="cover"
-                  />
-                  <View style={styles.detailUserInfo}>
-                    <Text style={styles.detailUsername} numberOfLines={1}>
-                      {isArtist
-                        ? (selectedCommission.client?.username || selectedCommission.client?.full_name || 'Unknown')
-                        : (selectedCommission.artist?.users?.username || selectedCommission.artist?.users?.full_name || 'Unknown')}
+              {/* Pinterest-style Tab Bar */}
+              <View style={styles.pinterestFilterBar}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.pinterestFilterContent}
+                >
+                  <TouchableOpacity
+                    style={styles.pinterestFilterItem}
+                    onPress={() => setDetailTab('details')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.pinterestFilterText, detailTab === 'details' && styles.pinterestFilterTextActive]}>
+                      Details
                     </Text>
-                    <View style={styles.detailRoleBadge}>
-                      <Text style={styles.detailUserRole}>{isArtist ? 'CLIENT' : 'ARTIST'}</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedCommission.status) + '15' }]}>
-                    <Ionicons name={getStatusIcon(selectedCommission.status)} size={14} color={getStatusColor(selectedCommission.status)} />
-                    <Text style={[styles.detailStatusText, { color: getStatusColor(selectedCommission.status) }]}>
-                      {formatStatus(selectedCommission.status)}
+                    {detailTab === 'details' && <View style={styles.pinterestFilterUnderline} />}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.pinterestFilterItem}
+                    onPress={() => setDetailTab('progress')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.pinterestFilterText, detailTab === 'progress' && styles.pinterestFilterTextActive]}>
+                      Progress
                     </Text>
-                  </View>
-                </View>
+                    {detailTab === 'progress' && <View style={styles.pinterestFilterUnderline} />}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.pinterestFilterItem}
+                    onPress={() => setDetailTab('files')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.pinterestFilterText, detailTab === 'files' && styles.pinterestFilterTextActive]}>
+                      Files
+                    </Text>
+                    {detailTab === 'files' && <View style={styles.pinterestFilterUnderline} />}
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
 
-                {selectedCommission.details && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>DESCRIPTION</Text>
-                    <View style={styles.detailContentBox}>
-                      <Text style={styles.detailText}>{selectedCommission.details}</Text>
-                    </View>
-                  </View>
-                )}
+              {/* Tab Content */}
+              <View style={{ flex: 1, minHeight: 200 }}>
+                {detailTab === 'details' ? (
+                  <ScrollView
+                    style={styles.commissionDetailContent}
+                    contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl, minHeight: 400 }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {/* Clean User Header - Pinterest Style */}
+                    {selectedCommission ? (
+                      <>
+                        <TouchableOpacity
+                          style={styles.detailUserHeader}
+                          onPress={() => {
+                            // If artist view, navigate to client profile
+                            // If client view, navigate to artist profile
+                            if (isArtist) {
+                              // Artist view: navigate to client profile
+                              // Check if client has an artist record, otherwise just show user info
+                              const clientId = selectedCommission.client_id;
+                              if (clientId) {
+                                // Try to navigate to artist profile (works if client is also an artist)
+                                // If not an artist, the route will handle it gracefully
+                                router.push(`/artist/${clientId}`);
+                              }
+                            } else {
+                              // Client view: navigate to artist profile
+                              const artistId = selectedCommission.artist_id;
+                              if (artistId) {
+                                router.push(`/artist/${artistId}`);
+                              }
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Image
+                            source={{
+                              uri: isArtist
+                                ? (selectedCommission.client?.avatar_url || selectedCommission.client?.profile_picture || DEFAULT_AVATAR)
+                                : (selectedCommission.artist?.users?.avatar_url || selectedCommission.artist?.users?.profile_picture || artistCache[selectedCommission.artist_id]?.avatar_url || DEFAULT_AVATAR)
+                            }}
+                            style={styles.detailAvatar}
+                            contentFit="cover"
+                          />
+                          <View style={styles.detailUserInfo}>
+                            <Text style={styles.detailUsername} numberOfLines={1}>
+                              {isArtist
+                                ? (selectedCommission.client?.username || selectedCommission.client?.full_name || 'Unknown Client')
+                                : (selectedCommission.artist?.users?.username || selectedCommission.artist?.users?.full_name || artistCache[selectedCommission.artist_id]?.username || 'Unknown Artist')}
+                            </Text>
+                            <Text style={styles.detailUserSubtext}>
+                              {isArtist ? 'Client' : 'Artist'} • {selectedCommission.created_at ? new Date(selectedCommission.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                            </Text>
+                          </View>
+                          <View style={[styles.detailStatusBadge, { backgroundColor: getStatusColor(selectedCommission.status) + '15' }]}>
+                            <Ionicons name={getStatusIcon(selectedCommission.status)} size={16} color={getStatusColor(selectedCommission.status)} />
+                            <Text style={[styles.detailStatusText, { color: getStatusColor(selectedCommission.status) }]}>
+                              {formatStatus(selectedCommission.status)}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
 
-                {selectedCommission.client_note && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>CLIENT NOTE</Text>
-                    <View style={styles.detailNoteBox}>
-                      <Text style={styles.detailText}>{selectedCommission.client_note}</Text>
-                    </View>
-                  </View>
-                )}
-
-                {(selectedCommission.final_price || selectedCommission.budget) && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>PRICING</Text>
-                    <View style={styles.detailContentBox}>
+                  {/* Pricing - Always Show */}
+                  <View style={styles.detailPricingCard}>
+                    <Text style={styles.detailPricingLabel}>Total</Text>
+                    {selectedCommission.final_price || selectedCommission.budget || selectedCommission.price ? (
                       <Text style={styles.detailPriceText}>
-                        ${selectedCommission.final_price || selectedCommission.budget}
-                        {!selectedCommission.final_price && ' (Budget)'}
+                        ${selectedCommission.final_price || selectedCommission.price || selectedCommission.budget}
+                        {!selectedCommission.final_price && !selectedCommission.price && <Text style={styles.detailBudgetLabel}> (Budget)</Text>}
                       </Text>
+                    ) : (
+                      <Text style={styles.detailPriceTextPlaceholder}>No price set</Text>
+                    )}
+                  </View>
+
+                  {/* Description */}
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Description</Text>
+                    {selectedCommission.details || selectedCommission.description ? (
+                      <Text style={styles.detailText}>{selectedCommission.details || selectedCommission.description}</Text>
+                    ) : (
+                      <Text style={styles.detailTextPlaceholder}>No description provided</Text>
+                    )}
+                  </View>
+
+                  {/* Client Note */}
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Client Note</Text>
+                    {selectedCommission.client_note || selectedCommission.note ? (
+                      <Text style={styles.detailText}>{selectedCommission.client_note || selectedCommission.note}</Text>
+                    ) : (
+                      <Text style={styles.detailTextPlaceholder}>No additional notes</Text>
+                    )}
+                  </View>
+
+                  {/* Milestone Tracker */}
+                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
+                      <MilestoneTracker
+                        commissionId={selectedCommission.id}
+                        isClient={!isArtist}
+                        onPayMilestone={(milestone) => {
+                          Toast.show({
+                            type: 'info',
+                            text1: 'Payment',
+                            text2: 'Stripe checkout coming soon',
+                            visibilityTime: 2000,
+                          });
+                        }}
+                      />
+                      </View>
+                    )}
+                    </>
+                  ) : (
+                    <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>Loading commission details...</Text>
                     </View>
+                  )}
+                </ScrollView>
+                ) : detailTab === 'progress' ? (
+                  <View style={{ flex: 1, minHeight: 200 }}>
+                    {selectedCommission?.id ? (
+                      <ProgressTracker
+                        commissionId={selectedCommission.id}
+                        token={token}
+                        isArtist={isArtist}
+                        onProgressUpdate={loadCommissions}
+                      />
+                    ) : (
+                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>Loading...</Text>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <View style={{ flex: 1, minHeight: 200 }}>
+                    {selectedCommission?.id ? (
+                      <CommissionFilesTab 
+                        commissionId={selectedCommission.id}
+                        token={token}
+                        isArtist={isArtist}
+                      />
+                    ) : (
+                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>Loading...</Text>
+                      </View>
+                    )}
                   </View>
                 )}
-              </ScrollView>
+              </View>
 
               <View style={styles.detailFooterBar}>
                 {selectedCommission.status === 'pending' && isArtist && (
@@ -1005,8 +1288,12 @@ export default function CommissionDashboard() {
                               text: 'Decline',
                               style: 'destructive',
                               onPress: async () => {
-                                await handleUpdateStatus(selectedCommission.id, 'declined');
-                                setShowCommissionModal(false);
+                                try {
+                                  await handleUpdateStatus(selectedCommission.id, 'declined');
+                                  setShowCommissionModal(false);
+                                } catch (error) {
+                                  console.error('Error declining commission:', error);
+                                }
                               }
                             }
                           ]
@@ -1322,7 +1609,10 @@ const styles = StyleSheet.create({
   },
   kanbanColumn: {
     width: width,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  kanbanCardMargin: {
+    marginHorizontal: 0,
   },
   paginationDots: {
     flexDirection: 'row',
@@ -1356,7 +1646,7 @@ const styles = StyleSheet.create({
   kanbanColumnTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
   },
   kanbanColumnBadge: {
@@ -1376,102 +1666,7 @@ const styles = StyleSheet.create({
   },
   kanbanColumnContent: {
     paddingBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  kanbanCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 2,
-    overflow: 'hidden',
-    position: 'relative',
-    ...shadows.small,
-  },
-  statusIndicator: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
-  },
-  kanbanCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  avatarContainer: {
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-  },
-  kanbanAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-  },
-  kanbanUserInfo: {
-    flex: 1,
-  },
-  kanbanUsername: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  kanbanDate: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 12,
-  },
-  noteIconButton: {
-    padding: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceLight,
-  },
-  kanbanDetails: {
-    ...typography.body,
-    color: colors.text.secondary,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: spacing.sm,
-  },
-  kanbanFooter: {
-    marginTop: spacing.xs,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
-  },
-  kanbanPriceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-  },
-  kanbanPriceText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  kanbanNoPriceBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.surfaceLight,
-  },
-  kanbanNoPriceText: {
-    ...typography.caption,
-    color: colors.text.disabled,
-    fontSize: 12,
   },
   kanbanEmptyColumn: {
     alignItems: 'center',
@@ -1486,21 +1681,19 @@ const styles = StyleSheet.create({
   },
   // List Styles
   listContent: {
-    padding: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xxl,
   },
   commissionCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    marginHorizontal: spacing.md,
     ...shadows.small,
   },
   pendingCommissionCard: {
-    borderColor: colors.primary + '40',
-    backgroundColor: colors.primary + '05',
+    backgroundColor: colors.surface,
   },
   selectedCommissionCard: {
     borderColor: colors.primary,
@@ -1667,6 +1860,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius.xl,
     maxHeight: '92%',
     width: '100%',
+    flex: 1,
+    flexDirection: 'column',
   },
   templatesModal: {
     backgroundColor: colors.background,
@@ -1736,24 +1931,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   commissionDetailContent: {
-    padding: spacing.lg,
+    flex: 1,
+    paddingTop: spacing.md,
+    backgroundColor: colors.background,
   },
   detailUserHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.surface,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
   },
   detailAvatar: {
-    width: 60,
-    height: 60,
+    width: 48,
+    height: 48,
     borderRadius: borderRadius.full,
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: colors.primary,
   },
   detailUserInfo: {
@@ -1763,9 +1960,9 @@ const styles = StyleSheet.create({
   detailUsername: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   detailRoleBadge: {
     backgroundColor: colors.primary + '20',
@@ -1798,15 +1995,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   detailSection: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   detailSectionTitle: {
     ...typography.bodyBold,
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '800',
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
     marginBottom: spacing.sm,
-    letterSpacing: 1,
+    letterSpacing: 0.3,
   },
   detailContentBox: {
     backgroundColor: colors.surface,
@@ -1826,13 +2024,14 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 24,
+    marginTop: spacing.xs,
   },
   detailPriceText: {
-    ...typography.h2,
+    ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
   },
   detailFooterBar: {
     paddingHorizontal: spacing.lg,
@@ -1936,5 +2135,432 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  quickAcceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+  },
+  quickAcceptText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  quickDeclineButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickDeclineText: {
+    ...typography.bodyBold,
+    color: colors.status.error,
+    fontSize: 15,
+  },
+  // Pinterest-style Header
+  pinterestHeader: {
+    backgroundColor: colors.background,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  pinterestHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  pinterestTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  pinterestActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Pinterest-style Filter Bar
+  pinterestFilterBar: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing.sm,
+  },
+  pinterestFilterContent: {
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  pinterestFilterItem: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
+  },
+  pinterestFilterText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pinterestFilterTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  pinterestFilterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.text.primary,
+    borderRadius: 1,
+  },
+  // Pinterest-style Card Elements
+  pinterestCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  pinterestCardAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+  },
+  pinterestCardUserInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pinterestCardUsername: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  pinterestCardDate: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  pinterestStatusBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinterestCardDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
+  pinterestCardPrice: {
+    marginTop: spacing.xs,
+  },
+  pinterestPriceText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  pinterestBudgetText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+  },
+  pinterestNoPriceText: {
+    ...typography.body,
+    color: colors.text.disabled,
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  // Compact Header Styles
+  compactHeader: {
+    backgroundColor: colors.background,
+    paddingBottom: spacing.xs,
+  },
+  compactHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  compactTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  compactHeaderActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  compactHeaderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Compact Card Styles
+  compactCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  compactAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+  },
+  compactInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactUsername: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  compactMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  compactStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: borderRadius.full,
+  },
+  compactDate: {
+    ...typography.caption,
+    color: colors.text.secondary || '#CCCCCC',
+    fontSize: 11,
+  },
+  compactPrice: {
+    alignItems: 'flex-end',
+    marginRight: spacing.xs,
+  },
+  compactPriceText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  compactBudgetText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  compactActions: {
+    marginLeft: spacing.xs,
+  },
+  compactAcceptButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Stats Modal Styles
+  statsModal: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '85%',
+    width: '100%',
+  },
+  statsContent: {
+    padding: spacing.lg,
+  },
+  statsSection: {
+    marginBottom: spacing.xl,
+  },
+  statsSectionTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  statBox: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  statBoxValue: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  statBoxLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  statCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  statCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  statCardRowWithBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  statCardLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+  },
+  statCardValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  filesTabContent: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  filesEmptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl * 2,
+  },
+  filesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  fileCard: {
+    width: (width - spacing.md * 2 - spacing.sm * 2) / 2,
+    aspectRatio: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    ...shadows.small,
+  },
+  fileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fileNoteOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: spacing.sm,
+  },
+  fileNoteText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 11,
+  },
+  fileDateBadge: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  fileDateText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  detailPricingCard: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    marginHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary + '20',
+  },
+  detailPricingLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    marginBottom: spacing.xs / 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailBudgetLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  detailPriceTextPlaceholder: {
+    ...typography.body,
+    color: colors.text.disabled,
+    fontSize: 18,
+    fontStyle: 'italic',
+  },
+  detailTextPlaceholder: {
+    ...typography.body,
+    color: colors.text.disabled,
+    fontSize: 15,
+    fontStyle: 'italic',
+    lineHeight: 24,
+  },
+  detailUserSubtext: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+    marginTop: 2,
   },
 });

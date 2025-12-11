@@ -13,6 +13,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
@@ -39,6 +40,7 @@ const REFERENCE_TYPES = [
 
 export default function ReferenceBoard({ commissionId, onReferenceAdded, onReferenceRemoved, onClose }) {
   const { token } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [references, setReferences] = useState([]);
   const [groupedReferences, setGroupedReferences] = useState({});
   const [loading, setLoading] = useState(true);
@@ -299,7 +301,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
         {onClose && (
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
@@ -312,27 +314,47 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
         </TouchableOpacity>
       </View>
 
-      {/* Filter Bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterBar}
-        contentContainerStyle={styles.filterContent}
-      >
-        <FilterChip
-          label="All"
-          active={activeFilter === 'all'}
-          onPress={() => setActiveFilter('all')}
-        />
-        {REFERENCE_TYPES.map(type => (
-          <FilterChip
-            key={type.id}
-            label={type.label}
-            active={activeFilter === type.id}
-            onPress={() => setActiveFilter(type.id)}
-          />
-        ))}
-      </ScrollView>
+      {/* Pinterest-style Filter Bar */}
+      <View style={styles.pinterestFilterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pinterestFilterContent}
+        >
+          <TouchableOpacity
+            style={styles.pinterestFilterItem}
+            onPress={() => setActiveFilter('all')}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.pinterestFilterText,
+              activeFilter === 'all' && styles.pinterestFilterTextActive
+            ]}>
+              All
+            </Text>
+            {activeFilter === 'all' && <View style={styles.pinterestFilterUnderline} />}
+          </TouchableOpacity>
+          {REFERENCE_TYPES.map(type => {
+            const isSelected = activeFilter === type.id;
+            return (
+              <TouchableOpacity
+                key={type.id}
+                style={styles.pinterestFilterItem}
+                onPress={() => setActiveFilter(type.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.pinterestFilterText,
+                  isSelected && styles.pinterestFilterTextActive
+                ]}>
+                  {type.label}
+                </Text>
+                {isSelected && <View style={styles.pinterestFilterUnderline} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* References Grid */}
       {filteredRefs.length === 0 ? (
@@ -471,18 +493,6 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
   );
 }
 
-function FilterChip({ label, active, onPress }) {
-  return (
-    <TouchableOpacity
-      style={[styles.filterChip, active && styles.filterChipActive]}
-      onPress={onPress}
-    >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
 
 function ImageCard({ reference, onDelete }) {
   return (
@@ -639,9 +649,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    minHeight: 50,
   },
   backButton: {
     padding: spacing.xs,
@@ -664,32 +674,37 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
   },
-  filterBar: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  filterContent: {
-    paddingHorizontal: spacing.md,
+  pinterestFilterBar: {
+    backgroundColor: colors.background,
     paddingVertical: spacing.sm,
-    gap: spacing.sm,
   },
-  filterChip: {
+  pinterestFilterContent: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    marginRight: spacing.sm,
+    alignItems: 'center',
   },
-  filterChipActive: {
-    backgroundColor: colors.primary,
+  pinterestFilterItem: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
   },
-  filterChipText: {
+  pinterestFilterText: {
     ...typography.body,
     color: colors.text.secondary,
-  },
-  filterChipTextActive: {
-    color: colors.text.primary,
+    fontSize: 15,
     fontWeight: '600',
+  },
+  pinterestFilterTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  pinterestFilterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.text.primary,
+    borderRadius: 1,
   },
   grid: {
     padding: spacing.md,

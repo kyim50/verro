@@ -449,30 +449,28 @@ router.get('/:id', authenticate, async (req, res) => {
       .eq('id', commission.client_id)
       .single();
 
-    // Fetch artist data
+    // Fetch artist data - commission.artist_id is the user_id
     const { data: artist } = await supabaseAdmin
       .from('artists')
       .select('id, min_price, max_price, turnaround_days')
+      .eq('id', commission.artist_id) // artist.id equals user_id
+      .maybeSingle();
+
+    // Fetch artist user data directly using commission.artist_id (which is user_id)
+    const { data: artistUser } = await supabaseAdmin
+      .from('users')
+      .select('id, username, full_name, avatar_url, bio')
       .eq('id', commission.artist_id)
-      .single();
+      .maybeSingle();
 
-    let artistWithUser = null;
-    if (artist) {
-      const { data: artistUser } = await supabaseAdmin
-        .from('users')
-        .select('username, full_name, avatar_url, bio')
-        .eq('id', artist.id)
-        .single();
-
-      artistWithUser = {
-        ...artist,
-        users: artistUser
-      };
-    }
+    const artistWithUser = artist ? {
+      ...artist,
+      users: artistUser || null
+    } : null;
 
     res.json({
       ...commission,
-      client,
+      client: client || null,
       artist: artistWithUser
     });
   } catch (error) {

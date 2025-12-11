@@ -681,6 +681,70 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Quick Actions (for artists) */}
+        {isArtist && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Artist Tools</Text>
+            <View style={styles.quickActionsList}>
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/commission-packages')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="cube-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Commission Packages</Text>
+                  <Text style={styles.quickActionSubtitle}>Manage packages & custom forms</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/artist-settings')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="settings-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Commission Settings</Text>
+                  <Text style={styles.quickActionSubtitle}>Queue, terms & preferences</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/verification')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Get Verified</Text>
+                  <Text style={styles.quickActionSubtitle}>Build trust with verification badges</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/(tabs)/explore')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>My Commissions</Text>
+                  <Text style={styles.quickActionSubtitle}>View commission requests</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Quick Actions (for clients) */}
         {!isArtist && (
           <View style={styles.section}>

@@ -40,7 +40,7 @@ router.get('/commission/:commissionId', authenticate, async (req, res) => {
         users:uploaded_by (
           id,
           username,
-          profile_picture
+          avatar_url
         )
       `)
       .eq('commission_id', commissionId)

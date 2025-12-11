@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -113,18 +114,34 @@ export default function ReviewsSection({ artistId, isArtistView = false }) {
         </View>
       )}
 
-      {/* Filter Bar */}
-      <View style={styles.filterBar}>
-        <FilterChip
-          label="All Reviews"
-          active={filter === 'all'}
-          onPress={() => setFilter('all')}
-        />
-        <FilterChip
-          label="Verified Only"
-          active={filter === 'verified'}
-          onPress={() => setFilter('verified')}
-        />
+      {/* Pinterest-style Filter Bar */}
+      <View style={styles.pinterestFilterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pinterestFilterContent}
+        >
+          <TouchableOpacity
+            style={styles.pinterestFilterItem}
+            onPress={() => setFilter('all')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.pinterestFilterText, filter === 'all' && styles.pinterestFilterTextActive]}>
+              All Reviews
+            </Text>
+            {filter === 'all' && <View style={styles.pinterestFilterUnderline} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.pinterestFilterItem}
+            onPress={() => setFilter('verified')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.pinterestFilterText, filter === 'verified' && styles.pinterestFilterTextActive]}>
+              Verified Only
+            </Text>
+            {filter === 'verified' && <View style={styles.pinterestFilterUnderline} />}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Reviews List */}
@@ -185,10 +202,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    margin: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statItem: {
     flex: 1,
@@ -209,30 +229,37 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: colors.border,
   },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
+  pinterestFilterBar: {
+    backgroundColor: colors.background,
     paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+  pinterestFilterContent: {
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
   },
-  filterChipActive: {
-    backgroundColor: colors.primary,
+  pinterestFilterItem: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
   },
-  filterChipText: {
+  pinterestFilterText: {
     ...typography.body,
     color: colors.text.secondary,
-  },
-  filterChipTextActive: {
-    color: colors.text.primary,
+    fontSize: 15,
     fontWeight: '600',
+  },
+  pinterestFilterTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  pinterestFilterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
   },
   listContent: {
     padding: spacing.md,

@@ -186,10 +186,11 @@ router.get('/my-submissions', authenticate, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (artistError) {
-      return res.status(404).json({
-        success: false,
-        error: 'Artist profile not found'
+    if (artistError || !artist) {
+      // Return empty array if not an artist instead of 404
+      return res.json({
+        success: true,
+        data: []
       });
     }
 
