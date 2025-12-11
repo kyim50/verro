@@ -32,6 +32,7 @@ export default function CreateCommissionScreen() {
   const [packages, setPackages] = useState([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [selectedPackageId, setSelectedPackageId] = useState(null);
+  const [selectedAddons, setSelectedAddons] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function CreateCommissionScreen() {
         if ((response.data || []).length === 1) {
           setSelectedPackageId(response.data[0].id);
         }
+        setSelectedAddons([]);
       } catch (error) {
         console.error('Error fetching packages for request:', error);
         setPackages([]);
@@ -100,6 +102,7 @@ export default function CreateCommissionScreen() {
           budget: budget.trim() ? parseFloat(budget.trim()) : null,
           deadline: deadline.trim() || null,
           package_id: selectedPackageId || null,
+          selected_addons: selectedAddons,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -124,6 +127,8 @@ export default function CreateCommissionScreen() {
       setLoading(false);
     }
   };
+
+  const selectedPackage = packages.find((p) => p.id === selectedPackageId);
 
   return (
     <KeyboardAvoidingView
@@ -201,6 +206,39 @@ export default function CreateCommissionScreen() {
                   </TouchableOpacity>
                 );
               })}
+              {selectedPackage?.addons?.length ? (
+                <View style={styles.addonList}>
+                  <Text style={styles.addonHeader}>Add-ons</Text>
+                  {selectedPackage.addons.map((addon) => {
+                    const isChecked = selectedAddons.includes(addon.id);
+                    return (
+                      <TouchableOpacity
+                        key={addon.id}
+                        style={styles.addonRow}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setSelectedAddons((prev) =>
+                            prev.includes(addon.id)
+                              ? prev.filter((id) => id !== addon.id)
+                              : [...prev, addon.id]
+                          );
+                        }}
+                      >
+                        <View style={[styles.addonCheckbox, isChecked && styles.addonCheckboxChecked]}>
+                          {isChecked && <Ionicons name="checkmark" size={14} color={colors.text.primary} />}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.addonName}>{addon.name}</Text>
+                          {addon.description ? (
+                            <Text style={styles.addonDesc} numberOfLines={2}>{addon.description}</Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.addonPrice}>+${addon.price}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
           )}
         </View>
@@ -393,6 +431,50 @@ const styles = StyleSheet.create({
   packageEmptyText: {
     ...typography.caption,
     color: colors.text.secondary,
+  },
+  addonList: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  addonHeader: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  addonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  addonCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addonCheckboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  addonName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  addonDesc: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  addonPrice: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
   },
   inputGroup: {
     marginBottom: spacing.lg,

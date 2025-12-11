@@ -37,6 +37,8 @@ export default function ArtistProfileScreen() {
   const [artworks, setArtworks] = useState([]);
   const [packages, setPackages] = useState([]);
   const [isPackagesLoading, setIsPackagesLoading] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [queueStatus, setQueueStatus] = useState(null);
   const [boards, setBoards] = useState([]);
   const [createdBoard, setCreatedBoard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +55,15 @@ export default function ArtistProfileScreen() {
   useEffect(() => {
     fetchArtistProfile();
   }, [id]);
+
+  useEffect(() => {
+    if (selectedPackage?.id) {
+      const refreshed = packages.find((p) => p.id === selectedPackage.id);
+      if (refreshed) {
+        setSelectedPackage(refreshed);
+      }
+    }
+  }, [packages, selectedPackage?.id]);
 
   const fetchArtistPackages = async (artistId, headers) => {
     setIsPackagesLoading(true);
@@ -89,6 +100,13 @@ export default function ArtistProfileScreen() {
       
       setArtist(artistData);
       await fetchArtistPackages(id, headers);
+      try {
+        const queueResponse = await axios.get(`${API_URL}/commission-packages/queue/${id}`, { headers });
+        setQueueStatus(queueResponse.data);
+      } catch (err) {
+        console.error('Error fetching queue status:', err);
+        setQueueStatus(null);
+      }
 
       // Fetch artist's artworks (uploaded by this artist)
       try {
@@ -231,6 +249,16 @@ export default function ArtistProfileScreen() {
         type: 'info',
         text1: 'Commissions Closed',
         text2: 'This artist is not currently accepting commissions',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    if (queueStatus?.is_full && !queueStatus?.allow_waitlist) {
+      Toast.show({
+        type: 'info',
+        text1: 'Slots Full',
+        text2: 'This artist has no open slots right now',
         visibilityTime: 3000,
       });
       return;
@@ -549,6 +577,17 @@ export default function ArtistProfileScreen() {
               Commissions {artist.commission_status === 'open' ? 'Open' : 'Closed'}
             </Text>
           </View>
+          {queueStatus && (
+            <View style={styles.queueBadge}>
+              <Ionicons name="people-outline" size={14} color={colors.text.primary} />
+              <Text style={styles.queueText}>
+                {Math.max(0, queueStatus.current || 0)}/{queueStatus.max || 0} slots filled
+              </Text>
+              {queueStatus.is_full && queueStatus.allow_waitlist && (
+                <Text style={styles.queueWaitlist}>Waitlist available</Text>
+              )}
+            </View>
+          )}
 
           {/* Social Links */}
           {artist.social_links && Object.keys(artist.social_links).length > 0 && (
@@ -696,7 +735,12 @@ export default function ArtistProfileScreen() {
             ) : (
               <View style={styles.packagesGrid}>
                 {packages.map((pkg) => (
-                  <View key={pkg.id} style={styles.packageCard}>
+                  <TouchableOpacity
+                    key={pkg.id}
+                    style={styles.packageCard}
+                    activeOpacity={0.9}
+                    onPress={() => setSelectedPackage(pkg)}
+                  >
                     {pkg.example_image_urls?.length > 0 && (
                       <Image
                         source={{ uri: pkg.example_image_urls[0] }}
@@ -729,11 +773,87 @@ export default function ArtistProfileScreen() {
                         <Text style={styles.packageMetaText}>{pkg.revision_count || 0} revisions</Text>
                       </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
           </View>
+
+        <Modal
+          visible={!!selectedPackage}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedPackage(null)}
+        >
+          <View style={styles.pkgModalOverlay}>
+            <View style={styles.pkgModal}>
+              <View style={styles.pkgModalHeader}>
+                <Text style={styles.pkgModalTitle}>{selectedPackage?.name}</Text>
+                <TouchableOpacity onPress={() => setSelectedPackage(null)}>
+                  <Ionicons name="close" size={22} color={colors.text.primary} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {selectedPackage?.example_image_urls?.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.pkgImageStrip}
+                  >
+                    {selectedPackage.example_image_urls.map((url) => (
+                      <Image
+                        key={url}
+                        source={{ uri: url }}
+                        style={styles.pkgModalImage}
+                        contentFit="cover"
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+                <Text style={styles.pkgPrice}>${selectedPackage?.base_price}</Text>
+                {selectedPackage?.description ? (
+                  <Text style={styles.pkgDesc}>{selectedPackage.description}</Text>
+                ) : null}
+
+                <View style={styles.pkgMetaRow}>
+                  {selectedPackage?.estimated_delivery_days ? (
+                    <View style={styles.packageMetaItem}>
+                      <Ionicons name="time-outline" size={16} color={colors.text.secondary} />
+                      <Text style={styles.packageMetaText}>{selectedPackage.estimated_delivery_days} days</Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.packageMetaItem}>
+                    <Ionicons name="refresh-outline" size={16} color={colors.text.secondary} />
+                    <Text style={styles.packageMetaText}>{selectedPackage?.revision_count || 0} revisions</Text>
+                  </View>
+                </View>
+
+                {(selectedPackage?.addons || []).length > 0 && (
+                  <View style={styles.pkgAddonSection}>
+                    <Text style={styles.sectionTitle}>Add-ons</Text>
+                    {(selectedPackage?.addons || []).map((addon) => (
+                      <View key={addon.id} style={styles.pkgAddonRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.pkgAddonName}>{addon.name}</Text>
+                          {addon.description ? (
+                            <Text style={styles.pkgAddonDesc} numberOfLines={2}>{addon.description}</Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.pkgAddonPrice}>+${addon.price}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {(selectedPackage?.addons || []).length === 0 && (
+                  <View style={styles.pkgAddonSection}>
+                    <Text style={styles.sectionTitle}>Add-ons</Text>
+                    <Text style={styles.pkgAddonDesc}>No add-ons for this package.</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         {/* Portfolio Images */}
         {(() => {
@@ -1209,6 +1329,29 @@ const styles = StyleSheet.create({
   statusClosedText: {
     color: colors.error,
   },
+  queueBadge: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  queueText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  queueWaitlist: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   socialLinksContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1431,6 +1574,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    flexWrap: 'wrap',
   },
   packageMetaItem: {
     flexDirection: 'row',
@@ -1461,6 +1605,83 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  pkgModalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
+  },
+  pkgModal: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '85%',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  pkgModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  pkgModalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  pkgImageStrip: {
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  pkgModalImage: {
+    width: 160,
+    height: 120,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceLight,
+  },
+  pkgPrice: {
+    ...typography.h3,
+    color: colors.primary,
+    fontWeight: '700',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  pkgDesc: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  pkgMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+    marginBottom: spacing.md,
+  },
+  pkgAddonSection: {
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  pkgAddonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  pkgAddonName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  pkgAddonDesc: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  pkgAddonPrice: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
   },
   boardCard: {
     width: ITEM_WIDTH,

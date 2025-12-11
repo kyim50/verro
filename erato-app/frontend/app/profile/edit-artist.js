@@ -30,7 +30,22 @@ export default function EditArtistProfileScreen() {
   const [turnaroundDays, setTurnaroundDays] = useState('');
   const [specialties, setSpecialties] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [maxSlots, setMaxSlots] = useState('5');
+  const [allowWaitlist, setAllowWaitlist] = useState(false);
   const isInitialMount = useRef(true);
+
+  const fetchSlotsSettings = async () => {
+    try {
+      if (!user?.id) return;
+      const { data } = await axios.get(`${API_URL}/commission-packages/settings/${user.id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (data?.max_queue_slots) setMaxSlots(String(data.max_queue_slots));
+      setAllowWaitlist(!!data?.allow_waitlist);
+    } catch (error) {
+      console.error('Error loading slots settings:', error);
+    }
+  };
 
   useEffect(() => {
     // Only set initial values on first mount, not when profile updates after save
@@ -40,6 +55,7 @@ export default function EditArtistProfileScreen() {
       setMaxPrice(profile.artist.max_price?.toString() || '');
       setTurnaroundDays(profile.artist.turnaround_days?.toString() || '');
       setSpecialties(profile.artist.specialties?.join(', ') || '');
+      fetchSlotsSettings();
       isInitialMount.current = false;
     }
   }, [profile]);
@@ -108,6 +124,18 @@ export default function EditArtistProfileScreen() {
         {
           headers: { Authorization: `Bearer ${token}` },
         }
+      );
+
+      // Update slots/waitlist
+      const slotsPayload = {
+        max_queue_slots: maxSlots ? parseInt(maxSlots, 10) : 5,
+        allow_waitlist: allowWaitlist,
+        is_open: commissionStatus === 'open',
+      };
+      await axios.post(
+        `${API_URL}/commission-packages/settings`,
+        slotsPayload,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       console.log('Commission update response:', response.data);
@@ -230,6 +258,35 @@ export default function EditArtistProfileScreen() {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        </View>
+
+        {/* Slots & Waitlist */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Slots & Queue</Text>
+          <Text style={styles.helperText}>Set how many commissions you can take at once</Text>
+
+          <Text style={styles.inputLabel}>Max active slots</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="5"
+            placeholderTextColor={colors.text.disabled}
+            value={maxSlots}
+            onChangeText={setMaxSlots}
+            keyboardType="number-pad"
+          />
+
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.switchLabel}>Allow waitlist</Text>
+              <Text style={styles.switchDescription}>Let clients join when full</Text>
+            </View>
+            <Switch
+              value={allowWaitlist}
+              onValueChange={setAllowWaitlist}
+              trackColor={{ false: colors.border, true: colors.primary + '60' }}
+              thumbColor={allowWaitlist ? colors.primary : colors.surface}
+            />
           </View>
         </View>
 
