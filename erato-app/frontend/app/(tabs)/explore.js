@@ -25,6 +25,7 @@ import { useAuthStore } from '../../store';
 import ReviewModal from '../../components/ReviewModal';
 import ProgressTracker from '../../components/ProgressTracker';
 import MilestoneTracker from '../../components/MilestoneTracker';
+import EscrowStatus from '../../components/EscrowStatus';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -345,51 +346,48 @@ export default function CommissionDashboard() {
   const filteredCommissions = selectedFilter === 'all'
     ? commissions
     : selectedFilter === 'active'
-    ? commissions.filter(c => c.status === 'pending' || c.status === 'in_progress' || c.status === 'accepted')
+    ? commissions.filter(c => c.status === 'in_progress' || c.status === 'accepted')
     : commissions.filter(c => c.status === selectedFilter);
 
-  const handleUpdateStatus = async (commissionId, newStatus) => {
-    try {
-      const response = await axios.patch(
-        `${API_URL}/commissions/${commissionId}/status`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Reload commissions list
-      await loadCommissions();
-      
-      // Update selected commission if it's the one being updated
-      if (selectedCommission && selectedCommission.id === commissionId) {
-        // Fetch updated commission details
-        try {
-          const updatedResponse = await axios.get(`${API_URL}/commissions/${commissionId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setSelectedCommission(updatedResponse.data);
-        } catch (fetchError) {
-          console.error('Error fetching updated commission:', fetchError);
-          // Update status locally as fallback
-          setSelectedCommission({ ...selectedCommission, status: newStatus });
-        }
-      }
-      
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
-        visibilityTime: 2000,
-      });
-    } catch (error) {
-      console.error('Error updating status:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: errorMessage,
-        visibilityTime: 3000,
-      });
+  const handleUpdateStatus = async (commissionId, newStatus, closeModal = false) => {
+    // Close modal immediately if requested (before any async operations)
+    if (closeModal) {
+      setShowCommissionModal(false);
+      setSelectedCommission(null);
     }
+    
+    // Use setTimeout to ensure UI updates happen first
+    setTimeout(async () => {
+      try {
+        // Perform API call
+        await axios.patch(
+          `${API_URL}/commissions/${commissionId}/status`,
+          { status: newStatus },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        // Reload commissions list in background
+        loadCommissions().catch(err => {
+          console.error('Error reloading commissions:', err);
+        });
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
+          visibilityTime: 2000,
+        });
+      } catch (error) {
+        console.error('Error updating status:', error);
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage,
+          visibilityTime: 3000,
+        });
+      }
+    }, 100);
   };
 
   const handleBatchAction = async (action) => {
@@ -719,43 +717,80 @@ export default function CommissionDashboard() {
   return (
     <View style={styles.container}>
       {/* Clean Compact Header with Safe Area */}
-      <View style={[styles.compactHeader, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
+      <View style={[styles.compactHeader, { paddingTop: Math.max(insets.top + spacing.sm, spacing.lg) }]}>
         <View style={styles.compactHeaderTop}>
-          <Text style={styles.compactTitle}>
-            {isArtist ? 'Commissions' : 'My Commissions'}
-          </Text>
-          <View style={styles.compactHeaderActions}>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.compactTitle}>
+              {isArtist ? 'Commissions' : 'My Commissions'}
+            </Text>
+            <Text style={styles.headerDescription}>
+              {isArtist 
+                ? 'Manage your commission requests and track progress' 
+                : 'View and manage your commission requests'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Stats Section - Above buttons */}
+        <View style={styles.statsSection}>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{commissionStats.pending}</Text>
+              <Text style={styles.statLabel}>Pending</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{commissionStats.in_progress}</Text>
+              <Text style={styles.statLabel}>Active</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{commissionStats.completed}</Text>
+              <Text style={styles.statLabel}>Completed</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Action Buttons Section - Below stats */}
+        <View style={styles.actionsSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.actionsScrollContent}
+          >
             <TouchableOpacity
-              style={styles.compactHeaderButton}
+              style={styles.actionButton}
               onPress={() => setShowStatsModal(true)}
             >
-              <Ionicons name="stats-chart" size={22} color={colors.text.primary} />
+              <Ionicons name="stats-chart" size={20} color={colors.primary} />
+              <Text style={styles.actionButtonText}>Stats</Text>
             </TouchableOpacity>
             {isArtist && (
               <TouchableOpacity
-                style={styles.compactHeaderButton}
+                style={styles.actionButton}
                 onPress={() => setShowTemplatesModal(true)}
               >
-                <Ionicons name="chatbox-ellipses-outline" size={22} color={colors.text.primary} />
+                <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.primary} />
+                <Text style={styles.actionButtonText}>Templates</Text>
               </TouchableOpacity>
             )}
             {isArtist && (
               <TouchableOpacity
-                style={styles.compactHeaderButton}
+                style={styles.actionButton}
                 onPress={() => router.push('/artist-settings')}
               >
-                <Ionicons name="settings-outline" size={22} color={colors.text.primary} />
+                <Ionicons name="settings-outline" size={20} color={colors.primary} />
+                <Text style={styles.actionButtonText}>Settings</Text>
               </TouchableOpacity>
             )}
             {!isArtist && (
               <TouchableOpacity
-                style={styles.compactHeaderButton}
-                onPress={() => router.push('/commission-requests')}
+                style={styles.actionButton}
+                onPress={() => router.push('/commission/create')}
               >
-                <Ionicons name="add-circle-outline" size={22} color={colors.text.primary} />
+                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                <Text style={styles.actionButtonText}>New Request</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </ScrollView>
         </View>
 
         {/* Pinterest-style Filter Tabs */}
@@ -1212,14 +1247,59 @@ export default function CommissionDashboard() {
                     )}
                   </View>
 
+                  {/* Escrow Status */}
+                  {selectedCommission.escrow_status && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Payment Status</Text>
+                      <EscrowStatus
+                        commission={selectedCommission}
+                        isClient={!isArtist}
+                        onRelease={async () => {
+                          try {
+                            await axios.post(
+                              `${API_URL}/payments/release-escrow`,
+                              { commissionId: selectedCommission.id },
+                              { headers: { Authorization: `Bearer ${token}` } }
+                            );
+                            await loadCommissions();
+                            // Refresh selected commission
+                            try {
+                              const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                              });
+                              setSelectedCommission(response.data);
+                            } catch (err) {
+                              console.error('Error refreshing commission:', err);
+                            }
+                            Toast.show({
+                              type: 'success',
+                              text1: 'Success',
+                              text2: 'Funds released to artist',
+                              visibilityTime: 2000,
+                            });
+                          } catch (error) {
+                            console.error('Error releasing escrow:', error);
+                            Toast.show({
+                              type: 'error',
+                              text1: 'Error',
+                              text2: error.response?.data?.error || 'Failed to release funds',
+                              visibilityTime: 3000,
+                            });
+                          }
+                        }}
+                      />
+                    </View>
+                  )}
+
                   {/* Milestone Tracker */}
-                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
+                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && selectedCommission.payment_type === 'milestone' && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
                       <MilestoneTracker
                         commissionId={selectedCommission.id}
                         isClient={!isArtist}
-                        onPayMilestone={(milestone) => {
+                        onPayMilestone={async (milestone) => {
+                          // TODO: Implement Stripe checkout
                           Toast.show({
                             type: 'info',
                             text1: 'Payment',
@@ -1228,8 +1308,8 @@ export default function CommissionDashboard() {
                           });
                         }}
                       />
-                      </View>
-                    )}
+                    </View>
+                  )}
                     </>
                   ) : (
                     <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
@@ -1287,13 +1367,8 @@ export default function CommissionDashboard() {
                             {
                               text: 'Decline',
                               style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  await handleUpdateStatus(selectedCommission.id, 'declined');
-                                  setShowCommissionModal(false);
-                                } catch (error) {
-                                  console.error('Error declining commission:', error);
-                                }
+                              onPress: () => {
+                                handleUpdateStatus(selectedCommission.id, 'declined', true);
                               }
                             }
                           ]
@@ -1316,9 +1391,8 @@ export default function CommissionDashboard() {
                             {
                               text: 'Accept',
                               style: 'default',
-                              onPress: async () => {
-                                await handleUpdateStatus(selectedCommission.id, 'accepted');
-                                setShowCommissionModal(false);
+                              onPress: () => {
+                                handleUpdateStatus(selectedCommission.id, 'accepted', true);
                               }
                             }
                           ]
@@ -1681,15 +1755,15 @@ const styles = StyleSheet.create({
   },
   // List Styles
   listContent: {
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   commissionCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-    marginHorizontal: spacing.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     ...shadows.small,
   },
   pendingCommissionCard: {
@@ -2208,9 +2282,12 @@ const styles = StyleSheet.create({
   pinterestFilterBar: {
     backgroundColor: colors.background,
     paddingVertical: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '30',
   },
   pinterestFilterContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
   pinterestFilterItem: {
@@ -2302,14 +2379,82 @@ const styles = StyleSheet.create({
   // Compact Header Styles
   compactHeader: {
     backgroundColor: colors.background,
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.sm,
   },
   compactHeaderTop: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  headerTitleContainer: {
+    flex: 1,
+  },
+  headerDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+    marginTop: spacing.xs / 2,
+    lineHeight: 18,
+  },
+  statsSection: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 26,
+    fontWeight: '700',
+    marginBottom: spacing.xs / 2,
+  },
+  statLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  actionsSection: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  actionsScrollContent: {
+    gap: spacing.sm,
+    paddingRight: spacing.md,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 110,
+  },
+  actionButtonText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   compactTitle: {
     ...typography.h2,
@@ -2320,7 +2465,24 @@ const styles = StyleSheet.create({
   },
   compactHeaderActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  headerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'transparent',
+  },
+  headerActionText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '500',
   },
   compactHeaderButton: {
     width: 36,

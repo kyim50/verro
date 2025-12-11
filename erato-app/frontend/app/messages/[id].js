@@ -1181,39 +1181,9 @@ export default function ConversationScreen() {
               )}
             </ScrollView>
 
-            {/* Payment Information */}
+            {/* Payment Information - Removed duplicate EscrowStatus, it's already shown above */}
             {commission && (
               <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                {/* Escrow Status */}
-                {commission.escrow_status && (
-                  <EscrowStatus
-                    commission={commission}
-                    isClient={commission.client_id === user?.id}
-                    onRelease={async () => {
-                      try {
-                        await axios.post(
-                          `${API_URL}/payments/release-escrow`,
-                          { commissionId: commission.id },
-                          { headers: { Authorization: `Bearer ${token}` } }
-                        );
-                        await fetchConversationDetails();
-                        Toast.show({
-                          type: 'success',
-                          text1: 'Success',
-                          text2: 'Funds released to artist',
-                        });
-                      } catch (error) {
-                        console.error('Error releasing escrow:', error);
-                        Toast.show({
-                          type: 'error',
-                          text1: 'Error',
-                          text2: error.response?.data?.error || 'Failed to release funds',
-                        });
-                      }
-                    }}
-                  />
-                )}
-
                 {/* Milestone Tracker */}
                 {commission.payment_type === 'milestone' && (
                   <MilestoneTracker
