@@ -21,6 +21,8 @@ import { useAuthStore, useBoardStore } from '../../store';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { colors, spacing, typography, borderRadius, DEFAULT_AVATAR } from '../../constants/theme';
+import { VerificationBadges } from '../../components/VerificationBadge';
+import ReviewsSection from '../../components/ReviewsSection';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
@@ -610,9 +612,12 @@ export default function ArtistProfileScreen() {
 
           {/* Name and Username */}
           <View style={styles.nameContainer}>
-            <Text style={styles.artistName} numberOfLines={1}>
-              {artist.users?.full_name || artist.users?.username}
-            </Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.artistName} numberOfLines={1}>
+                {artist.users?.full_name || artist.users?.username}
+              </Text>
+              <VerificationBadges artist={artist} size="small" />
+            </View>
             <Text style={styles.artistUsername} numberOfLines={1}>
               @{artist.users?.username}
             </Text>
@@ -743,6 +748,20 @@ export default function ArtistProfileScreen() {
               </TouchableOpacity>
             </View>
           )}
+        </View>
+
+        {/* Reviews Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <Ionicons name="star-outline" size={20} color={colors.primary} />
+              <Text style={styles.sectionTitle}>Reviews</Text>
+            </View>
+          </View>
+          <ReviewsSection
+            artistId={id}
+            isArtistView={isOwnProfile}
+          />
         </View>
 
         {/* Packages */}
@@ -946,7 +965,7 @@ export default function ArtistProfileScreen() {
           transparent={true}
           onRequestClose={() => setShowSimilarArtists(false)}
         >
-          <View style={styles.modalOverlay}>
+          <View style={styles.similarModalOverlay}>
             <View style={styles.similarModalContent}>
               <View style={styles.similarModalHeader}>
                 <Text style={styles.similarModalTitle}>Similar Artists</Text>
@@ -1394,12 +1413,19 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     width: '100%',
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   artistName: {
     ...typography.h1,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 24 : 28,
     fontWeight: '700',
-    marginBottom: 4,
     textAlign: 'center',
   },
   artistUsername: {
@@ -1610,11 +1636,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
+  similarModalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
   similarModalContent: {
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     maxHeight: '90%',
+    height: '90%',
+    flexDirection: 'column',
   },
   similarModalHeader: {
     flexDirection: 'row',
@@ -1651,6 +1684,8 @@ const styles = StyleSheet.create({
   },
   similarListContent: {
     padding: spacing.md,
+    paddingBottom: spacing.xl,
+    flexGrow: 1,
   },
   similarArtistCard: {
     flexDirection: 'row',

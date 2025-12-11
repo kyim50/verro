@@ -21,6 +21,12 @@ import reviewRoutes from './routes/reviews.js';
 import notificationRoutes from './routes/notifications.js';
 import commissionPackageRoutes from './routes/commissionPackages.js';
 import commissionRequestRoutes from './routes/commissionRequests.js';
+// New feature routes
+import formBuilderRoutes from './routes/formBuilder.js';
+import referencesRoutes from './routes/references.js';
+import verificationRoutes from './routes/verification.js';
+import paymentsRoutes from './routes/payments.js';
+import reviewEnhancementsRoutes from './routes/reviewEnhancements.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -142,6 +148,12 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/commission-packages', commissionPackageRoutes);
 app.use('/api/commission-requests', commissionRequestRoutes);
+// New feature routes
+app.use('/api/form-builder', formBuilderRoutes);
+app.use('/api/references', referencesRoutes);
+app.use('/api/verification', verificationRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/review-enhancements', reviewEnhancementsRoutes);
 
 // 404 handler
 app.use((req, res) => {
