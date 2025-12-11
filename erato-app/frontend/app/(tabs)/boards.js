@@ -72,9 +72,8 @@ export default function BoardsScreen() {
   // Refresh boards and liked artists when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Always refresh boards when screen comes into focus (e.g., when returning from board detail)
-      // This ensures pin counts are up to date
-      loadBoards();
+      // Always refresh boards when screen comes into focus (skip cache to avoid stale counts)
+      loadBoards(true);
       
       if (activeTab === 'liked' && !isArtistUser && token) {
         loadLikedArtists();
@@ -82,9 +81,9 @@ export default function BoardsScreen() {
     }, [activeTab, isArtistUser, token])
   );
 
-  const loadBoards = useCallback(async () => {
+  const loadBoards = useCallback(async (skipCache = false) => {
     try {
-      const fetchedBoards = await fetchBoards();
+      const fetchedBoards = await fetchBoards(null, { skipCache });
       console.log('Boards loaded:', fetchedBoards?.length || 0, 'boards');
       // Log board counts for debugging
       fetchedBoards?.forEach(board => {

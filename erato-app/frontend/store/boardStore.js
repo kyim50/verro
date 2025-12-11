@@ -11,11 +11,12 @@ export const useBoardStore = create((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchBoards: async (type = null) => {
+  fetchBoards: async (type = null, { skipCache = true } = {}) => {
     set({ isLoading: true, error: null });
     try {
       const token = useAuthStore.getState().token;
       const params = type ? { type } : {};
+      if (skipCache) params.skipCache = 'true';
       
       const response = await axios.get(`${API_URL}/boards`, {
         headers: { Authorization: `Bearer ${token}` },
