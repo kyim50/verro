@@ -2,10 +2,9 @@ import { io } from 'socket.io-client';
 import Constants from 'expo-constants';
 
 // Socket.io connects to the base server URL (without /api)
-// Temporarily hardcoded for EC2 testing - remove this after confirming it works
 const SOCKET_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL || 
                    process.env.EXPO_PUBLIC_SOCKET_URL || 
-                   'http://3.18.213.189:3000';
+                   'https://api.verrocio.com';
 
 let socket = null;
 

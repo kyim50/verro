@@ -95,8 +95,10 @@ export default function UploadArtworkScreen() {
         .filter(tag => tag.length > 0);
 
       // Create artwork in database
+      const apiUrl = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.verrocio.com/api';
+      console.log('📡 Creating artwork at:', apiUrl.substring(0, 30) + '...');
       const response = await fetch(
-        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/artworks`,
+        `${apiUrl}/artworks`,
         {
           method: 'POST',
           headers: {

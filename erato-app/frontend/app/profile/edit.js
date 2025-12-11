@@ -128,8 +128,10 @@ export default function EditProfileScreen() {
       }
 
       // Update user profile
+      const apiUrl = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.verrocio.com/api';
+      console.log('📡 Updating profile at:', apiUrl.substring(0, 30) + '...');
       const userResponse = await fetch(
-        `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me`,
+        `${apiUrl}/users/me`,
         {
           method: 'PUT',
           headers: {
@@ -171,8 +173,9 @@ export default function EditProfileScreen() {
         if (tiktokUrl) artistData.tiktok_url = tiktokUrl.trim();
 
         if (Object.keys(artistData).length > 0) {
+          console.log('📡 Updating artist profile at:', apiUrl.substring(0, 30) + '...');
           const artistResponse = await fetch(
-            `${Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api'}/users/me/artist`,
+            `${apiUrl}/users/me/artist`,
             {
               method: 'PUT',
               headers: {

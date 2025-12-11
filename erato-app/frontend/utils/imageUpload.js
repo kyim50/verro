@@ -4,7 +4,10 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { getFormattedFileUri, verifyFileAccess } from './androidUploadFix';
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'http://3.18.213.189:3000/api';
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.verrocio.com/api';
+
+// Log API URL for debugging (first 30 chars only for security)
+console.log('📡 API URL configured:', API_URL ? API_URL.substring(0, 30) + '...' : 'NOT SET');
 
 /**
  * Upload an image to Supabase Storage via backend API
@@ -84,12 +87,13 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
     }
     
     // Log for debugging
-    console.log('Uploading image:', {
+    console.log('📤 Uploading image:', {
       endpoint,
       fieldName,
       uri: uri.substring(0, 50) + '...',
       contentType,
       platform: Platform.OS,
+      apiUrl: API_URL.substring(0, 30) + '...',
     });
     
     // For Android, ensure we're using the correct axios config
@@ -126,7 +130,19 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
 
     return response.data.url;
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.error('❌ Error uploading image:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response ? {
+        status: error.response.status,
+        data: error.response.data,
+      } : null,
+      request: error.request ? 'Request made but no response' : null,
+      apiUrl: API_URL,
+      endpoint,
+    });
+    
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response data:', error.response.data);
@@ -134,8 +150,13 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       throw new Error(errorMessage);
     }
     if (error.request) {
-      console.error('Request made but no response received:', error.request);
-      throw new Error('Network error: Could not reach server');
+      console.error('Request made but no response received');
+      console.error('API URL attempted:', API_URL);
+      console.error('Endpoint attempted:', endpoint);
+      throw new Error(`Network error: Could not reach server at ${API_URL}. Please check your internet connection and that the server is running.`);
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Upload timeout: The server took too long to respond. Please try again.');
     }
     throw new Error(error.message || 'Failed to upload image');
   }
