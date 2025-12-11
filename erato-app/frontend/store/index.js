@@ -802,8 +802,10 @@ export const useSearchStore = create((set, get) => ({
 
   setFilters: (filters) => set({ filters }),
 
-  search: async (searchQuery, filters = null) => {
+  search: async (searchQuery, filters = null, preserveTab = null) => {
     const currentFilters = filters || get().filters;
+    // Use preserveTab if provided, otherwise get current tab
+    const currentActiveTab = preserveTab !== null ? preserveTab : get().activeTab;
     
     if (!searchQuery || searchQuery.trim().length < 2) {
       set({ artworks: [], artists: [], query: searchQuery });
@@ -815,7 +817,7 @@ export const useSearchStore = create((set, get) => ({
     try {
       // Build artist search params with filters
       const artistParams = new URLSearchParams({
-        search: searchQuery,
+        search: searchQuery.trim(),
         limit: '20'
       });
       
@@ -835,16 +837,23 @@ export const useSearchStore = create((set, get) => ({
         artistParams.append('language', currentFilters.language);
       }
 
+      const artistsUrl = `${API_URL}/artists?${artistParams.toString()}`;
+      console.log('Searching artists with URL:', artistsUrl);
+
       // Search both artworks and artists in parallel
       const [artworksResponse, artistsResponse] = await Promise.all([
-        axios.get(`${API_URL}/artworks?search=${encodeURIComponent(searchQuery)}&limit=20`),
-        axios.get(`${API_URL}/artists?${artistParams.toString()}`)
+        axios.get(`${API_URL}/artworks?search=${encodeURIComponent(searchQuery.trim())}&limit=20`),
+        axios.get(artistsUrl)
       ]);
+
+      console.log('Artists search response:', artistsResponse.data);
+      console.log('Found artists:', artistsResponse.data?.artists?.length || 0);
 
       set({
         artworks: artworksResponse.data.artworks || [],
         artists: artistsResponse.data.artists || [],
         isLoading: false,
+        activeTab: currentActiveTab, // Preserve active tab
       });
     } catch (error) {
       console.error('Search error:', error);
@@ -853,6 +862,7 @@ export const useSearchStore = create((set, get) => ({
         isLoading: false,
         artworks: [],
         artists: [],
+        activeTab: currentActiveTab, // Preserve active tab even on error
       });
     }
   },

@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useBoardStore } from '../../store';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, DEFAULT_AVATAR } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');

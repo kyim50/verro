@@ -93,6 +93,7 @@ router.get(
       }
 
       // Build base query
+      // Note: We'll apply commission_status filter AFTER search to ensure search works
       let artistQuery = supabaseAdmin
         .from('artists')
         .select(`
@@ -100,21 +101,89 @@ router.get(
           users(id, username, avatar_url, full_name, bio),
           primary_style:art_styles!artists_primary_style_id_fkey(id, name, slug),
           art_styles:artist_art_styles(style:art_styles(id, name, slug))
-        `)
-        .in('commission_status', ['open', 'limited']);
+        `);
 
       // Text search filter
-      if (searchQuery) {
-        const { data: users } = await supabaseAdmin
+      if (searchQuery && searchQuery.trim().length > 0) {
+        const trimmedQuery = searchQuery.trim();
+        const searchPattern = `%${trimmedQuery}%`;
+        
+        console.log('Searching for artists with query:', trimmedQuery);
+        console.log('Search pattern:', searchPattern);
+        
+        // Search users table for matching usernames or full names
+        // Use separate queries and combine results (more reliable than .or())
+        // Note: artists.id = users.id (artists table uses user_id as primary key)
+        const usernameQuery = supabaseAdmin
           .from('users')
-          .select('id')
-          .or(`username.ilike.%${searchQuery}%,full_name.ilike.%${searchQuery}%`);
+          .select('id, username')
+          .ilike('username', searchPattern);
+        
+        const nameQuery = supabaseAdmin
+          .from('users')
+          .select('id, full_name')
+          .ilike('full_name', searchPattern);
+        
+        const [usernameResult, nameResult] = await Promise.all([
+          usernameQuery,
+          nameQuery
+        ]);
+        
+        const { data: usersByUsername, error: usernameError } = usernameResult;
+        const { data: usersByName, error: nameError } = nameResult;
 
-        const userIds = users?.map(u => u.id) || [];
-        if (userIds.length > 0) {
-          artistQuery = artistQuery.in('id', userIds);
+        console.log('Username search results:', usersByUsername?.length || 0);
+        if (usernameError) {
+          console.error('Username search error:', usernameError);
+        }
+        console.log('Name search results:', usersByName?.length || 0);
+        if (nameError) {
+          console.error('Name search error:', nameError);
+        }
+        
+        // Combine results and remove duplicates
+        const allUserIds = [
+          ...(usersByUsername || []).map(u => u.id),
+          ...(usersByName || []).map(u => u.id)
+        ];
+        const uniqueUserIds = [...new Set(allUserIds)];
+        
+        console.log('Found matching users:', uniqueUserIds.length);
+        console.log('User IDs:', uniqueUserIds);
+        if (usersByUsername?.length > 0) {
+          console.log('Sample usernames found:', usersByUsername.slice(0, 3).map(u => u.username));
+        }
+        if (usersByName?.length > 0) {
+          console.log('Sample names found:', usersByName.slice(0, 3).map(u => u.full_name));
+        }
+        
+        if (uniqueUserIds.length > 0) {
+          // Verify these users are actually artists
+          const { data: existingArtists, error: artistCheckError } = await supabaseAdmin
+            .from('artists')
+            .select('id')
+            .in('id', uniqueUserIds);
+          
+          console.log('Artists found for user IDs:', existingArtists?.length || 0);
+          if (artistCheckError) {
+            console.error('Error checking artists:', artistCheckError);
+          }
+          
+          const artistIds = existingArtists?.map(a => a.id) || [];
+          console.log('Valid artist IDs:', artistIds);
+          
+          if (artistIds.length > 0) {
+            // artists.id = users.id, so we can directly filter
+            artistQuery = artistQuery.in('id', artistIds);
+            console.log('Filtering artists by user IDs:', artistIds.length);
+          } else {
+            // Users found but they're not artists
+            console.log('Users found but none are artists, returning empty');
+            return res.json({ artists: [] });
+          }
         } else {
           // No matching users, return empty
+          console.log('No matching users found, returning empty artists array');
           return res.json({ artists: [] });
         }
       }
@@ -174,6 +243,15 @@ router.get(
         artistQuery = artistQuery.contains('languages', [language]);
       }
 
+      // Apply commission_status filter (only show open/limited when not searching)
+      // When searching, we want to find all artists first, then filter
+      if (!searchQuery || searchQuery.trim().length === 0) {
+        artistQuery = artistQuery.in('commission_status', ['open', 'limited']);
+      } else {
+        // When searching, include all commission statuses but prioritize open/limited
+        // We'll filter in the results if needed
+      }
+
       // Exclude current user if authenticated
       if (req.user) {
         artistQuery = artistQuery.neq('id', req.user.id);
@@ -193,9 +271,28 @@ router.get(
       const { data: artists, error } = await artistQuery
         .order('rating', { ascending: false })
         .limit(parseInt(limit));
+      
+      // Filter by commission_status after search if we have search results
+      let filteredArtists = artists || [];
+      if (searchQuery && searchQuery.trim().length > 0) {
+        // When searching, prioritize open/limited but also show others
+        filteredArtists = filteredArtists.filter(a => 
+          ['open', 'limited', 'closed'].includes(a.commission_status)
+        );
+      } else {
+        // When not searching, only show open/limited
+        filteredArtists = filteredArtists.filter(a => 
+          ['open', 'limited'].includes(a.commission_status)
+        );
+      }
 
-      if (error) throw error;
-      res.json({ artists: artists || [] });
+      if (error) {
+        console.error('Error fetching artists:', error);
+        throw error;
+      }
+      
+      console.log('Returning artists:', filteredArtists?.length || 0);
+      res.json({ artists: filteredArtists || [] });
     } catch (error) {
       next(error);
     }

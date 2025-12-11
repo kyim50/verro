@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -53,19 +53,29 @@ export default function SearchModal({ visible, onClose }) {
   const [showFilters, setShowFilters] = useState(false);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
   const [loadingSmartMatches, setLoadingSmartMatches] = useState(false);
+  const lastSearchQuery = useRef('');
 
   useEffect(() => {
-    // Debounce search
+    // Debounce search - only search when query actually changes
+    // Skip if query hasn't changed (prevents re-searching on tab switch)
+    if (localQuery === lastSearchQuery.current) {
+      return;
+    }
+    
     const timeoutId = setTimeout(() => {
       if (localQuery.trim().length >= 2) {
-        search(localQuery, filters);
+        lastSearchQuery.current = localQuery;
+        // Get current activeTab from store at the time of search
+        const currentTab = useSearchStore.getState().activeTab;
+        search(localQuery, filters, currentTab);
       } else if (localQuery.trim().length === 0) {
+        lastSearchQuery.current = '';
         clearSearch();
       }
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [localQuery, filters]);
+  }, [localQuery, filters]); // Only trigger on query/filter changes, not tab changes
 
   const handleApplyFilters = (newFilters) => {
     setFilters(newFilters);
@@ -294,7 +304,9 @@ export default function SearchModal({ visible, onClose }) {
         <View style={styles.tabs}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'artworks' && styles.activeTab]}
-            onPress={() => setActiveTab('artworks')}
+            onPress={() => {
+              setActiveTab('artworks');
+            }}
           >
             <Text style={[styles.tabText, activeTab === 'artworks' && styles.activeTabText]}>
               Artworks {artworks.length > 0 && `(${artworks.length})`}
@@ -302,7 +314,9 @@ export default function SearchModal({ visible, onClose }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'artists' && styles.activeTab]}
-            onPress={() => setActiveTab('artists')}
+            onPress={() => {
+              setActiveTab('artists');
+            }}
           >
             <Text style={[styles.tabText, activeTab === 'artists' && styles.activeTabText]}>
               Artists {artists.length > 0 && `(${artists.length})`}

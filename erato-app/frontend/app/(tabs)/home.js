@@ -74,6 +74,12 @@ export default function HomeScreen() {
   const [loadingArtists, setLoadingArtists] = useState(false);
   const [artistFilters, setArtistFilters] = useState({});
   const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
+  const [artStyles, setArtStyles] = useState([]);
+  const [curatedStyles, setCuratedStyles] = useState([]); // Styles from quiz preferences
+  const [selectedStyleFilter, setSelectedStyleFilter] = useState(null);
+  const [loadingStyles, setLoadingStyles] = useState(false);
+  const [suggestedArtists, setSuggestedArtists] = useState([]);
+  const [loadingSuggestedArtists, setLoadingSuggestedArtists] = useState(false);
   const [forYouArtworks, setForYouArtworks] = useState([]);
   const [forYouPage, setForYouPage] = useState(1);
   const [forYouLoading, setForYouLoading] = useState(false);
@@ -110,6 +116,98 @@ export default function HomeScreen() {
       loadLikedArtworks(false);
     }
   }, [token, boards.length]);
+
+  // Load art styles and curate based on quiz preferences
+  useEffect(() => {
+    const loadArtStyles = async () => {
+      if (!token || isArtist) return;
+      setLoadingStyles(true);
+      try {
+        // Load all styles
+        const stylesResponse = await axios.get(`${API_URL}/artists/styles/list`);
+        const allStyles = stylesResponse.data.styles || [];
+        
+        // Load user's style preferences
+        try {
+          const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (prefsResponse.data && prefsResponse.data.preferred_styles?.length > 0) {
+            // Sort styles: preferred first, then others
+            const preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
+            const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
+            const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
+            
+            // Sort preferred by weight if available
+            preferredStyles.sort((a, b) => {
+              const aWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === a.id)?.weight || 0;
+              const bWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === b.id)?.weight || 0;
+              return bWeight - aWeight;
+            });
+            
+            setCuratedStyles([...preferredStyles, ...otherStyles]);
+            setArtStyles([...preferredStyles, ...otherStyles]);
+          } else {
+            setArtStyles(allStyles);
+            setCuratedStyles([]);
+          }
+        } catch (prefError) {
+          // No preferences set, use all styles
+          setArtStyles(allStyles);
+          setCuratedStyles([]);
+        }
+      } catch (error) {
+        console.error('Error loading art styles:', error);
+      } finally {
+        setLoadingStyles(false);
+      }
+    };
+    loadArtStyles();
+  }, [token, isArtist]);
+
+  // Load suggested artists for "Artists you might like" cards
+  useEffect(() => {
+    const loadSuggestedArtists = async () => {
+      if (!token || isArtist || artworks.length === 0) return;
+      
+      setLoadingSuggestedArtists(true);
+      try {
+        const response = await axios.get(`${API_URL}/artists/matches/smart?limit=6`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSuggestedArtists(response.data.artists || []);
+      } catch (error) {
+        console.error('Error loading suggested artists:', error);
+      } finally {
+        setLoadingSuggestedArtists(false);
+      }
+    };
+    
+    // Load after a delay to not interfere with initial feed load
+    const timer = setTimeout(loadSuggestedArtists, 1000);
+    return () => clearTimeout(timer);
+  }, [token, isArtist, artworks.length]);
+
+  // Handle style filter selection
+  const handleStyleFilterSelect = useCallback((styleId) => {
+    if (selectedStyleFilter === styleId) {
+      // Deselect - go back to "All"
+      setSelectedStyleFilter(null);
+      setArtistFilters({});
+      setShowDiscoverArtists(false);
+      setDiscoverArtists([]);
+    } else {
+      // Select - replace any existing style filter
+      setSelectedStyleFilter(styleId);
+      const newFilters = {
+        ...artistFilters,
+        styles: [styleId] // Only one style at a time
+      };
+      setArtistFilters(newFilters);
+      loadFilteredArtists(newFilters);
+    }
+  }, [selectedStyleFilter, artistFilters]);
 
   // Load filtered artists
   const loadFilteredArtists = useCallback(async (filters = null) => {
@@ -281,13 +379,15 @@ export default function HomeScreen() {
     }, [currentUser?.id, token])
   );
 
-  // Organize artworks into balanced columns (Pinterest masonry style)
+  // Organize artworks into balanced columns (Pinterest masonry style) with suggested artist cards
   useEffect(() => {
     if (artworks.length > 0) {
       const newColumns = [[], []];
       const columnHeights = [0, 0];
+      let artworkIndex = 0;
+      const INSERT_INTERVAL = 8; // Insert suggested card every 8 artworks
 
-      artworks.forEach((item, index) => {
+      artworks.forEach((item) => {
         // Calculate image height based on aspect ratio if available
         let imageHeight;
         const ratio = item.aspect_ratio || item.aspectRatio; // Handle both snake_case and camelCase
@@ -319,14 +419,31 @@ export default function HomeScreen() {
           ...item,
           imageHeight,
           totalHeight,
+          type: 'artwork',
         });
 
         columnHeights[shortestColumnIndex] += totalHeight + SPACING;
+        artworkIndex++;
+
+        // Insert suggested artist card every N artworks
+        if (artworkIndex % INSERT_INTERVAL === 0 && suggestedArtists.length > 0 && !isArtist && token) {
+          const suggestedCardHeight = 180; // Approximate height of suggested card
+          const shortestCol = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+          
+          newColumns[shortestCol].push({
+            type: 'suggested_artists',
+            id: `suggested-${artworkIndex}`,
+            artists: suggestedArtists.slice(0, 3), // Show 3 artists per card
+            totalHeight: suggestedCardHeight,
+          });
+          
+          columnHeights[shortestCol] += suggestedCardHeight + SPACING;
+        }
       });
 
       setColumns(newColumns);
     }
-  }, [artworks]);
+  }, [artworks, suggestedArtists, isArtist, token]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -497,7 +614,61 @@ export default function HomeScreen() {
     }
   };
 
+  const renderSuggestedArtistsCard = (item) => {
+    if (!item.artists || item.artists.length === 0) return null;
+    
+    return (
+      <View key={item.id} style={styles.suggestedArtistCard}>
+        <View style={styles.suggestedArtistHeader}>
+          <Text style={styles.suggestedArtistTitle}>Artists you might like</Text>
+          <Text style={styles.suggestedArtistSubtitle}>Based on your preferences</Text>
+        </View>
+        <View style={styles.suggestedArtistList}>
+          {item.artists.map((artist) => (
+            <TouchableOpacity
+              key={artist.id}
+              style={styles.suggestedArtistItem}
+              onPress={() => router.push(`/artist/${artist.id}`)}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/40' }}
+                style={styles.suggestedArtistAvatar}
+                contentFit="cover"
+              />
+              <View style={styles.suggestedArtistInfo}>
+                <Text style={styles.suggestedArtistName} numberOfLines={1}>
+                  {artist.users?.full_name || artist.users?.username}
+                </Text>
+                <View style={styles.suggestedArtistStats}>
+                  <Ionicons name="star" size={12} color={colors.primary} />
+                  <Text style={styles.suggestedArtistRating}>
+                    {artist.rating?.toFixed(1) || '0.0'}
+                  </Text>
+                  {artist.min_price && artist.max_price && (
+                    <>
+                      <Text style={styles.suggestedArtistRating}> • </Text>
+                      <Text style={styles.suggestedArtistRating}>
+                        ${artist.min_price}-${artist.max_price}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.text.disabled} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   const renderArtwork = (item, showLikeButton = false) => {
+    // Handle suggested artists card
+    if (item.type === 'suggested_artists') {
+      return renderSuggestedArtistsCard(item);
+    }
+    
     // Always check current state from store for immediate updates
     const currentLikedState = useFeedStore.getState().likedArtworks;
     const isLiked = currentLikedState.has(String(item.id));
@@ -818,13 +989,22 @@ export default function HomeScreen() {
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'explore' && styles.tabActive]}
-            onPress={() => setActiveTab('explore')}
+            onPress={() => {
+              setActiveTab('explore');
+            }}
           >
             <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]}>Explore</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'foryou' && styles.tabActive]}
-            onPress={() => setActiveTab('foryou')}
+            onPress={() => {
+              // Clear filters when switching to For You tab
+              setArtistFilters({});
+              setSelectedStyleFilter(null);
+              setShowDiscoverArtists(false);
+              setDiscoverArtists([]);
+              setActiveTab('foryou');
+            }}
           >
             <Text style={[styles.tabText, activeTab === 'foryou' && styles.tabTextActive]}>For you</Text>
           </TouchableOpacity>
@@ -874,100 +1054,57 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Active Filters Bar */}
-      {!isArtist && token && Object.keys(artistFilters).length > 0 && (
-        <View style={styles.activeFiltersBar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-            {artistFilters.styles?.length > 0 && (
-              <View style={styles.activeFilterChip}>
-                <Text style={styles.activeFilterText}>
-                  {artistFilters.styles.length} style{artistFilters.styles.length > 1 ? 's' : ''}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const newFilters = { ...artistFilters };
-                    delete newFilters.styles;
-                    setArtistFilters(newFilters);
-                    loadFilteredArtists(newFilters);
-                  }}
-                >
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            {artistFilters.price_min !== undefined && (
-              <View style={styles.activeFilterChip}>
-                <Text style={styles.activeFilterText}>Min: ${artistFilters.price_min}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const newFilters = { ...artistFilters };
-                    delete newFilters.price_min;
-                    setArtistFilters(newFilters);
-                    loadFilteredArtists(newFilters);
-                  }}
-                >
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            {artistFilters.price_max !== undefined && (
-              <View style={styles.activeFilterChip}>
-                <Text style={styles.activeFilterText}>Max: ${artistFilters.price_max}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const newFilters = { ...artistFilters };
-                    delete newFilters.price_max;
-                    setArtistFilters(newFilters);
-                    loadFilteredArtists(newFilters);
-                  }}
-                >
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            {artistFilters.turnaround_max !== undefined && (
-              <View style={styles.activeFilterChip}>
-                <Text style={styles.activeFilterText}>Max {artistFilters.turnaround_max} days</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const newFilters = { ...artistFilters };
-                    delete newFilters.turnaround_max;
-                    setArtistFilters(newFilters);
-                    loadFilteredArtists(newFilters);
-                  }}
-                >
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            {artistFilters.language && (
-              <View style={styles.activeFilterChip}>
-                <Text style={styles.activeFilterText}>{artistFilters.language}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const newFilters = { ...artistFilters };
-                    delete newFilters.language;
-                    setArtistFilters(newFilters);
-                    loadFilteredArtists(newFilters);
-                  }}
-                >
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
+      {/* Pinterest-style Filter Bar - Only show on Explore tab */}
+      {!isArtist && token && artStyles.length > 0 && activeTab === 'explore' && (
+        <View style={styles.pinterestFilterBar}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pinterestFilterContent}
+          >
             <TouchableOpacity
-              style={styles.clearAllFilters}
+              style={styles.pinterestFilterItem}
               onPress={() => {
+                setSelectedStyleFilter(null);
                 setArtistFilters({});
                 setShowDiscoverArtists(false);
                 setDiscoverArtists([]);
               }}
+              activeOpacity={0.7}
             >
-              <Text style={styles.clearAllText}>Clear All</Text>
+              <Text style={[
+                styles.pinterestFilterText,
+                !selectedStyleFilter && Object.keys(artistFilters).length === 0 && styles.pinterestFilterTextActive
+              ]}>
+                All
+              </Text>
+              {!selectedStyleFilter && Object.keys(artistFilters).length === 0 && <View style={styles.pinterestFilterUnderline} />}
             </TouchableOpacity>
+            {artStyles.map((style) => {
+              const isSelected = selectedStyleFilter === style.id;
+              const isCurated = curatedStyles.some(cs => cs.id === style.id);
+              return (
+                <TouchableOpacity
+                  key={style.id}
+                  style={styles.pinterestFilterItem}
+                  onPress={() => handleStyleFilterSelect(style.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.pinterestFilterText,
+                    isSelected && styles.pinterestFilterTextActive,
+                    isCurated && !isSelected && styles.pinterestFilterTextCurated
+                  ]}>
+                    {style.name}
+                  </Text>
+                  {isSelected && <View style={styles.pinterestFilterUnderline} />}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       )}
+
 
       {/* Discover Artists Section */}
       {!isArtist && token && showDiscoverArtists && discoverArtists.length > 0 && (
@@ -1684,6 +1821,105 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '700',
+  },
+  // Pinterest-style Filter Bar
+  pinterestFilterBar: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing.sm,
+  },
+  pinterestFilterContent: {
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  pinterestFilterItem: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
+  },
+  pinterestFilterText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pinterestFilterTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  pinterestFilterTextCurated: {
+    color: colors.primary,
+  },
+  pinterestFilterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.text.primary,
+    borderRadius: 1,
+  },
+  // Artists you might like card
+  suggestedArtistCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  suggestedArtistHeader: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  suggestedArtistTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  suggestedArtistSubtitle: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  suggestedArtistList: {
+    padding: spacing.sm,
+  },
+  suggestedArtistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  suggestedArtistAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    marginRight: spacing.sm,
+  },
+  suggestedArtistInfo: {
+    flex: 1,
+  },
+  suggestedArtistName: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  suggestedArtistStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  suggestedArtistRating: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 11,
   },
   // Filter styles
   filterBadge: {
