@@ -64,3 +64,4 @@ else
     $SSH_CMD "$EC2_HOST"
 fi
 
+

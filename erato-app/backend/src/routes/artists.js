@@ -98,6 +98,46 @@ router.get(
   }
 );
 
+// Get active commission packages for an artist (public)
+router.get('/:id/packages', optionalAuth, async (req, res, next) => {
+  try {
+    const artistId = req.params.id;
+
+    // Try cache
+    const { cache } = await import('../utils/cache.js');
+    const cacheKey = `artist:${artistId}:packages`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const { data: packages, error } = await supabaseAdmin
+      .from('commission_packages')
+      .select(`
+        id,
+        artist_id,
+        name,
+        description,
+        base_price,
+        estimated_delivery_days,
+        revision_count,
+        example_image_urls,
+        is_active,
+        display_order
+      `)
+      .eq('artist_id', artistId)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+
+    await cache.set(cacheKey, packages || [], 300);
+    res.json(packages || []);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get artist profile
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {

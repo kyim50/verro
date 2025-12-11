@@ -29,7 +29,7 @@ import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { showAlert } from '../../components/StyledAlert';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
 
 const { width, height } = Dimensions.get('window');
@@ -291,17 +291,14 @@ export default function HomeScreen() {
 
   const handleBoardSelect = async (board) => {
     try {
+      // saveArtworkToBoard already updates the local state
       await saveArtworkToBoard(board.id, selectedArtwork.id);
-      
+
       // Close modal first
       setShowSaveModal(false);
       setShowCreateBoard(false);
       setNewBoardName('');
-      
-      // Refresh boards to ensure count is updated
-      const { fetchBoards } = useBoardStore.getState();
-      await fetchBoards();
-      
+
       // Small delay to ensure modal is closed before showing alert
       setTimeout(() => {
         showAlert({
@@ -351,12 +348,11 @@ export default function HomeScreen() {
     }
 
     try {
+      // createBoard adds the board to local state
       const newBoard = await createBoard({ name: newBoardName.trim() });
+      // saveArtworkToBoard updates the board count in local state
       await saveArtworkToBoard(newBoard.id, selectedArtwork.id);
-      
-      // Refresh boards to ensure count is updated
-      await fetchBoards();
-      
+
       setShowCreateBoard(false);
       setShowSaveModal(false);
       setNewBoardName('');
@@ -1345,68 +1341,87 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: Dimensions.get('window').height * 0.85,
+    maxHeight: Dimensions.get('window').height * 0.75,
     width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
+    paddingTop: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    borderBottomWidth: 0,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
+    fontWeight: '700',
   },
   boardList: {
-    maxHeight: 300,
+    maxHeight: 400,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   boardOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    gap: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    gap: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
+    ...shadows.small,
   },
   boardOptionText: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontSize: IS_SMALL_SCREEN ? 16 : 17,
+    fontWeight: '600',
     flex: 1,
   },
   createBoardButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    padding: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
+    marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
     gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: colors.primary + '40',
+    borderStyle: 'dashed',
   },
   createBoardText: {
     ...typography.bodyBold,
     color: colors.primary,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontWeight: '700',
   },
   createBoardForm: {
     padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
   },
   input: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
     color: colors.text.primary,
     ...typography.body,
-    borderWidth: 1,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    borderWidth: 2,
     borderColor: colors.border,
-    marginBottom: spacing.md,
+    marginBottom: spacing.md + 4,
   },
   createBoardActions: {
     flexDirection: 'row',
@@ -1414,24 +1429,31 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.background,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
     alignItems: 'center',
   },
   cancelButtonText: {
     ...typography.button,
     color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontWeight: '700',
   },
   createButton: {
     flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.primary,
     alignItems: 'center',
+    ...shadows.medium,
   },
   createButtonText: {
     ...typography.button,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontWeight: '700',
   },
 });

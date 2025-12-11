@@ -7,7 +7,6 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +19,7 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import { initSocket, getSocket } from '../../lib/socket';
+import { showAlert } from '../../components/StyledAlert';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
@@ -131,10 +131,11 @@ export default function MessagesScreen() {
   };
 
   const handleDeleteConversation = (conversationId) => {
-    Alert.alert(
-      'Delete Conversation',
-      'Hold to confirm deleting this conversation. This will remove all messages.',
-      [
+    showAlert({
+      title: 'Delete Conversation',
+      message: 'Are you sure you want to delete this conversation? This will remove all messages.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -145,6 +146,12 @@ export default function MessagesScreen() {
                 headers: { Authorization: `Bearer ${token}` }
               });
               await fetchConversations();
+              Toast.show({
+                type: 'success',
+                text1: 'Deleted',
+                text2: 'Conversation deleted successfully',
+                visibilityTime: 2000,
+              });
             } catch (error) {
               console.error('Error deleting conversation:', error);
               const msg = error.response?.data?.error || 'Failed to delete conversation';
@@ -157,8 +164,8 @@ export default function MessagesScreen() {
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const formatTime = (dateString) => {
@@ -212,28 +219,34 @@ export default function MessagesScreen() {
     const isOnline = isUserOnline(item.other_participant);
 
     return (
-            <TouchableOpacity
-              style={styles.conversationCard}
-              onPress={() => {
-                // Optimistically clear unread count locally when opening
-                setConversations((prev) =>
-                  prev.map((c) =>
-                    c.id === item.id ? { ...c, unread_count: 0 } : c
-                  )
-                );
-                router.push(`/messages/${item.id}`);
-              }}
-              onLongPress={() => handleDeleteConversation(item.id)}
-              activeOpacity={0.7}
-            >
+      <TouchableOpacity
+        style={styles.conversationCard}
+        onPress={() => {
+          // Optimistically clear unread count locally when opening
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === item.id ? { ...c, unread_count: 0 } : c
+            )
+          );
+          router.push(`/messages/${item.id}`);
+        }}
+        onLongPress={() => handleDeleteConversation(item.id)}
+        activeOpacity={0.6}
+      >
         <View style={styles.cardContent}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: item.other_participant?.avatar_url || DEFAULT_AVATAR }}
-              style={styles.avatar}
-              contentFit="cover"
-            />
-            {isOnline && <View style={styles.onlineDot} />}
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={{ uri: item.other_participant?.avatar_url || DEFAULT_AVATAR }}
+                style={styles.avatar}
+                contentFit="cover"
+              />
+              {isOnline && (
+                <View style={styles.onlineIndicator}>
+                  <View style={styles.onlineDot} />
+                </View>
+              )}
+            </View>
           </View>
 
           <View style={styles.conversationContent}>
@@ -246,20 +259,25 @@ export default function MessagesScreen() {
                   <Text style={[styles.time, hasUnread && styles.timeUnread]}>
                     {formatTime(item.latest_message.created_at)}
                   </Text>
-                  {hasUnread && <View style={styles.unreadDot} />}
                 </View>
-              )}
-              {!item.latest_message && hasUnread && (
-                <View style={styles.unreadDot} />
               )}
             </View>
 
-            <Text
-              style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]}
-              numberOfLines={2}
-            >
-              {getMessagePreview(item)}
-            </Text>
+            <View style={styles.messageRow}>
+              <Text
+                style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]}
+                numberOfLines={2}
+              >
+                {getMessagePreview(item)}
+              </Text>
+              {hasUnread && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadCount}>
+                    {item.unread_count > 99 ? '99+' : item.unread_count}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -332,53 +350,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.md : Constants.statusBarHeight + spacing.md + 4,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    backgroundColor: colors.background,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 22 : 24,
+    fontSize: IS_SMALL_SCREEN ? 26 : 28,
+    fontWeight: '700',
   },
   listContent: {
+    paddingTop: spacing.xs,
     paddingBottom: spacing.xl,
   },
   conversationCard: {
     marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: IS_SMALL_SCREEN ? spacing.xs + 4 : spacing.sm + 4,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     overflow: 'hidden',
     ...shadows.small,
   },
   cardContent: {
     flexDirection: 'row',
-    padding: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
     alignItems: 'center',
   },
   avatarContainer: {
+    marginRight: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+  },
+  avatarWrapper: {
     position: 'relative',
-    marginRight: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   avatar: {
-    width: IS_SMALL_SCREEN ? 44 : 48,
-    height: IS_SMALL_SCREEN ? 44 : 48,
-    borderRadius: IS_SMALL_SCREEN ? 22 : 24,
+    width: IS_SMALL_SCREEN ? 56 : 60,
+    height: IS_SMALL_SCREEN ? 56 : 60,
+    borderRadius: IS_SMALL_SCREEN ? 28 : 30,
     backgroundColor: colors.background,
   },
-  onlineDot: {
+  onlineIndicator: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: colors.status.success,
-    borderWidth: 2.5,
-    borderColor: colors.surface,
   },
   conversationContent: {
     flex: 1,
@@ -388,12 +415,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 1,
+    marginBottom: spacing.xs,
   },
   name: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontSize: IS_SMALL_SCREEN ? 16 : 17,
     fontWeight: '600',
     flex: 1,
     marginRight: spacing.sm,
@@ -404,35 +431,47 @@ const styles = StyleSheet.create({
   timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
   },
   time: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '500',
   },
   timeUnread: {
     color: colors.primary,
     fontWeight: '600',
   },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#e60023',
-    marginLeft: spacing.xs,
-    borderWidth: 0,
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   messagePreview: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
-    lineHeight: 16,
-    marginTop: 1,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    lineHeight: 20,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   messagePreviewUnread: {
     color: colors.text.primary,
     fontWeight: '500',
+  },
+  unreadBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  unreadCount: {
+    color: colors.text.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyStateContainer: {
     flexGrow: 1,
@@ -448,11 +487,15 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.text.primary,
     marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '700',
   },
   emptySubtitle: {
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',
+    lineHeight: 22,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
 });
