@@ -9,6 +9,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -29,6 +30,7 @@ export default function ProfileScreen() {
   const feedStore = useFeedStore();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [avatarKey, setAvatarKey] = useState(0);
+  const insets = useSafeAreaInsets();
 
   // Auto-refresh when screen comes into focus to get latest profile data
   useFocusEffect(
@@ -305,7 +307,10 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+      >
         {/* Profile Info */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>

@@ -47,13 +47,18 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       endpoint = `${API_URL}/uploads/register-profile`;
       fieldName = 'file';
     } else if (bucket === 'portfolios') {
-      // Portfolio endpoint expects 'files' (plural) even for single uploads
+      // Portfolio endpoint expects 'files' (plural) - but for single file, we should use uploadMultipleImages
+      // However, if someone calls uploadImage with portfolio, we'll still try to use the portfolio endpoint
+      // The backend accepts upload.array('files', 6) which can handle a single file
       endpoint = `${API_URL}/uploads/portfolio`;
-      fieldName = 'files';
+      fieldName = 'files'; // Backend expects 'files' field name
     } else {
       endpoint = `${API_URL}/uploads/${bucket === 'profiles' ? 'profile' : 'artwork'}`;
       fieldName = 'file';
     }
+    
+    console.log('🔗 Upload endpoint:', endpoint);
+    console.log('📎 Field name:', fieldName);
 
     // Create form data with proper React Native format
     // Use helper function to get correctly formatted URI
@@ -118,17 +123,48 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
     
     const response = await axios.post(endpoint, formData, axiosConfig);
 
-    if (!response.data || !response.data.success) {
-      throw new Error(response.data?.error || 'Upload failed');
+    // Log response for debugging
+    console.log('📥 Upload response:', {
+      success: response.data?.success,
+      hasUrl: !!response.data?.url,
+      hasUrls: !!response.data?.urls,
+      bucket,
+      endpoint,
+    });
+
+    if (!response || !response.data) {
+      throw new Error('Invalid response from server');
+    }
+
+    if (!response.data.success) {
+      const errorMsg = response.data.error || response.data.message || 'Upload failed';
+      throw new Error(errorMsg);
     }
 
     // Portfolio endpoint returns array of URLs, single file endpoints return single URL
-    if (bucket === 'portfolios' && Array.isArray(response.data.urls)) {
-      // For single file upload to portfolio, return first URL
-      return response.data.urls[0];
+    if (bucket === 'portfolios') {
+      // When using uploadImage with portfolio bucket, backend still returns { success: true, urls: [...] }
+      if (Array.isArray(response.data.urls) && response.data.urls.length > 0) {
+        // For single file upload to portfolio, return first URL
+        return response.data.urls[0];
+      } else if (response.data.url) {
+        // Fallback: some responses might have single url instead of urls array
+        return response.data.url;
+      } else {
+        throw new Error('Portfolio upload returned no URLs');
+      }
     }
 
-    return response.data.url;
+    // For artwork and profile endpoints, expect a single URL
+    if (response.data.url) {
+      return response.data.url;
+    } else {
+      // Check if response has urls array (shouldn't happen for single uploads, but handle it)
+      if (Array.isArray(response.data.urls) && response.data.urls.length > 0) {
+        return response.data.urls[0];
+      }
+      throw new Error('Upload succeeded but no URL returned from server');
+    }
   } catch (error) {
     console.error('❌ Error uploading image:', error);
     console.error('Error details:', {
@@ -222,8 +258,23 @@ export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '
       
       const response = await axios.post(`${API_URL}/uploads/portfolio`, formData, axiosConfig);
 
+      console.log('📥 Portfolio upload response:', {
+        success: response.data?.success,
+        urlsCount: response.data?.urls?.length,
+        count: response.data?.count,
+      });
+
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+
       if (!response.data.success) {
-        throw new Error(response.data.error || 'Upload failed');
+        const errorMsg = response.data.error || response.data.message || 'Upload failed';
+        throw new Error(errorMsg);
+      }
+
+      if (!Array.isArray(response.data.urls) || response.data.urls.length === 0) {
+        throw new Error('Portfolio upload returned no URLs');
       }
 
       return response.data.urls;
@@ -233,11 +284,28 @@ export async function uploadMultipleImages(uris, bucket = 'artworks', folder = '
     const uploadPromises = uris.map(uri => uploadImage(uri, bucket, folder, token));
     return await Promise.all(uploadPromises);
   } catch (error) {
-    console.error('Error uploading multiple images:', error);
+    console.error('❌ Error uploading multiple images:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response ? {
+        status: error.response.status,
+        data: error.response.data,
+      } : null,
+      request: error.request ? 'Request made but no response' : null,
+    });
+    
     if (error.response) {
-      throw new Error(error.response.data.error || 'Failed to upload images');
+      const errorMsg = error.response.data?.error || error.response.data?.message || 'Failed to upload images';
+      throw new Error(errorMsg);
     }
-    throw new Error('Failed to upload images');
+    if (error.request) {
+      throw new Error(`Network error: Could not reach server at ${API_URL}. Please check your internet connection.`);
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Upload timeout: The server took too long to respond. Please try again.');
+    }
+    throw new Error(error.message || 'Failed to upload images');
   }
 }
 

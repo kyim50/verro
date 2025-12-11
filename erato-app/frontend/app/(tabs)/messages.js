@@ -10,6 +10,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ const IS_SMALL_SCREEN = width < 400;
 const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function MessagesScreen() {
+  const insets = useSafeAreaInsets();
   const { user, token } = useAuthStore();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -282,7 +284,8 @@ export default function MessagesScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.listContent,
-          conversations.length === 0 && styles.emptyStateContainer
+          conversations.length === 0 && styles.emptyStateContainer,
+          { paddingBottom: Math.max(insets.bottom, 20) + 80 }
         ]}
         ListEmptyComponent={
           conversations.length === 0 && !loading ? (

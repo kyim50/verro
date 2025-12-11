@@ -625,7 +625,11 @@ export default function ExploreScreen() {
           <FlatList
             data={filteredCommissions}
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.commissionsListContent, filteredCommissions.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
+            contentContainerStyle={[
+              styles.commissionsListContent,
+              filteredCommissions.length === 0 && { flexGrow: 1, justifyContent: 'center' },
+              { paddingBottom: Math.max(insets.bottom, 20) + 80 }
+            ]}
             renderItem={({ item, index }) => {
               // For artists: show client info, for clients: show artist info
               // API returns: item.client (user object) and item.artist.users (user object)
