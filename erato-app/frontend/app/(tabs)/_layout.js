@@ -53,7 +53,57 @@ function MessagesTabIcon({ color }) {
     <View style={{ position: 'relative' }}>
       <Ionicons name="chatbubbles" size={22} color={color} />
       {unreadCount > 0 && (
-        <View style={styles.unreadDot} />
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadBadgeText}>{Math.min(unreadCount, 9)}{unreadCount > 9 ? '+' : ''}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CommissionsTabIcon({ color }) {
+  const { token, user } = useAuthStore();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPending = async () => {
+      if (!token || !isMounted) return;
+      try {
+        const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+        const params = isArtist
+          ? { status: 'pending', type: 'received' }
+          : { status: 'pending', type: 'sent' };
+        const response = await axios.get(`${API_URL}/commissions`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params,
+        });
+        if (!isMounted) return;
+        const pending = response.data?.commissions?.length || 0;
+        setPendingCount(pending);
+      } catch (error) {
+        if (error.response?.status !== 429) {
+          console.error('Error fetching pending commissions:', error.message);
+        }
+      }
+    };
+
+    fetchPending();
+    const interval = setInterval(fetchPending, 120000); // 2 minutes
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [token, user]);
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <Ionicons name="briefcase" size={22} color={color} />
+      {pendingCount > 0 && (
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadBadgeText}>{Math.min(pendingCount, 9)}{pendingCount > 9 ? '+' : ''}</Text>
+        </View>
       )}
     </View>
   );
@@ -110,7 +160,9 @@ function BoardsTabIcon({ color }) {
     <View style={{ position: 'relative' }}>
       <Ionicons name="library" size={22} color={color} />
       {newCommissionCount > 0 && (
-        <View style={styles.unreadDot} />
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadBadgeText}>{Math.min(newCommissionCount, 9)}{newCommissionCount > 9 ? '+' : ''}</Text>
+        </View>
       )}
     </View>
   );
@@ -167,9 +219,7 @@ export default function TabsLayout() {
         name="explore"
         options={{
           title: 'Commissions',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="briefcase" size={22} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <CommissionsTabIcon color={color} />,
         }}
         listeners={{
           focus: () => {},
@@ -268,16 +318,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     elevation: 8,
   },
-  unreadDot: {
+  unreadBadge: {
     position: 'absolute',
-    top: -3,
-    right: -6,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#e60023',
-    borderWidth: 2.5,
+    top: -6,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5,
     borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 10,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  unreadBadgeText: {
+    color: colors.text.primary,
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 });

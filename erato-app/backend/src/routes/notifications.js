@@ -1,4 +1,36 @@
 import express from 'express';
+import authenticate from '../middleware/auth.js';
+import cache from '../utils/cache.js';
+
+const router = express.Router();
+
+// Store Expo push token for the authenticated user
+router.post('/token', authenticate, async (req, res) => {
+  try {
+    const { token, platform = 'unknown' } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ error: 'Push token is required' });
+    }
+
+    const key = `push_tokens:${req.user.id}`;
+    const payload = {
+      token,
+      platform,
+      updated_at: Date.now(),
+    };
+
+    // Store for 30 days to keep it fresh; refreshed on every app launch
+    await cache.set(key, payload, 60 * 60 * 24 * 30);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving push token:', error);
+    res.status(500).json({ error: 'Failed to save push token' });
+  }
+});
+
+export default router;
+import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { NotificationService } from '../utils/redisServices.js';
 

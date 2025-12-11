@@ -57,12 +57,19 @@ export const useBoardStore = create((set, get) => ({
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // Ensure baseline shape for new board
+      const createdBoard = {
+        ...response.data,
+        board_artworks: response.data?.board_artworks || [],
+        artworks: response.data?.artworks || [{ count: 0 }],
+      };
+
       set((state) => ({
-        boards: [response.data, ...state.boards],
+        boards: [createdBoard, ...state.boards],
         isLoading: false
       }));
       
-      return response.data;
+      return createdBoard;
     } catch (error) {
       set({ error: error.response?.data?.error || error.message, isLoading: false });
       throw error;
@@ -143,40 +150,43 @@ export const useBoardStore = create((set, get) => ({
     try {
       const token = useAuthStore.getState().token;
 
-      const response = await axios.post(
+      await axios.post(
         `${API_URL}/boards/${boardId}/artworks`,
         { artwork_id: artworkId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Update the board in the store to reflect the new artwork count
-      // Use the most accurate count: from board_artworks array length if available
+      // Fetch full board detail to get accurate count and latest thumbnails
+      const detail = await axios.get(`${API_URL}/boards/${boardId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { skipCache: 'true' },
+      });
+
+      const boardData = detail.data;
+      const updatedBoardArtworks = boardData.board_artworks || [];
+      const newCount = boardData.artworks?.[0]?.count || updatedBoardArtworks.length || 0;
+
       set((state) => ({
-        boards: state.boards.map(board => {
-          if (board.id === boardId) {
-            // Get updated board_artworks from response or use existing
-            const updatedBoardArtworks = response.data.board_artworks || board.board_artworks || [];
-            const newCount = updatedBoardArtworks.length;
-            
-            return {
-              ...board,
-              artworks: [{ count: newCount }],
-              board_artworks: updatedBoardArtworks,
-            };
-          }
-          return board;
+        boards: state.boards.map((board) => {
+          const isMatch = String(board.id) === String(boardId);
+          if (!isMatch) return board;
+          return {
+            ...board,
+            artworks: [{ count: newCount }],
+            board_artworks: updatedBoardArtworks,
+          };
         }),
-        // Also update currentBoard if it's the one being modified
-        currentBoard: state.currentBoard?.id === boardId 
-          ? { 
-              ...state.currentBoard, 
-              artworks: [{ count: (response.data.board_artworks || state.currentBoard.board_artworks || []).length }],
-              board_artworks: response.data.board_artworks || state.currentBoard.board_artworks || [],
-            }
-          : state.currentBoard,
+        currentBoard:
+          state.currentBoard && String(state.currentBoard.id) === String(boardId)
+            ? {
+                ...state.currentBoard,
+                artworks: [{ count: newCount }],
+                board_artworks: updatedBoardArtworks,
+              }
+            : state.currentBoard,
       }));
 
-      return response.data;
+      return boardData;
     } catch (error) {
       throw error;
     }

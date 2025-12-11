@@ -1,4 +1,4 @@
-package com.erato.app
+package com.kyim50.erato
 
 import android.app.Application
 import android.content.res.Configuration
