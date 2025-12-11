@@ -123,7 +123,8 @@ router.get('/:id/packages', optionalAuth, async (req, res, next) => {
         revision_count,
         example_image_urls,
         is_active,
-        display_order
+        display_order,
+        addons:commission_package_addons(id, name, description, price)
       `)
       .eq('artist_id', artistId)
       .eq('is_active', true)

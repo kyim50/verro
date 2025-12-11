@@ -51,6 +51,35 @@ router.post('/request', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
+    // Slots / queue guard
+    const { data: queueStatus, error: queueError } = await supabaseAdmin
+      .from('commissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('artist_id', artist_id)
+      .in('status', ['pending', 'accepted', 'in_progress']);
+
+    if (queueError) throw queueError;
+
+    const { data: settings } = await supabaseAdmin
+      .from('artist_commission_settings')
+      .select('max_queue_slots, allow_waitlist, is_open')
+      .eq('artist_id', artist_id)
+      .maybeSingle();
+
+    const maxSlots = settings?.max_queue_slots ?? 5;
+    const allowWaitlist = settings?.allow_waitlist ?? false;
+    const isOpen = settings?.is_open ?? true;
+    const currentCount = queueStatus || 0;
+    const isFull = currentCount >= maxSlots;
+
+    if (!isOpen) {
+      return res.status(400).json({ error: 'Commissions are closed' });
+    }
+
+    if (isFull && !allowWaitlist) {
+      return res.status(400).json({ error: 'Commission slots are full' });
+    }
+
     // Validate package selection (if provided)
     let selectedPackage = null;
     if (packageId) {

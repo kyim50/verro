@@ -38,6 +38,8 @@ export default function CommissionPackagesScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [addonForm, setAddonForm] = useState({ name: '', price: '', description: '' });
+  const [savingAddon, setSavingAddon] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -207,6 +209,7 @@ export default function CommissionPackagesScreen() {
       is_active: pkg.is_active,
       example_image_urls: pkg.example_image_urls || [],
     });
+    setAddonForm({ name: '', price: '', description: '' });
     setShowCreateModal(true);
   };
 
@@ -322,6 +325,99 @@ export default function CommissionPackagesScreen() {
       });
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  const handleAddAddon = async () => {
+    if (!editingPackage) {
+      Toast.show({
+        type: 'info',
+        text1: 'Save package first',
+        text2: 'Create the package, then add add-ons.',
+        visibilityTime: 2500,
+      });
+      return;
+    }
+
+    if (!addonForm.name.trim() || !addonForm.price.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation',
+        text2: 'Add-on name and price are required',
+        visibilityTime: 2500,
+      });
+      return;
+    }
+
+    const priceValue = parseFloat(addonForm.price);
+    if (Number.isNaN(priceValue) || priceValue < 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation',
+        text2: 'Price must be 0 or more',
+        visibilityTime: 2500,
+      });
+      return;
+    }
+
+    try {
+      setSavingAddon(true);
+      await axios.post(
+        `${API_URL}/commission-packages/${editingPackage.id}/addons`,
+        {
+          name: addonForm.name.trim(),
+          description: addonForm.description.trim() || null,
+          price: priceValue,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await fetchPackages();
+      const fresh = (packages || []).find((p) => p.id === editingPackage.id);
+      if (fresh) {
+        setEditingPackage(fresh);
+      }
+      setAddonForm({ name: '', price: '', description: '' });
+      Toast.show({
+        type: 'success',
+        text1: 'Add-on added',
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error('Error adding add-on:', error);
+      const msg = error.response?.data?.error || 'Failed to add add-on';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: msg,
+        visibilityTime: 2500,
+      });
+    } finally {
+      setSavingAddon(false);
+    }
+  };
+
+  const handleDeleteAddon = async (addonId) => {
+    try {
+      await axios.delete(`${API_URL}/commission-packages/addons/${addonId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await fetchPackages();
+      const fresh = (packages || []).find((p) => p.id === editingPackage?.id);
+      if (fresh) setEditingPackage(fresh);
+      Toast.show({
+        type: 'success',
+        text1: 'Add-on removed',
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error('Error deleting add-on:', error);
+      const msg = error.response?.data?.error || 'Failed to delete add-on';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: msg,
+        visibilityTime: 2500,
+      });
     }
   };
 
@@ -549,6 +645,70 @@ export default function CommissionPackagesScreen() {
                     </View>
                   ))}
                 </ScrollView>
+              )}
+
+              {editingPackage && (
+                <>
+                  <Text style={[styles.inputLabel, { marginTop: spacing.lg }]}>Add-ons</Text>
+                  <View style={styles.addonList}>
+                    {(editingPackage.addons || []).length === 0 ? (
+                      <Text style={styles.addonEmpty}>No add-ons yet</Text>
+                    ) : (
+                      editingPackage.addons.map((addon) => (
+                        <View key={addon.id} style={styles.addonRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.addonName}>{addon.name}</Text>
+                            {addon.description ? (
+                              <Text style={styles.addonDesc} numberOfLines={2}>{addon.description}</Text>
+                            ) : null}
+                          </View>
+                          <Text style={styles.addonPrice}>${addon.price}</Text>
+                          <TouchableOpacity style={styles.addonDelete} onPress={() => handleDeleteAddon(addon.id)}>
+                            <Ionicons name="trash-outline" size={18} color={colors.status.error} />
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    )}
+                  </View>
+
+                  <View style={styles.addonForm}>
+                    <TextInput
+                      style={[styles.input, styles.addonInput]}
+                      value={addonForm.name}
+                      onChangeText={(text) => setAddonForm({ ...addonForm, name: text })}
+                      placeholder="Add-on name (e.g., Background)"
+                      placeholderTextColor={colors.text.disabled}
+                    />
+                    <TextInput
+                      style={[styles.input, styles.addonInput]}
+                      value={addonForm.price}
+                      onChangeText={(text) => setAddonForm({ ...addonForm, price: text })}
+                      placeholder="Price (e.g., 20)"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="decimal-pad"
+                    />
+                    <TextInput
+                      style={[styles.input, styles.textArea, styles.addonInput]}
+                      value={addonForm.description}
+                      onChangeText={(text) => setAddonForm({ ...addonForm, description: text })}
+                      placeholder="Short description (optional)"
+                      placeholderTextColor={colors.text.disabled}
+                      multiline
+                      numberOfLines={2}
+                    />
+                    <TouchableOpacity
+                      style={[styles.saveButton, savingAddon && styles.saveButtonDisabled, { marginTop: spacing.sm }]}
+                      onPress={handleAddAddon}
+                      disabled={savingAddon}
+                    >
+                      {savingAddon ? (
+                        <ActivityIndicator color={colors.text.primary} />
+                      ) : (
+                        <Text style={styles.saveButtonText}>Add add-on</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </>
               )}
 
               <Text style={styles.inputLabel}>Estimated Delivery (days)</Text>
@@ -924,5 +1084,45 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  addonList: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  addonEmpty: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  addonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  addonName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  addonDesc: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  addonPrice: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  addonDelete: {
+    padding: spacing.xs,
+  },
+  addonForm: {
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  addonInput: {
+    minHeight: 44,
   },
 });
