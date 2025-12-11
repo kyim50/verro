@@ -1,10 +1,11 @@
 import express from 'express';
-import authenticate from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
 import cache from '../utils/cache.js';
+import { NotificationService } from '../utils/redisServices.js';
 
 const router = express.Router();
 
-// Store Expo push token for the authenticated user
+// Store push token (optional)
 router.post('/token', authenticate, async (req, res) => {
   try {
     const { token, platform = 'unknown' } = req.body || {};
@@ -13,13 +14,7 @@ router.post('/token', authenticate, async (req, res) => {
     }
 
     const key = `push_tokens:${req.user.id}`;
-    const payload = {
-      token,
-      platform,
-      updated_at: Date.now(),
-    };
-
-    // Store for 30 days to keep it fresh; refreshed on every app launch
+    const payload = { token, platform, updated_at: Date.now() };
     await cache.set(key, payload, 60 * 60 * 24 * 30);
 
     res.json({ success: true });
@@ -28,13 +23,6 @@ router.post('/token', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to save push token' });
   }
 });
-
-export default router;
-import express from 'express';
-import { authenticate } from '../middleware/auth.js';
-import { NotificationService } from '../utils/redisServices.js';
-
-const router = express.Router();
 
 // Get notifications for current user
 router.get('/', authenticate, async (req, res) => {
@@ -89,5 +77,3 @@ router.get('/unread-count', authenticate, async (req, res) => {
 });
 
 export default router;
-
-
