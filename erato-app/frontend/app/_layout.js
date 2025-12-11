@@ -7,6 +7,30 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
 import LoadingScreen from './auth/loading';
 import ErrorBoundary from '../components/ErrorBoundary';
+import toastConfig from '../components/StyledToast';
+import StyledAlert, { showAlert } from '../components/StyledAlert';
+
+// Patch Toast.show globally to use the styled alert (smaller, consistent)
+let toastPatched = false;
+function patchToastToAlert() {
+  if (toastPatched) return;
+  const originalShow = Toast.show?.bind(Toast);
+  Toast.show = (options = {}) => {
+    const { type = 'info', text1 = 'Notice', text2 = '', visibilityTime } = options || {};
+    const safeType = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+    showAlert({
+      title: text1 || 'Notice',
+      message: text2 || '',
+      type: safeType,
+      duration: visibilityTime || 2500,
+    });
+    // Keep the original behavior in dev if needed
+    if (__DEV__ && originalShow) {
+      originalShow(options);
+    }
+  };
+  toastPatched = true;
+}
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -14,6 +38,7 @@ export default function RootLayout() {
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
   useEffect(() => {
+    patchToastToAlert();
     // Set up global error handlers FIRST - before anything else
     const errorHandler = (error, isFatal) => {
       console.error('🚨 Global error:', error, 'Fatal:', isFatal);
@@ -141,7 +166,12 @@ export default function RootLayout() {
             fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
           }}
         />
-        <Toast />
+        <Toast 
+          config={toastConfig}
+          topOffset={60}
+          visibilityTime={3000}
+        />
+        <StyledAlert />
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

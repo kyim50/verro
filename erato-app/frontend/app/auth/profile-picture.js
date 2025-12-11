@@ -8,6 +8,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -30,10 +31,12 @@ export default function ProfilePictureScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Please grant camera roll permissions to upload a profile picture'
-        );
+        Toast.show({
+          type: 'info',
+          text1: 'Permission Required',
+          text2: 'Please grant camera roll permissions to upload a profile picture',
+          visibilityTime: 3000,
+        });
         return;
       }
 
@@ -49,18 +52,33 @@ export default function ProfilePictureScreen() {
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to pick image',
+        visibilityTime: 2000,
+      });
     }
   };
 
   const handleContinue = async () => {
     if (!avatarUri) {
-      Alert.alert('Profile Picture Required', 'Please upload a profile picture to continue');
+      Toast.show({
+        type: 'info',
+        text1: 'Profile Picture Required',
+        text2: 'Please upload a profile picture to continue',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     if (!token) {
-      Alert.alert('Error', 'Please log in again');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please log in again',
+        visibilityTime: 3000,
+      });
       router.replace('/auth/login');
       return;
     }
@@ -72,7 +90,12 @@ export default function ProfilePictureScreen() {
       const uploadedUrl = await uploadImage(avatarUri, 'profiles', '', token, false);
 
       if (!uploadedUrl) {
-        Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Failed to upload profile picture. Please try again.',
+          visibilityTime: 3000,
+        });
         setUploading(false);
         return;
       }
@@ -102,7 +125,12 @@ export default function ProfilePictureScreen() {
       }
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      Alert.alert('Error', error.message || 'Failed to upload profile picture. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.message || 'Failed to upload profile picture. Please try again.',
+        visibilityTime: 3000,
+      });
       setUploading(false);
     }
   };

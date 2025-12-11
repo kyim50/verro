@@ -74,7 +74,12 @@ export default function EditProfileScreen() {
   const pickProfileImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photos');
+      Toast.show({
+        type: 'info',
+        text1: 'Permission needed',
+        text2: 'Please allow access to your photos',
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -95,11 +100,21 @@ export default function EditProfileScreen() {
     if (username && username.trim() !== '') {
       const trimmedUsername = username.trim();
       if (trimmedUsername.length < 3) {
-        Alert.alert('Error', 'Username must be at least 3 characters long');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Username must be at least 3 characters long',
+          visibilityTime: 2000,
+        });
         return;
       }
       if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
-        Alert.alert('Error', 'Username can only contain letters, numbers, and underscores');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Username can only contain letters, numbers, and underscores',
+          visibilityTime: 2000,
+        });
         return;
       }
     }
@@ -214,7 +229,12 @@ export default function EditProfileScreen() {
     } catch (error) {
       console.error('Error updating profile:', error);
       const errorMessage = error.message || 'Failed to update profile. Please try again.';
-      Alert.alert('Error', errorMessage);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMessage,
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
     }

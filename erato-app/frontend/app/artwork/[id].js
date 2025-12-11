@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -88,7 +89,12 @@ export default function ArtworkDetailScreen() {
       setArtwork(artworkData);
     } catch (error) {
       console.error('Error fetching artwork:', error);
-      Alert.alert('Error', 'Failed to load artwork');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load artwork',
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
     }
@@ -97,7 +103,12 @@ export default function ArtworkDetailScreen() {
 
   const handleLike = async () => {
     if (!token) {
-      Alert.alert('Login Required', 'Please login to like artworks');
+      Toast.show({
+        type: 'info',
+        text1: 'Login Required',
+        text2: 'Please login to like artworks',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -174,7 +185,12 @@ export default function ArtworkDetailScreen() {
 
       // Show user-friendly error message
       const errorMessage = error.response?.data?.error || 'Failed to update like status';
-      Alert.alert('Error', errorMessage);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMessage,
+        visibilityTime: 3000,
+      });
       
       // Reset the ref on error
       isLikingRef.current = false;
@@ -232,12 +248,22 @@ export default function ArtworkDetailScreen() {
                 console.warn('Boards refresh after delete failed:', e?.message || e);
               }
 
-              Alert.alert('Deleted', 'Artwork removed');
+              Toast.show({
+                type: 'success',
+                text1: 'Deleted',
+                text2: 'Artwork removed',
+                visibilityTime: 2000,
+              });
               router.back();
             } catch (error) {
               console.error('Error deleting artwork:', error?.response?.data || error.message || error);
               const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
-              Alert.alert('Error', msg);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: msg,
+                visibilityTime: 3000,
+              });
             }
           },
         },
@@ -353,7 +379,12 @@ export default function ArtworkDetailScreen() {
               style={styles.commissionButton}
               onPress={() => {
                 if (!user) {
-                  Alert.alert('Login Required', 'Please login to request a commission');
+                  Toast.show({
+                    type: 'info',
+                    text1: 'Login Required',
+                    text2: 'Please login to request a commission',
+                    visibilityTime: 2000,
+                  });
                   return;
                 }
                 router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
@@ -427,7 +458,12 @@ export default function ArtworkDetailScreen() {
               onPress={() => {
                 setShowMenu(false);
                 // TODO: Implement share functionality
-                Alert.alert('Share', 'Share functionality coming soon');
+                Toast.show({
+                  type: 'info',
+                  text1: 'Share',
+                  text2: 'Share functionality coming soon',
+                  visibilityTime: 2000,
+                });
               }}
             >
               <Ionicons name="share-outline" size={22} color={colors.text.primary} />

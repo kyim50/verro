@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -31,7 +32,12 @@ export default function PortfolioScreen() {
     // Request permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant permission to access your photos');
+      Toast.show({
+        type: 'info',
+        text1: 'Permission needed',
+        text2: 'Please grant permission to access your photos',
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -60,10 +66,12 @@ export default function PortfolioScreen() {
     const filledImages = portfolioImages.filter((img) => img !== null);
 
     if (filledImages.length < 1) {
-      Alert.alert(
-        'Portfolio Required',
-        'Please upload at least one portfolio image to showcase your work.'
-      );
+      Toast.show({
+        type: 'info',
+        text1: 'Portfolio Required',
+        text2: 'Please upload at least one portfolio image to showcase your work.',
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -76,15 +84,22 @@ export default function PortfolioScreen() {
       // Complete onboarding with uploaded image URLs
       await completeOnboarding(uploadedUrls, token);
 
-      Alert.alert('Success!', 'Your portfolio has been set up successfully!', [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/(tabs)/home'),
-        },
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: 'Your portfolio has been set up successfully!',
+        visibilityTime: 2000,
+      });
+      // Navigate after toast
+      setTimeout(() => router.replace('/(tabs)/home'), 1500);
     } catch (error) {
       console.error('Onboarding error:', error);
-      Alert.alert('Error', error.message || 'Failed to complete onboarding. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.message || 'Failed to complete onboarding. Please try again.',
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
     }

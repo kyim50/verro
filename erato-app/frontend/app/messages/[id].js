@@ -16,6 +16,7 @@ import {
   Animated,
   Keyboard,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -279,7 +280,12 @@ export default function ConversationScreen() {
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    Alert.alert('Thank you!', 'Your review has been submitted.');
+    Toast.show({
+      type: 'success',
+      text1: 'Thank you!',
+      text2: 'Your review has been submitted.',
+      visibilityTime: 2000,
+    });
   };
 
   const fetchMessages = async () => {
@@ -316,7 +322,12 @@ export default function ConversationScreen() {
   const handleImagePick = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photos');
+      Toast.show({
+        type: 'info',
+        text1: 'Permission needed',
+        text2: 'Please allow access to your photos',
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -369,7 +380,12 @@ export default function ConversationScreen() {
         console.error('Error sending image:', error);
         // Remove temp message on error
         setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
-        Alert.alert('Error', 'Failed to send image. Please try again.');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Failed to send image. Please try again.',
+          visibilityTime: 3000,
+        });
       }
     }
   };
@@ -419,7 +435,12 @@ export default function ConversationScreen() {
       // Remove temp message on error and restore input
       setMessages(prev => prev.filter(m => m.id !== tempId));
       setNewMessage(messageContent);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to send message. Please try again.',
+        visibilityTime: 3000,
+      });
     }
   };
 
@@ -484,7 +505,12 @@ export default function ConversationScreen() {
       await Promise.all([fetchMessages(), fetchConversationDetails()]);
     } catch (error) {
       console.error('Error responding to commission:', error);
-      Alert.alert('Error', 'Failed to update commission status. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to update commission status. Please try again.',
+        visibilityTime: 3000,
+      });
     }
   };
 
@@ -512,7 +538,12 @@ export default function ConversationScreen() {
                 );
                 await fetchMessages();
               } catch (err) {
-                Alert.alert('Error', err.response?.data?.error || 'Failed to delete message');
+                Toast.show({
+                  type: 'error',
+                  text1: 'Error',
+                  text2: err.response?.data?.error || 'Failed to delete message',
+                  visibilityTime: 3000,
+                });
               }
             }
           },
@@ -755,7 +786,12 @@ export default function ConversationScreen() {
                               router.back();
                             } catch (error) {
                               console.error('Error cancelling commission:', error);
-                              Alert.alert('Error', 'Failed to cancel commission. Please try again.');
+                              Toast.show({
+                                type: 'error',
+                                text1: 'Error',
+                                text2: 'Failed to cancel commission. Please try again.',
+                                visibilityTime: 3000,
+                              });
                             }
                           }
                         }
@@ -791,7 +827,12 @@ export default function ConversationScreen() {
                                   { headers: { Authorization: `Bearer ${token}` } }
                                 );
                                 await Promise.all([fetchMessages(), fetchConversationDetails()]);
-                                Alert.alert('Success', 'Commission has been completed!');
+                                Toast.show({
+                                  type: 'success',
+                                  text1: 'Success',
+                                  text2: 'Commission has been completed!',
+                                  visibilityTime: 2000,
+                                });
                                 // Prompt for review after completion
                                 setTimeout(() => {
                                   setPendingReviewCommission(updatedCommission.data);
@@ -799,7 +840,12 @@ export default function ConversationScreen() {
                                 }, 1500);
                               } catch (error) {
                                 console.error('Error completing commission:', error);
-                                Alert.alert('Error', 'Failed to complete commission. Please try again.');
+                                Toast.show({
+                                  type: 'error',
+                                  text1: 'Error',
+                                  text2: 'Failed to complete commission. Please try again.',
+                                  visibilityTime: 3000,
+                                });
                               }
                             }
                           }

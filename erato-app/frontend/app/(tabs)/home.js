@@ -27,6 +27,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
+import { showAlert } from '../../components/StyledAlert';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
@@ -291,40 +292,97 @@ export default function HomeScreen() {
   const handleBoardSelect = async (board) => {
     try {
       await saveArtworkToBoard(board.id, selectedArtwork.id);
+      
+      // Close modal first
       setShowSaveModal(false);
-      Alert.alert('Saved!', `Added to ${board.name}`);
+      setShowCreateBoard(false);
+      setNewBoardName('');
+      
+      // Refresh boards to ensure count is updated
+      const { fetchBoards } = useBoardStore.getState();
+      await fetchBoards();
+      
+      // Small delay to ensure modal is closed before showing alert
+      setTimeout(() => {
+        showAlert({
+          title: 'Saved!',
+          message: `Added to ${board.name}`,
+          type: 'success',
+        });
+      }, 100);
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to save artwork');
+      console.error('Error saving artwork to board:', error);
+      
+      // Close modal immediately
+      setShowSaveModal(false);
+      setShowCreateBoard(false);
+      setNewBoardName('');
+      
+      // Extract error message from various possible locations
+      let errorMessage = 'Failed to save artwork';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Small delay to ensure modal is closed before showing alert
+      setTimeout(() => {
+        showAlert({
+          title: 'Error',
+          message: errorMessage,
+          type: 'error',
+          duration: 3000,
+        });
+      }, 150);
     }
   };
 
   const handleCreateAndSave = async () => {
     if (!newBoardName.trim()) {
-      Alert.alert('Error', 'Board name is required');
+      showAlert({
+        title: 'Error',
+        message: 'Board name is required',
+        type: 'error',
+      });
       return;
     }
 
     try {
       const newBoard = await createBoard({ name: newBoardName.trim() });
       await saveArtworkToBoard(newBoard.id, selectedArtwork.id);
+      
+      // Refresh boards to ensure count is updated
+      await fetchBoards();
+      
       setShowCreateBoard(false);
       setShowSaveModal(false);
       setNewBoardName('');
-      Toast.show({
+      showAlert({
+        title: 'Success!',
+        message: `Created "${newBoardName}" and saved artwork`,
         type: 'success',
-        text1: 'Success!',
-        text2: `Created "${newBoardName}" and saved artwork`,
-        visibilityTime: 2000,
       });
     } catch (error) {
-      Alert.alert('Error', 'Failed to create board');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to create board',
+        visibilityTime: 3000,
+      });
     }
   };
 
   // Handle like artwork (optimistic update)
   const handleLikeArtwork = async (artwork) => {
     if (!token) {
-      Alert.alert('Login Required', 'Please login to like artworks');
+      showAlert({
+        title: 'Login Required',
+        message: 'Please login to like artworks',
+        type: 'info',
+      });
       return;
     }
 
@@ -332,13 +390,20 @@ export default function HomeScreen() {
     const currentLikedState = likedArtworksLoaded ? likedArtworks.has(artworkId) : false;
     const previousLikedState = currentLikedState;
     const previousLikeCount = artwork.like_count || 0;
+    const newLikedState = !currentLikedState;
 
-    // Optimistic update - use shared store
-    setLikedArtwork(artwork.id, !currentLikedState);
+    // Optimistic update - use shared store immediately
+    setLikedArtwork(artwork.id, newLikedState);
 
     // Update local artwork like count optimistically
     if (updateArtworkLikeCount) {
-      updateArtworkLikeCount(artwork.id, currentLikedState ? Math.max(0, previousLikeCount - 1) : previousLikeCount + 1);
+      updateArtworkLikeCount(artwork.id, newLikedState ? previousLikeCount + 1 : Math.max(0, previousLikeCount - 1));
+    }
+
+    // Force UI update by updating local state
+    if (!likedArtworksLoaded) {
+      // If liked artworks haven't loaded yet, ensure they're loaded
+      loadLikedArtworks(true);
     }
 
     try {
@@ -365,12 +430,10 @@ export default function HomeScreen() {
       // Update shared store with authoritative backend response
       setLikedArtwork(artwork.id, isNowLiked);
       
-      // Verify the update worked
-      setTimeout(() => {
-        const currentState = useFeedStore.getState().likedArtworks;
-        console.log('Home Current liked artworks after update:', Array.from(currentState));
-        console.log('Home Is artwork liked?', currentState.has(String(artwork.id)));
-      }, 100);
+      // Refresh liked artworks list to ensure UI updates
+      if (isNowLiked) {
+        loadLikedArtworks(true);
+      }
     } catch (error) {
       console.error('Error toggling like:', error);
       // Rollback optimistic update in shared store
@@ -384,7 +447,9 @@ export default function HomeScreen() {
   };
 
   const renderArtwork = (item, showLikeButton = false) => {
-    const isLiked = likedArtworksLoaded ? likedArtworks.has(String(item.id)) : false;
+    // Always check current state from store for immediate updates
+    const currentLikedState = useFeedStore.getState().likedArtworks;
+    const isLiked = currentLikedState.has(String(item.id));
     
     return (
       <View key={item.id} style={styles.card}>
@@ -444,7 +509,9 @@ export default function HomeScreen() {
 
   // TikTok-style full screen artwork renderer
   const renderTikTokArtwork = (item, index) => {
-    const isLiked = likedArtworksLoaded ? likedArtworks.has(String(item.id)) : false;
+    // Always check current state from store for immediate updates
+    const currentLikedState = useFeedStore.getState().likedArtworks;
+    const isLiked = currentLikedState.has(String(item.id));
     const artworkId = String(item.id);
     const showHeartAnimation = heartAnimations[artworkId] || false;
     
@@ -456,10 +523,14 @@ export default function HomeScreen() {
     
     const handleDoubleTap = () => {
       const now = Date.now();
-      const DOUBLE_PRESS_DELAY = 300;
+      const DOUBLE_PRESS_DELAY = 200; // Reduced from 300ms for more sensitive double tap
+      
+      // Check current liked state directly from store
+      const currentLikedState = useFeedStore.getState().likedArtworks;
+      const currentlyLiked = currentLikedState.has(artworkId);
       
       if (lastTapRef.current[artworkId] && (now - lastTapRef.current[artworkId]) < DOUBLE_PRESS_DELAY) {
-        if (!isLiked && token) {
+        if (!currentlyLiked && token) {
           handleLikeArtwork(item);
           
           heartScaleAnims.current[artworkId].setValue(0);

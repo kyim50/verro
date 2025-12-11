@@ -166,35 +166,39 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       throw new Error('Upload succeeded but no URL returned from server');
     }
   } catch (error) {
-    console.error('❌ Error uploading image:', error);
+    // Capture rich diagnostics
+    const respData = error.response?.data;
+    const networkMsg = `Network error: Could not reach server at ${API_URL}. Please check your internet connection and that the server is running.`;
+    const timeoutMsg = 'Upload timeout: The server took too long to respond. Please try again.';
+    const defaultMsg = 'Failed to upload image';
+
+    console.error('❌ Error uploading image:', error?.message || error);
     console.error('Error details:', {
       message: error.message,
       code: error.code,
-      response: error.response ? {
-        status: error.response.status,
-        data: error.response.data,
-      } : null,
+      responseStatus: error.response?.status,
+      responseData: respData,
       request: error.request ? 'Request made but no response' : null,
       apiUrl: API_URL,
       endpoint,
     });
     
+    // Prefer backend-provided message first
     if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-      const errorMessage = error.response.data?.error || error.response.data?.message || 'Failed to upload image';
-      throw new Error(errorMessage);
+      const backendMsg = respData?.error || respData?.message;
+      if (backendMsg) throw new Error(backendMsg);
+      throw new Error(defaultMsg);
     }
+    // Network layer issues (no response)
     if (error.request) {
-      console.error('Request made but no response received');
-      console.error('API URL attempted:', API_URL);
-      console.error('Endpoint attempted:', endpoint);
-      throw new Error(`Network error: Could not reach server at ${API_URL}. Please check your internet connection and that the server is running.`);
+      throw new Error(networkMsg);
     }
+    // Timeout
     if (error.code === 'ECONNABORTED') {
-      throw new Error('Upload timeout: The server took too long to respond. Please try again.');
+      throw new Error(timeoutMsg);
     }
-    throw new Error(error.message || 'Failed to upload image');
+    // Fallback
+    throw new Error(error.message || defaultMsg);
   }
 }
 

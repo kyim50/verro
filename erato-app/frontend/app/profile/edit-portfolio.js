@@ -61,7 +61,12 @@ export default function EditPortfolioScreen() {
   const pickImage = async (index) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photos');
+      Toast.show({
+        type: 'info',
+        text1: 'Permission needed',
+        text2: 'Please allow access to your photos',
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -91,7 +96,12 @@ export default function EditPortfolioScreen() {
     const filledImages = portfolioImages.filter((img) => img && img.trim() !== '');
 
     if (filledImages.length === 0) {
-      Alert.alert('Error', 'Please add at least one portfolio image');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please add at least one portfolio image',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -242,7 +252,12 @@ export default function EditPortfolioScreen() {
       router.back();
     } catch (error) {
       console.error('Error updating portfolio:', error);
-      Alert.alert('Error', error.message || 'Failed to update portfolio. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.message || 'Failed to update portfolio. Please try again.',
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
     }

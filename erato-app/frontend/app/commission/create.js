@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -33,18 +34,33 @@ export default function CreateCommissionScreen() {
   const handleSubmit = async () => {
     // Check if current user is an artist
     if (user?.artists) {
-      Alert.alert('Not Available', 'Artists cannot request commissions from other artists. This feature is only available for clients.');
+      Toast.show({
+        type: 'info',
+        text1: 'Not Available',
+        text2: 'Artists cannot request commissions from other artists. This feature is only available for clients.',
+        visibilityTime: 3000,
+      });
       router.back();
       return;
     }
 
     if (!title.trim()) {
-      Alert.alert('Required', 'Please provide a title for your commission');
+      Toast.show({
+        type: 'error',
+        text1: 'Required',
+        text2: 'Please provide a title for your commission',
+        visibilityTime: 2000,
+      });
       return;
     }
 
     if (!description.trim()) {
-      Alert.alert('Required', 'Please provide details about what you want');
+      Toast.show({
+        type: 'error',
+        text1: 'Required',
+        text2: 'Please provide details about what you want',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -63,19 +79,22 @@ export default function CreateCommissionScreen() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      Alert.alert(
-        'Success!',
-        'Your commission request has been sent to the artist.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: 'Your commission request has been sent to the artist.',
+        visibilityTime: 3000,
+      });
+      // Navigate back after a short delay
+      setTimeout(() => router.back(), 1500);
     } catch (error) {
       console.error('Error creating commission:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to create commission request');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to create commission request',
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,7 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
@@ -33,12 +33,9 @@ export default function BoardDetailScreen() {
   const [showModal, setShowModal] = useState(false);
   const [columns, setColumns] = useState([[], []]);
 
-  useEffect(() => {
-    fetchBoardDetails();
-  }, [id]);
-
-  const fetchBoardDetails = async () => {
+  const fetchBoardDetails = useCallback(async () => {
     try {
+      setLoading(true);
       const response = await axios.get(`${API_URL}/boards/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -52,7 +49,18 @@ export default function BoardDetailScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, token]);
+
+  useEffect(() => {
+    fetchBoardDetails();
+  }, [fetchBoardDetails]);
+
+  // Refresh board details when screen comes into focus (e.g., after adding artwork)
+  useFocusEffect(
+    useCallback(() => {
+      fetchBoardDetails();
+    }, [fetchBoardDetails])
+  );
 
   // Organize artworks into balanced columns (Pinterest masonry style)
   useEffect(() => {
