@@ -17,6 +17,7 @@ import {
   Keyboard,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
@@ -30,6 +31,7 @@ import ReviewModal from '../../components/ReviewModal';
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function BoardsScreen() {
+  const insets = useSafeAreaInsets();
   const { boards, isLoading, fetchBoards, createBoard, deleteBoard } = useBoardStore();
   const { user, token } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -527,7 +529,10 @@ export default function BoardsScreen() {
               tintColor={colors.primary}
             />
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 20) + 80 }
+          ]}
           ListEmptyComponent={!isLoading && renderEmpty}
           showsVerticalScrollIndicator={false}
         />
@@ -553,7 +558,10 @@ export default function BoardsScreen() {
               tintColor={colors.primary}
             />
           }
-          contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingHorizontal: spacing.md, paddingBottom: Math.max(insets.bottom, 20) + 80 }
+          ]}
           ListEmptyComponent={!likedLoading && (
             <View style={styles.emptyState}>
               <Ionicons name="heart-outline" size={64} color={colors.text.disabled} />
@@ -594,7 +602,10 @@ export default function BoardsScreen() {
               tintColor={colors.primary}
             />
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 20) + 80 }
+          ]}
           ListEmptyComponent={!isLoading && renderEmpty}
           showsVerticalScrollIndicator={false}
         />
@@ -627,7 +638,10 @@ export default function BoardsScreen() {
               tintColor={colors.primary}
             />
           }
-          contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingHorizontal: spacing.md, paddingBottom: Math.max(insets.bottom, 20) + 80 }
+          ]}
           ListEmptyComponent={!commissionsLoading && renderEmpty}
           showsVerticalScrollIndicator={false}
         />
@@ -653,7 +667,10 @@ export default function BoardsScreen() {
               tintColor={colors.primary}
             />
           }
-          contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.md }]}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingHorizontal: spacing.md, paddingBottom: Math.max(insets.bottom, 20) + 80 }
+          ]}
           ListEmptyComponent={!likedLoading && (
             <View style={styles.emptyState}>
               <Ionicons name="heart-outline" size={64} color={colors.text.disabled} />

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store';
 import { colors } from '../../constants/theme';
 
@@ -117,14 +118,28 @@ function BoardsTabIcon({ color }) {
 
 export default function TabsLayout() {
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const isArtist = user?.user_type === 'artist' || 
                    (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
+
+  // Calculate tab bar height with safe area insets
+  const tabBarHeight = Platform.OS === 'ios' 
+    ? 88 + Math.max(0, insets.bottom - 28) // iOS default + extra bottom inset
+    : 65 + Math.max(0, insets.bottom - 8); // Android default + extra bottom inset
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            height: tabBarHeight,
+            paddingBottom: Platform.OS === 'ios' 
+              ? Math.max(28, insets.bottom) 
+              : Math.max(8, insets.bottom),
+          }
+        ],
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarShowLabel: true,

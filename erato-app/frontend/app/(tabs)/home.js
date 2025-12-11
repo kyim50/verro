@@ -19,6 +19,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Link, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ const IS_SMALL_SCREEN = width < 400;
 const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const {
     artworks,
     fetchArtworks,
@@ -755,7 +757,10 @@ export default function HomeScreen() {
               />
             }
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Math.max(insets.bottom, 20) + 80 }
+            ]}
           >
             <View style={styles.masonryContainer}>
               {/* Left Column */}
@@ -986,7 +991,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 100, // Base padding, will be overridden by inline style with safe area
   },
   masonryContainer: {
     flexDirection: 'row',
