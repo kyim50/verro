@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
-import { uploadImage } from '../../utils/imageUpload';
+import { uploadImage, uploadMultipleImages } from '../../utils/imageUpload';
 
 // Get store reference for direct state updates
 const useProfileStoreRef = useProfileStore;
@@ -40,7 +40,7 @@ export default function EditPortfolioScreen() {
   }, []);
 
   useEffect(() => {
-    // Load existing portfolio images
+    // Load existing portfolio images - always show 6 slots
     if (profile?.artist?.portfolio_images && profile.artist.portfolio_images.length > 0) {
       const existing = profile.artist.portfolio_images.filter(img => img && img.trim() !== '');
       // Fill remaining slots with empty strings up to 6
@@ -50,8 +50,11 @@ export default function EditPortfolioScreen() {
       }
       setPortfolioImages(filled.slice(0, 6));
     } else if (profile?.artist) {
-      // Artist exists but no portfolio images - start with one empty slot
-      setPortfolioImages(['']);
+      // Artist exists but no portfolio images - show all 6 empty slots
+      setPortfolioImages(['', '', '', '', '', '']);
+    } else {
+      // No artist yet - show all 6 empty slots
+      setPortfolioImages(['', '', '', '', '', '']);
     }
   }, [profile]);
 
@@ -79,28 +82,8 @@ export default function EditPortfolioScreen() {
   const removeImage = (index) => {
     const newImages = [...portfolioImages];
     newImages[index] = '';
-    // Remove empty slots from the end, but keep at least one slot
-    const filledImages = newImages.filter(img => img && img.trim() !== '');
-    // If we have filled images, show only those (minimum 1 slot for adding)
-    if (filledImages.length > 0) {
-      // Add empty slots up to 6, but remove trailing empty slots
-      const filtered = newImages.filter((img, i) => {
-        if (i === index) return false; // Remove the deleted one
-        return true;
-      });
-      // Remove trailing empty slots
-      while (filtered.length > 0 && !filtered[filtered.length - 1]) {
-        filtered.pop();
-      }
-      // Ensure at least 1 slot remains (or up to 6)
-      while (filtered.length < 6) {
-        filtered.push('');
-      }
-      setPortfolioImages(filtered.slice(0, 6));
-    } else {
-      // If all images removed, keep just one empty slot
-      setPortfolioImages(['']);
-    }
+    // Always keep 6 slots - just clear the one at this index
+    setPortfolioImages(newImages);
   };
 
   const handleSave = async () => {
@@ -140,22 +123,26 @@ export default function EditPortfolioScreen() {
           visibilityTime: 2000,
         });
 
-        // Upload images one by one
-        for (const file of localFiles) {
-          try {
-            console.log('Uploading portfolio image:', file.uri);
-            const uploadedUrl = await uploadImage(file.uri, 'portfolios', '', token);
-            console.log('Uploaded URL received:', uploadedUrl);
-            if (uploadedUrl) {
-              imageMap.set(file.originalIndex, uploadedUrl);
-              uploadedUrls.push(uploadedUrl);
-            } else {
-              throw new Error('No URL returned from upload');
+        try {
+          // Use multi-file upload for portfolios (more efficient)
+          const fileUris = localFiles.map(f => f.uri);
+          console.log('Uploading portfolio images:', fileUris.length);
+          uploadedUrls = await uploadMultipleImages(fileUris, 'portfolios', '', token);
+          console.log('Uploaded URLs received:', uploadedUrls);
+          
+          // Map uploaded URLs back to their original indices
+          localFiles.forEach((file, idx) => {
+            if (uploadedUrls[idx]) {
+              imageMap.set(file.originalIndex, uploadedUrls[idx]);
             }
-          } catch (uploadError) {
-            console.error('Error uploading image:', uploadError);
-            throw new Error(`Failed to upload image: ${uploadError.message}`);
+          });
+          
+          if (uploadedUrls.length !== localFiles.length) {
+            console.warn('Upload count mismatch:', uploadedUrls.length, 'expected', localFiles.length);
           }
+        } catch (uploadError) {
+          console.error('Error uploading portfolio images:', uploadError);
+          throw new Error(`Failed to upload images: ${uploadError.message}`);
         }
       }
 

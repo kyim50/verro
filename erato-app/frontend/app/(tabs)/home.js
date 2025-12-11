@@ -15,6 +15,9 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Link, router, useFocusEffect } from 'expo-router';
@@ -847,7 +850,9 @@ export default function HomeScreen() {
             style={{ flex: 1, justifyContent: 'flex-end' }}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            <View style={styles.modalContent}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.modalContent}>
+                <SafeAreaView edges={['bottom']}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Save to Board</Text>
                 <TouchableOpacity onPress={() => {
@@ -912,7 +917,9 @@ export default function HomeScreen() {
                   </View>
                 </View>
               )}
-            </View>
+                </SafeAreaView>
+              </View>
+            </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -1269,7 +1276,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '70%',
+    maxHeight: Dimensions.get('window').height * 0.85,
+    width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
