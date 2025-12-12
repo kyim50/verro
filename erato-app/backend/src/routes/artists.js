@@ -938,11 +938,11 @@ router.get('/settings', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Get artist profile first to get artist_id
+    // Get artist profile - artists.id = user_id
     const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
       .select('id')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .maybeSingle();
 
     if (artistError || !artist) {
@@ -1005,11 +1005,11 @@ router.put('/settings', authenticate, async (req, res) => {
       });
     }
 
-    // Get artist profile first to get artist_id
+    // Get artist profile - artists.id = user_id
     const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
       .select('id')
-      .eq('user_id', userId)
+      .eq('id', userId)
       .maybeSingle();
 
     if (artistError || !artist) {
