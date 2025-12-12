@@ -939,11 +939,12 @@ router.get('/settings', authenticate, async (req, res) => {
     const userId = req.user.id;
     console.log('Fetching settings for user:', userId);
 
-    // Get artist profile - artists.id = user_id
+    // Get artist profile - artists.id = user_id (artists table primary key IS the user_id)
+    // IMPORTANT: Do NOT use .eq('user_id', ...) - that column doesn't exist
     const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
       .select('id')
-      .eq('id', userId)
+      .eq('id', userId)  // artists.id is the user_id
       .maybeSingle();
 
     if (artistError) {
