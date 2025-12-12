@@ -13,23 +13,56 @@ router.get('/settings', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Get artist profile
+    // Get artist profile - artists.id = user_id (artists table primary key IS the user_id)
     const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
-      .select('id, commission_settings')
-      .eq('user_id', userId)
-      .single();
+      .select('id')
+      .eq('id', userId)  // artists.id is the user_id
+      .maybeSingle();
 
     if (artistError) {
+      console.error('Error fetching artist:', artistError);
+      return res.status(500).json({
+        success: false,
+        error: 'Database error: ' + artistError.message
+      });
+    }
+
+    if (!artist) {
       return res.status(404).json({
         success: false,
         error: 'Artist profile not found'
       });
     }
 
+    // Get commission settings from artist_commission_settings table
+    const { data: settings, error: settingsError } = await supabaseAdmin
+      .from('artist_commission_settings')
+      .select('*')
+      .eq('artist_id', artist.id)
+      .maybeSingle();
+
+    if (settingsError && settingsError.code !== 'PGRST116') {
+      console.error('Error fetching commission settings:', settingsError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch settings: ' + settingsError.message
+      });
+    }
+
     res.json({
       success: true,
-      settings: artist.commission_settings || {}
+      settings: settings || {
+        artist_id: artist.id,
+        max_queue_slots: 5,
+        allow_waitlist: false,
+        is_open: true,
+        status_message: null,
+        terms_of_service: null,
+        will_draw: [],
+        wont_draw: [],
+        avg_response_hours: null
+      }
     });
   } catch (error) {
     console.error('Error fetching artist settings:', error);
@@ -68,11 +101,38 @@ router.put('/settings', authenticate, async (req, res) => {
       updated_at: new Date().toISOString()
     };
 
-    // Update artist settings
-    const { data, error } = await supabaseAdmin
+    // Get artist profile - artists.id = user_id
+    const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
-      .update({ commission_settings: validatedSettings })
-      .eq('user_id', userId)
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (artistError || !artist) {
+      return res.status(404).json({
+        success: false,
+        error: 'Artist profile not found'
+      });
+    }
+
+    // Validate and prepare settings for artist_commission_settings table
+    const validatedSettings = {
+      artist_id: artist.id,
+      max_queue_slots: parseInt(settings.queue_slots || settings.max_queue_slots) || 5,
+      allow_waitlist: Boolean(settings.waitlist_enabled || settings.allow_waitlist),
+      is_open: !Boolean(settings.commissions_paused),
+      status_message: settings.status_message?.trim() || null,
+      terms_of_service: settings.terms_of_service?.trim() || null,
+      will_draw: Array.isArray(settings.will_draw) ? settings.will_draw : (settings.will_draw ? [settings.will_draw] : []),
+      wont_draw: Array.isArray(settings.wont_draw) ? settings.wont_draw : (settings.wont_draw ? [settings.wont_draw] : []),
+      avg_response_hours: settings.avg_response_hours ? parseInt(settings.avg_response_hours) : null,
+      updated_at: new Date().toISOString()
+    };
+
+    // Upsert settings in artist_commission_settings table
+    const { data, error } = await supabaseAdmin
+      .from('artist_commission_settings')
+      .upsert(validatedSettings, { onConflict: 'artist_id' })
       .select()
       .single();
 
