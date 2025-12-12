@@ -192,7 +192,7 @@ router.post('/request', authenticate, async (req, res) => {
     }
 
     // Send initial message
-    await supabaseAdmin.from('messages').insert({
+    const { data: initialMessage } = await supabaseAdmin.from('messages').insert({
       conversation_id: conversation.id,
       sender_id: req.user.id,
       message_type: 'commission_request',
@@ -214,7 +214,16 @@ router.post('/request', authenticate, async (req, res) => {
           : null,
         selected_addons: Array.isArray(selectedAddons) ? selectedAddons : []
       }
-    });
+    }).select().single();
+
+    // Emit Socket.io event for real-time update
+    const io = req.app.locals.io;
+    if (io && initialMessage) {
+      io.to(conversation.id).emit('new-message', {
+        ...initialMessage,
+        created_at: new Date().toISOString()
+      });
+    }
 
     res.status(201).json({
       commission,

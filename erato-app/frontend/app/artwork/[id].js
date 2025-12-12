@@ -18,6 +18,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore, useBoardStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { useEngagementTracking } from '../../hooks/useEngagementTracking';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -39,9 +40,15 @@ export default function ArtworkDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const isLikingRef = useRef(false); // Prevent useEffect from interfering during like operation
-  
+
   // Get liked state from shared store
   const isLiked = likedArtworks.has(String(id));
+
+  // Track engagement
+  const { trackLike, trackSave, trackCommissionInquiry } = useEngagementTracking(id, {
+    trackView: true,
+    source: 'artwork_detail',
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -164,15 +171,16 @@ export default function ArtworkDetailScreen() {
         setArtwork({ ...artwork, like_count: newLikeCount });
       }
 
+      // Track engagement if liked (not unliked)
+      if (isNowLiked) {
+        trackLike({ like_count: newLikeCount });
+      }
+
       // DON'T refresh boards immediately - it causes reloading which resets state
       // The backend has already updated the board, so we trust our local state
       // We manually add to the store, so we don't need to reload from server
-      // Only reset the flag after a longer delay to prevent any reloads from interfering
-      setTimeout(() => {
-        isLikingRef.current = false;
-        // Optionally refresh boards much later, but don't do it immediately
-        // The merge strategy in loadLikedArtworks will preserve our local state
-      }, 5000); // Long delay to ensure no reloads interfere
+      // Reset the flag immediately so user can like/unlike again
+      isLikingRef.current = false;
     } catch (error) {
       console.error('Error toggling like:', error);
       console.error('Error details:', error.response?.data || error.message);
@@ -387,6 +395,8 @@ export default function ArtworkDetailScreen() {
                   });
                   return;
                 }
+                // Track commission inquiry engagement
+                trackCommissionInquiry({ artist_id: artwork.artist_id });
                 router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
               }}
             >

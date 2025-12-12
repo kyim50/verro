@@ -63,11 +63,11 @@ router.post('/submit', authenticate, upload.array('files', 10), async (req, res)
     }
 
     // Validate verification type
-    const validTypes = ['portfolio', 'payment', 'identity'];
+    const validTypes = ['portfolio', 'payment'];
     if (!validTypes.includes(verificationType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid verification type'
+        error: 'Invalid verification type. Available types: portfolio, payment'
       });
     }
 
@@ -363,18 +363,6 @@ router.get('/badge-requirements', async (req, res) => {
           'No disputes or chargebacks',
           'Account in good standing'
         ]
-      },
-      identity: {
-        name: 'Identity Verified',
-        description: 'Artist has verified their identity with Erato',
-        icon: 'user-check',
-        color: '#8B5CF6',
-        requirements: [
-          'Provide government-issued ID',
-          'Complete video verification call (optional)',
-          'Verify payment details match identity',
-          'Pass background check (for commercial tiers)'
-        ]
       }
     };
 
@@ -430,8 +418,7 @@ router.get('/stats/:artistId', async (req, res) => {
     // Calculate verification progress
     const verificationProgress = {
       portfolio: artist.verification_type === 'portfolio' && artist.verified,
-      payment: completedCommissions >= 5 && averageRating >= 4.0,
-      identity: artist.verification_type === 'identity' && artist.verified
+      payment: completedCommissions >= 5 && averageRating >= 4.0
     };
 
     res.json({

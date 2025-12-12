@@ -297,9 +297,17 @@ export default function MessagesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity>
-          <Ionicons name="create-outline" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => router.push('/commission-requests')}
+          >
+            <Ionicons name="briefcase-outline" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="create-outline" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -360,6 +368,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 26 : 28,
     fontWeight: '700',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerButton: {
+    padding: spacing.xs,
   },
   listContent: {
     paddingTop: spacing.xs,

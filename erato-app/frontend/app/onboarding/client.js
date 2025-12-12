@@ -85,16 +85,8 @@ export default function ClientOnboardingScreen() {
   };
 
   const handleComplete = () => {
-    Alert.alert(
-      'You\'re all set!',
-      'Start exploring artworks and discovering amazing artists.',
-      [
-        {
-          text: 'Start Exploring',
-          onPress: () => router.replace('/(tabs)/home'),
-        },
-      ]
-    );
+    // Navigate to style quiz before going to home
+    router.replace('/onboarding/style-quiz');
   };
 
   const handleSkip = () => {

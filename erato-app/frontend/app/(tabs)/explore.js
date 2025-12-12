@@ -18,7 +18,7 @@ import { showAlert } from '../../components/StyledAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
@@ -154,6 +154,7 @@ function CommissionFilesTab({ commissionId, token, isArtist }) {
 export default function CommissionDashboard() {
   const { token, user } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
   const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
   const [commissions, setCommissions] = useState([]);
@@ -192,6 +193,18 @@ export default function CommissionDashboard() {
       }
     }, [token, user?.user_type, user?.artists])
   );
+
+  // Handle incoming commissionId from navigation params
+  useEffect(() => {
+    if (params.commissionId && commissions.length > 0) {
+      const commission = commissions.find(c => c.id === params.commissionId);
+      if (commission) {
+        setSelectedCommission(commission);
+        setShowCommissionModal(true);
+        setDetailTab('details');
+      }
+    }
+  }, [params.commissionId, commissions]);
 
   const loadCommissions = async () => {
     if (!token) return;
@@ -356,31 +369,35 @@ export default function CommissionDashboard() {
       setSelectedCommission(null);
     }
     
-    // Use requestAnimationFrame + setTimeout to ensure UI updates happen first
-    requestAnimationFrame(() => {
+    // Show success toast immediately (optimistic update)
+    Toast.show({
+      type: 'success',
+      text1: 'Success',
+      text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
+      visibilityTime: 2000,
+    });
+    
+    // Perform API call in background (completely fire-and-forget)
+    // Use multiple layers of async to ensure it doesn't block
+    Promise.resolve().then(() => {
       setTimeout(() => {
-        // Perform API call in background (fire-and-forget pattern)
         axios.patch(
           `${API_URL}/commissions/${commissionId}/status`,
           { status: newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         )
         .then(() => {
-          // Reload commissions list in background
-          loadCommissions().catch(err => {
-            console.error('Error reloading commissions:', err);
-          });
-          
-          Toast.show({
-            type: 'success',
-            text1: 'Success',
-            text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
-            visibilityTime: 2000,
-          });
+          // Reload commissions list much later to avoid blocking
+          setTimeout(() => {
+            loadCommissions().catch(err => {
+              console.error('Error reloading commissions:', err);
+            });
+          }, 500);
         })
         .catch((error) => {
           console.error('Error updating status:', error);
           const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
+          // Show error toast if API call fails
           Toast.show({
             type: 'error',
             text1: 'Error',
@@ -388,7 +405,7 @@ export default function CommissionDashboard() {
             visibilityTime: 3000,
           });
         });
-      }, 50);
+      }, 200);
     });
   };
 
@@ -1360,21 +1377,30 @@ export default function CommissionDashboard() {
                     <TouchableOpacity
                       style={styles.detailDeclineButton}
                       onPress={() => {
-                        showAlert({
-                          title: 'Decline Commission',
-                          message: 'Are you sure?',
-                          type: 'warning',
-                          buttons: [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Decline',
-                              style: 'destructive',
-                              onPress: () => {
-                                handleUpdateStatus(selectedCommission.id, 'declined', true);
+                        const commissionId = selectedCommission.id;
+                        // Close modal immediately (synchronously)
+                        setShowCommissionModal(false);
+                        setSelectedCommission(null);
+                        
+                        // Show confirmation after UI updates
+                        setTimeout(() => {
+                          showAlert({
+                            title: 'Decline Commission',
+                            message: 'Are you sure?',
+                            type: 'warning',
+                            buttons: [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Decline',
+                                style: 'destructive',
+                                onPress: () => {
+                                  // Handle action immediately without blocking
+                                  handleUpdateStatus(commissionId, 'declined', false);
+                                }
                               }
-                            }
-                          ]
-                        });
+                            ]
+                          });
+                        }, 200);
                       }}
                     >
                       <Ionicons name="close-circle-outline" size={20} color={colors.text.primary} />
@@ -1384,21 +1410,30 @@ export default function CommissionDashboard() {
                     <TouchableOpacity
                       style={styles.detailAcceptButton}
                       onPress={() => {
-                        showAlert({
-                          title: 'Accept Commission',
-                          message: 'Accept this request?',
-                          type: 'info',
-                          buttons: [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Accept',
-                              style: 'default',
-                              onPress: () => {
-                                handleUpdateStatus(selectedCommission.id, 'accepted', true);
+                        const commissionId = selectedCommission.id;
+                        // Close modal immediately (synchronously)
+                        setShowCommissionModal(false);
+                        setSelectedCommission(null);
+                        
+                        // Show confirmation after UI updates
+                        setTimeout(() => {
+                          showAlert({
+                            title: 'Accept Commission',
+                            message: 'Accept this request?',
+                            type: 'info',
+                            buttons: [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Accept',
+                                style: 'default',
+                                onPress: () => {
+                                  // Handle action immediately without blocking
+                                  handleUpdateStatus(commissionId, 'accepted', false);
+                                }
                               }
-                            }
-                          ]
-                        });
+                            ]
+                          });
+                        }, 200);
                       }}
                     >
                       <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />
@@ -1411,21 +1446,30 @@ export default function CommissionDashboard() {
                   <TouchableOpacity
                     style={styles.detailCompleteButton}
                     onPress={() => {
-                      showAlert({
-                        title: 'Complete Commission',
-                        message: 'Mark as completed?',
-                        type: 'info',
-                        buttons: [
-                          { text: 'Not Yet', style: 'cancel' },
-                          {
-                            text: 'Complete',
-                            style: 'default',
-                            onPress: () => {
-                              handleUpdateStatus(selectedCommission.id, 'completed', true);
+                      const commissionId = selectedCommission.id;
+                      // Close modal immediately (synchronously)
+                      setShowCommissionModal(false);
+                      setSelectedCommission(null);
+                      
+                      // Show confirmation after UI updates
+                      setTimeout(() => {
+                        showAlert({
+                          title: 'Complete Commission',
+                          message: 'Mark as completed?',
+                          type: 'info',
+                          buttons: [
+                            { text: 'Not Yet', style: 'cancel' },
+                            {
+                              text: 'Complete',
+                              style: 'default',
+                              onPress: () => {
+                                // Handle action immediately without blocking
+                                handleUpdateStatus(commissionId, 'completed', false);
+                              }
                             }
-                          }
-                        ]
-                      });
+                          ]
+                        });
+                      }, 200);
                     }}
                   >
                     <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />

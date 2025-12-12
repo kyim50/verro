@@ -93,6 +93,22 @@ export default function UploadArtworkScreen() {
       return;
     }
 
+    // Validate tags (at least one tag required)
+    const tagArray = tags
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0);
+
+    if (tagArray.length === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Tags Required',
+        text2: 'Please add at least one tag to help people discover your work',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
     setLoading(true);
     setUploading(true);
 
@@ -178,7 +194,7 @@ export default function UploadArtworkScreen() {
         <TouchableOpacity
           style={styles.uploadButton}
           onPress={handleUpload}
-          disabled={loading || !imageUri || !title.trim()}
+          disabled={loading || !imageUri || !title.trim() || !tags.trim()}
         >
           {loading ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -186,7 +202,7 @@ export default function UploadArtworkScreen() {
             <Text
               style={[
                 styles.uploadText,
-                (!imageUri || !title.trim()) && styles.uploadTextDisabled,
+                (!imageUri || !title.trim() || !tags.trim()) && styles.uploadTextDisabled,
               ]}
             >
               Post
@@ -299,7 +315,9 @@ export default function UploadArtworkScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Tags</Text>
+            <Text style={styles.label}>
+              Tags <Text style={styles.required}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               value={tags}
@@ -308,7 +326,19 @@ export default function UploadArtworkScreen() {
               placeholderTextColor={colors.text.disabled}
               editable={!loading}
             />
-            <Text style={styles.hint}>Add tags to help people discover your work</Text>
+            <Text style={styles.hint}>At least one tag is required to help people discover your work</Text>
+            {tags.trim() && (
+              <View style={styles.tagPreview}>
+                {tags.split(',').map((tag, index) => {
+                  const trimmedTag = tag.trim();
+                  return trimmedTag ? (
+                    <View key={index} style={styles.tagChip}>
+                      <Text style={styles.tagChipText}>{trimmedTag}</Text>
+                    </View>
+                  ) : null;
+                })}
+              </View>
+            )}
           </View>
 
           <View style={styles.switchContainer}>
@@ -491,6 +521,26 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+  },
+  tagPreview: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: `${colors.primary}20`,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  tagChipText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 12,
   },
   switchContainer: {
     flexDirection: 'row',
