@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import { useAuthStore } from '../../store';
 
@@ -89,7 +90,8 @@ export default function StyleQuizScreen() {
 
   const fetchStyles = async () => {
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/artists/styles/list`, {
+      const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}/artists/styles/list`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
 
@@ -162,7 +164,8 @@ export default function StyleQuizScreen() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/user-preferences`, {
+      const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}/user-preferences`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

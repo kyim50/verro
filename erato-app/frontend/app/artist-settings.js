@@ -144,12 +144,13 @@ export default function ArtistSettings() {
           title: 'Commission Settings',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text.primary,
+          headerShown: true,
         }}
       />
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: spacing.sm }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Commission Status */}

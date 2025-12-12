@@ -311,32 +311,15 @@ export default function CommissionDashboard() {
 
   const loadEngagementMetrics = async () => {
     if (!token || !isArtist) return;
-    
+
     setLoadingEngagement(true);
     try {
-      // Get artist ID - handle both array and object formats
-      let artistId;
-      if (Array.isArray(user?.artists) && user.artists.length > 0) {
-        artistId = user.artists[0].id;
-      } else if (user?.artists?.id) {
-        artistId = user.artists.id;
-      } else if (user?.artist_id) {
-        artistId = user.artist_id;
-      } else {
-        // Try to get from user_id if artist profile exists
-        const artistResponse = await axios.get(
-          `${API_URL}/artists?user_id=${user.id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const artists = artistResponse.data?.artists || [];
-        if (artists.length > 0) {
-          artistId = artists[0].id;
-        } else {
-          throw new Error('No artist profile found');
-        }
-      }
+      // Use user.id directly as the backend expects user_id, not artist table ID
+      // In the schema, artist.id = user.id, so we should pass the user's ID
+      const artistUserId = user.id;
+
       const response = await axios.get(
-        `${API_URL}/engagement/artist/${artistId}/metrics`,
+        `${API_URL}/engagement/artist/${artistUserId}/metrics`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setEngagementMetrics(response.data.data);
@@ -492,51 +475,41 @@ export default function CommissionDashboard() {
     ? commissions.filter(c => c.status === 'in_progress' || c.status === 'accepted')
     : commissions.filter(c => c.status === selectedFilter);
 
-  const handleUpdateStatus = (commissionId, newStatus, closeModal = false) => {
-    // Close modal immediately if requested (synchronously, before any async operations)
-    if (closeModal) {
-      setShowCommissionModal(false);
-      setSelectedCommission(null);
+  const handleUpdateStatus = async (commissionId, newStatus, closeModal = false) => {
+    try {
+      // Close modal if requested
+      if (closeModal) {
+        setShowCommissionModal(false);
+        setSelectedCommission(null);
+      }
+
+      // Update commission status via API
+      await axios.patch(
+        `${API_URL}/commissions/${commissionId}/status`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Show success message
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
+        visibilityTime: 2000,
+      });
+
+      // Reload commissions to reflect the change
+      await loadCommissions();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMessage,
+        visibilityTime: 3000,
+      });
     }
-    
-    // Show success toast immediately (optimistic update)
-    Toast.show({
-      type: 'success',
-      text1: 'Success',
-      text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
-      visibilityTime: 2000,
-    });
-    
-    // Perform API call in background (completely fire-and-forget)
-    // Use multiple layers of async to ensure it doesn't block
-    Promise.resolve().then(() => {
-      setTimeout(() => {
-        axios.patch(
-          `${API_URL}/commissions/${commissionId}/status`,
-          { status: newStatus },
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        .then(() => {
-          // Reload commissions list much later to avoid blocking
-          setTimeout(() => {
-            loadCommissions().catch(err => {
-              console.error('Error reloading commissions:', err);
-            });
-          }, 500);
-        })
-        .catch((error) => {
-          console.error('Error updating status:', error);
-          const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
-          // Show error toast if API call fails
-          Toast.show({
-            type: 'error',
-            text1: 'Error',
-            text2: errorMessage,
-            visibilityTime: 3000,
-          });
-        });
-      }, 200);
-    });
   };
 
   const handleBatchAction = async (action) => {

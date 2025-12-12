@@ -71,7 +71,7 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.8,
       selectionLimit: 5,
@@ -95,25 +95,47 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('note', uploadNote);
-      formData.append('requires_approval', approvalRequested);
-
-      selectedImages.forEach((image, index) => {
-        formData.append('images', {
+      // First upload images to get URLs
+      const uploadedImageUrls = [];
+      for (const image of selectedImages) {
+        const formData = new FormData();
+        formData.append('file', {
           uri: image.uri,
           type: 'image/jpeg',
-          name: `progress_${Date.now()}_${index}.jpg`,
+          name: `progress_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`,
         });
-      });
 
+        const uploadResponse = await axios.post(
+          `${API_URL}/uploads/commission-reference`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+
+        if (uploadResponse.data?.url) {
+          uploadedImageUrls.push(uploadResponse.data.url);
+        }
+      }
+
+      // Now create progress update with uploaded image URLs
+      const updateType = approvalRequested ? 'approval_checkpoint' : 'wip_image';
       await axios.post(
         `${API_URL}/commissions/${commissionId}/progress`,
-        formData,
+        {
+          update_type: updateType,
+          image_url: uploadedImageUrls[0], // Primary image
+          additional_images: uploadedImageUrls.slice(1), // Additional images
+          notes: uploadNote || null,
+          requires_approval: approvalRequested,
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
+            'Content-Type': 'application/json',
           },
         }
       );
