@@ -892,52 +892,28 @@ export default function ConversationScreen() {
     return (
       <>
         {shouldShowDayHeader(item, index) && renderDayHeader(item.created_at)}
-        <View style={[styles.commissionCard, isArtist && styles.commissionCardReceived]}>
-          <TouchableOpacity
-            style={styles.commissionCardContent}
-            onPress={() => {
-              setSelectedCommissionDetails({
-                title: metadata.title,
-                description: item.content,
-                budget: metadata.budget,
-                deadline: metadata.deadline,
+        <TouchableOpacity
+          style={[styles.compactCommissionCard, isArtist && styles.compactCommissionCardReceived]}
+          onPress={() => {
+            if (commission?.id) {
+              // Navigate to Commissions tab (explore) with commission ID
+              router.push({
+                pathname: '/(tabs)/explore',
+                params: { commissionId: commission.id }
               });
-              setShowDetailsModal(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.commissionHeader}>
-              <View style={styles.commissionHeaderLeft}>
-                <Ionicons name="briefcase" size={20} color={colors.primary} />
-                <Text style={styles.commissionTitle}>Commission Request</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
-            </View>
-
-            {metadata.title && (
-              <Text style={styles.commissionRequestTitle} numberOfLines={2}>
-                {metadata.title}
-              </Text>
-            )}
-
-            <View style={styles.commissionQuickInfo}>
-              {metadata.budget && (
-                <View style={styles.quickInfoChip}>
-                  <Ionicons name="cash-outline" size={14} color={colors.primary} />
-                  <Text style={styles.quickInfoText}>${metadata.budget}</Text>
-                </View>
-              )}
-              {metadata.deadline && (
-                <View style={styles.quickInfoChip}>
-                  <Ionicons name="time-outline" size={14} color={colors.primary} />
-                  <Text style={styles.quickInfoText}>{metadata.deadline}</Text>
-                </View>
-              )}
-            </View>
-
-            <Text style={styles.tapToViewText}>Tap to view details</Text>
-          </TouchableOpacity>
-        </View>
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.compactCommissionIcon}>
+            <Ionicons name="briefcase" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.compactCommissionContent}>
+            <Text style={styles.compactCommissionTitle}>Commission Request</Text>
+            <Text style={styles.compactCommissionSubtitle}>Tap to view details</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.text.disabled} />
+        </TouchableOpacity>
       </>
     );
   };
@@ -1057,36 +1033,96 @@ export default function ConversationScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {selectedCommissionDetails && (
-                <>
-                  {selectedCommissionDetails.title && (
-                    <View style={styles.modalSection}>
-                      <Text style={styles.modalLabel}>Title</Text>
-                      <Text style={styles.modalValue}>{selectedCommissionDetails.title}</Text>
-                    </View>
-                  )}
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalLabel}>Description</Text>
-                    <Text style={styles.modalValue}>{selectedCommissionDetails.description}</Text>
-                  </View>
-                  {selectedCommissionDetails.budget && (
-                    <View style={styles.modalSection}>
-                      <Text style={styles.modalLabel}>Budget</Text>
-                      <Text style={styles.modalValue}>${selectedCommissionDetails.budget}</Text>
-                    </View>
-                  )}
-                  {selectedCommissionDetails.deadline && (
-                    <View style={styles.modalSection}>
-                      <Text style={styles.modalLabel}>Deadline</Text>
-                      <Text style={styles.modalValue}>{selectedCommissionDetails.deadline}</Text>
-                    </View>
-                  )}
-                </>
-              )}
-
-              {/* Payment Information */}
               {commission && (
                 <>
+                  {/* Commission Status */}
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalLabel}>Status</Text>
+                    <View style={styles.statusBadgeContainer}>
+                      <View style={[
+                        styles.statusBadge,
+                        commission.status === 'completed' && styles.statusBadgeSuccess,
+                        commission.status === 'in_progress' && styles.statusBadgeWarning,
+                        commission.status === 'pending' && styles.statusBadgeInfo,
+                        commission.status === 'cancelled' && styles.statusBadgeError,
+                      ]}>
+                        <Text style={styles.statusBadgeText}>
+                          {commission.status === 'in_progress' ? 'In Progress' :
+                           commission.status.charAt(0).toUpperCase() + commission.status.slice(1)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Commission Details */}
+                  {commission.details && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Details</Text>
+                      <Text style={styles.modalValue}>{commission.details}</Text>
+                    </View>
+                  )}
+
+                  {commission.client_note && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Client Notes</Text>
+                      <Text style={styles.modalValue}>{commission.client_note}</Text>
+                    </View>
+                  )}
+
+                  {commission.budget && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Budget</Text>
+                      <Text style={styles.modalValue}>${commission.budget}</Text>
+                    </View>
+                  )}
+
+                  {commission.final_price && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Final Price</Text>
+                      <Text style={styles.modalValue}>${commission.final_price}</Text>
+                    </View>
+                  )}
+
+                  {commission.deadline_text && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Deadline</Text>
+                      <Text style={styles.modalValue}>{commission.deadline_text}</Text>
+                    </View>
+                  )}
+
+                  {/* Progress Updates */}
+                  {progressUpdates.length > 0 && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Progress Updates ({progressUpdates.length})</Text>
+                      <View style={styles.progressList}>
+                        {progressUpdates.slice(0, 3).map((update, idx) => (
+                          <View key={update.id} style={styles.progressItem}>
+                            <Ionicons
+                              name={
+                                update.update_type === 'wip_image' ? 'image-outline' :
+                                update.update_type === 'approval_checkpoint' ? 'checkmark-circle-outline' :
+                                'refresh-outline'
+                              }
+                              size={16}
+                              color={colors.primary}
+                            />
+                            <Text style={styles.progressItemText}>
+                              {update.update_type === 'wip_image' ? 'WIP Update' :
+                               update.update_type === 'approval_checkpoint' ? 'Approval Checkpoint' :
+                               `Revision #${update.revision_number}`}
+                            </Text>
+                          </View>
+                        ))}
+                        {progressUpdates.length > 3 && (
+                          <Text style={styles.progressMoreText}>
+                            +{progressUpdates.length - 3} more in chat
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Payment Information */}
                   {/* Escrow Status */}
                   {commission.escrow_status && (
                     <View style={styles.modalSection}>
@@ -1180,56 +1216,6 @@ export default function ConversationScreen() {
                 </>
               )}
             </ScrollView>
-
-            {/* Payment Information - Removed duplicate EscrowStatus, it's already shown above */}
-            {commission && (
-              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                {/* Milestone Tracker */}
-                {commission.payment_type === 'milestone' && (
-                  <MilestoneTracker
-                    commissionId={commission.id}
-                    isClient={commission.client_id === user?.id}
-                    onPayMilestone={async (milestone) => {
-                      setPaymentData({
-                        commissionId: commission.id,
-                        amount: milestone.amount,
-                        paymentType: 'milestone',
-                        milestoneId: milestone.id,
-                      });
-                      setShowPaymentOptions(false);
-                      setShowStripeCheckout(true);
-                    }}
-                  />
-                )}
-
-                {/* Payment Options for Pending Commissions */}
-                {commission.status === 'pending' && commission.client_id === user?.id && (
-                  <TouchableOpacity
-                    style={styles.paymentButton}
-                    onPress={() => setShowPaymentOptions(true)}
-                  >
-                    <Ionicons name="card-outline" size={20} color={colors.text.primary} />
-                    <Text style={styles.paymentButtonText}>Make Payment</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Transaction History */}
-                {commission.payment_status && commission.payment_status !== 'unpaid' && (
-                  <TransactionHistory commissionId={commission.id} />
-                )}
-
-                {/* Tip Jar for Completed Commissions */}
-                {commission.status === 'completed' && commission.client_id === user?.id && (
-                  <TouchableOpacity
-                    style={styles.tipButton}
-                    onPress={() => setShowTipJar(true)}
-                  >
-                    <Ionicons name="heart" size={20} color={colors.status.error} />
-                    <Text style={styles.tipButtonText}>Tip Artist</Text>
-                  </TouchableOpacity>
-                )}
-              </ScrollView>
-            )}
 
             {/* Action Buttons for In-Progress Commissions */}
             {commission && (commission.status === 'in_progress' || commission.status === 'accepted') && (
@@ -1783,76 +1769,48 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: borderRadius.lg,
   },
-  commissionCard: {
+  // Compact commission request card
+  compactCommissionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    marginVertical: spacing.sm,
-    marginHorizontal: spacing.xs,
+    borderRadius: borderRadius.md,
+    marginVertical: spacing.xs,
+    marginHorizontal: spacing.md,
+    padding: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    maxWidth: '90%',
+    maxWidth: '85%',
     alignSelf: 'flex-start',
-    overflow: 'hidden',
+    gap: spacing.sm,
     ...shadows.small,
   },
-  commissionCardReceived: {
-    backgroundColor: colors.surface,
-    borderColor: colors.primary + '30',
+  compactCommissionCardReceived: {
+    borderColor: colors.primary + '40',
+    backgroundColor: colors.primary + '08',
   },
-  commissionCardContent: {
-    padding: spacing.md,
-  },
-  commissionHeader: {
-    flexDirection: 'row',
+  compactCommissionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
   },
-  commissionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
+  compactCommissionContent: {
+    flex: 1,
   },
-  commissionTitle: {
+  compactCommissionTitle: {
     ...typography.bodyBold,
-    color: colors.primary,
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: '700',
-  },
-  commissionRequestTitle: {
-    ...typography.h3,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: spacing.sm,
+    marginBottom: 2,
   },
-  commissionQuickInfo: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  quickInfoChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  quickInfoText: {
-    ...typography.small,
-    color: colors.text.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tapToViewText: {
+  compactCommissionSubtitle: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 11,
-    fontStyle: 'italic',
+    fontSize: 12,
   },
   commissionTime: {
     ...typography.small,
@@ -1888,7 +1846,6 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: spacing.lg,
-    maxHeight: 500,
   },
   paymentButton: {
     flexDirection: 'row',
@@ -1920,6 +1877,59 @@ const styles = StyleSheet.create({
   },
   modalSection: {
     marginBottom: spacing.lg,
+  },
+  statusBadgeContainer: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.text.disabled + '20',
+  },
+  statusBadgeSuccess: {
+    backgroundColor: colors.status.success + '20',
+  },
+  statusBadgeWarning: {
+    backgroundColor: colors.status.warning + '20',
+  },
+  statusBadgeInfo: {
+    backgroundColor: colors.primary + '20',
+  },
+  statusBadgeError: {
+    backgroundColor: colors.status.error + '20',
+  },
+  statusBadgeText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  progressList: {
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  progressItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.sm,
+  },
+  progressItemText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 14,
+  },
+  progressMoreText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   modalLabel: {
     ...typography.small,

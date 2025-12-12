@@ -705,4 +705,125 @@ router.get('/:id/like-count', optionalAuth, async (req, res, next) => {
   }
 });
 
+/**
+ * @route   GET /api/artworks/personalized
+ * @desc    Get personalized artwork feed based on user preferences and engagement
+ * @access  Private
+ */
+router.get('/personalized/feed', authenticate, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    // Get user preferences
+    const { data: preferences } = await supabaseAdmin
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    // Get user's engagement history to understand what they like
+    const { data: engagements } = await supabaseAdmin
+      .from('user_engagement')
+      .select('artwork_id, engagement_type, artworks(tags)')
+      .eq('user_id', userId)
+      .in('engagement_type', ['like', 'save', 'commission_inquiry'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // Extract tags from artworks user has engaged with
+    const engagedTags = new Set();
+    const engagedArtworkIds = new Set();
+
+    engagements?.forEach(eng => {
+      engagedArtworkIds.add(eng.artwork_id);
+      eng.artworks?.tags?.forEach(tag => engagedTags.add(tag));
+    });
+
+    // Combine preferred styles and engaged tags
+    const allPreferredTags = new Set([
+      ...(preferences?.preferred_styles || []),
+      ...(preferences?.interests || []),
+      ...Array.from(engagedTags)
+    ]);
+
+    let query = supabaseAdmin
+      .from('artworks_with_engagement')
+      .select(`
+        *,
+        artist:artists(
+          id,
+          user:users(id, username, avatar_url, full_name)
+        )
+      `);
+
+    // Filter by preferred tags if available
+    if (allPreferredTags.size > 0) {
+      query = query.overlaps('tags', Array.from(allPreferredTags));
+    }
+
+    // Exclude artworks user has already heavily engaged with
+    if (engagedArtworkIds.size > 0) {
+      query = query.not('id', 'in', `(${Array.from(engagedArtworkIds).join(',')})`);
+    }
+
+    const { data: artworks, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
+
+    if (error) throw error;
+
+    // Score artworks based on:
+    // 1. Tag match with user preferences (40%)
+    // 2. Engagement score (30%)
+    // 3. Recency (30%)
+    const scoredArtworks = (artworks || []).map(artwork => {
+      // Tag match score
+      const matchingTags = artwork.tags?.filter(tag => allPreferredTags.has(tag)) || [];
+      const tagMatchScore = allPreferredTags.size > 0
+        ? (matchingTags.length / allPreferredTags.size) * 100
+        : 50;
+
+      // Engagement score (normalized)
+      const engagementScore = artwork.engagement_score || 0;
+
+      // Recency score
+      const daysOld = (Date.now() - new Date(artwork.created_at).getTime()) / (1000 * 60 * 60 * 24);
+      const recencyScore = Math.max(0, 100 - (daysOld * 2)); // 2 points off per day
+
+      // Calculate final score
+      const finalScore = (tagMatchScore * 0.4) + (engagementScore * 0.3) + (recencyScore * 0.3);
+
+      return {
+        ...artwork,
+        personalization_score: finalScore,
+        match_reasons: {
+          matching_tags: matchingTags,
+          tag_match_percentage: Math.round((matchingTags.length / (artwork.tags?.length || 1)) * 100),
+        }
+      };
+    });
+
+    // Sort by personalization score
+    scoredArtworks.sort((a, b) => b.personalization_score - a.personalization_score);
+
+    res.json({
+      artworks: scoredArtworks,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: scoredArtworks.length,
+      },
+      personalization_info: {
+        has_preferences: !!preferences?.completed_quiz,
+        preferred_tags_count: allPreferredTags.size,
+        engagement_history_count: engagements?.length || 0,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

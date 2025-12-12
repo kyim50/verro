@@ -77,6 +77,9 @@ export default function ArtistSettings() {
   };
 
   const saveSettings = async () => {
+    // Prevent multiple simultaneous saves
+    if (saving) return;
+    
     try {
       setSaving(true);
 
@@ -101,7 +104,7 @@ export default function ArtistSettings() {
         type: 'success',
         text1: 'Saved',
         text2: 'Commission settings updated',
-        visibilityTime: 2000,
+        visibilityTime: 1500,
       });
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -166,7 +169,13 @@ export default function ArtistSettings() {
               </View>
               <Switch
                 value={commissionsPaused}
-                onValueChange={setCommissionsPaused}
+                onValueChange={(value) => {
+                  setCommissionsPaused(value);
+                  // Auto-save toggle changes
+                  setTimeout(() => {
+                    saveSettings();
+                  }, 300);
+                }}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.text.primary}
               />
@@ -209,7 +218,13 @@ export default function ArtistSettings() {
               </View>
               <Switch
                 value={waitlistEnabled}
-                onValueChange={setWaitlistEnabled}
+                onValueChange={(value) => {
+                  setWaitlistEnabled(value);
+                  // Auto-save toggle changes
+                  setTimeout(() => {
+                    saveSettings();
+                  }, 300);
+                }}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.text.primary}
               />
@@ -226,7 +241,13 @@ export default function ArtistSettings() {
               </View>
               <Switch
                 value={autoDecline}
-                onValueChange={setAutoDecline}
+                onValueChange={(value) => {
+                  setAutoDecline(value);
+                  // Auto-save toggle changes
+                  setTimeout(() => {
+                    saveSettings();
+                  }, 300);
+                }}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.text.primary}
                 disabled={waitlistEnabled}

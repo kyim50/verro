@@ -27,6 +27,8 @@ import referencesRoutes from './routes/references.js';
 import verificationRoutes from './routes/verification.js';
 import paymentsRoutes from './routes/payments.js';
 import reviewEnhancementsRoutes from './routes/reviewEnhancements.js';
+import userPreferencesRoutes from './routes/userPreferences.js';
+import engagementRoutes from './routes/engagement.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -154,6 +156,8 @@ app.use('/api/references', referencesRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/review-enhancements', reviewEnhancementsRoutes);
+app.use('/api/user-preferences', userPreferencesRoutes);
+app.use('/api/engagement', engagementRoutes);
 
 // 404 handler
 app.use((req, res) => {
