@@ -9,6 +9,7 @@ import LoadingScreen from './auth/loading';
 import ErrorBoundary from '../components/ErrorBoundary';
 import toastConfig from '../components/StyledToast';
 import StyledAlert, { showAlert } from '../components/StyledAlert';
+import { colors } from '../constants/theme';
 
 // Patch Toast.show globally to use the styled alert (smaller, consistent)
 let toastPatched = false;
@@ -154,11 +155,11 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: '#000000' },
+            contentStyle: { backgroundColor: colors.background },
             animation: 'fade',
             gestureEnabled: true,
             gestureDirection: 'horizontal',

@@ -27,8 +27,20 @@ export const colors = {
     info: '#0099ff',
   },
   
+  // Shorthand aliases for common status colors
+  success: '#00a400',
+  error: '#e60023',
+  warning: '#ffba00',
+  info: '#0099ff',
+  
   overlay: 'rgba(0, 0, 0, 0.7)',
   overlayLight: 'rgba(0, 0, 0, 0.5)',
+  overlayDark: 'rgba(0, 0, 0, 0.9)',
+  overlayMedium: 'rgba(0, 0, 0, 0.8)',
+  
+  // Common UI colors
+  likeColor: '#FF6B6B', // Heart/like color
+  white: '#ffffff',
   
   shadow: {
     color: '#000000',

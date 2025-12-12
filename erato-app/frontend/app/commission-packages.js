@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    backgroundColor: colors.overlayDark,
     justifyContent: 'flex-end',
   },
   modalContent: {

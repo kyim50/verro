@@ -197,7 +197,7 @@ export default function BoardDetailScreen() {
                 style={styles.modalCloseButton}
                 onPress={() => setShowModal(false)}
               >
-                <Ionicons name="close" size={28} color="#fff" />
+                <Ionicons name="close" size={28} color={colors.text.primary} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalViewButton}
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    backgroundColor: colors.overlayDark,
   },
   modalOverlay: {
     flex: 1,
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.text.primary + '33', // 0.2 opacity
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...typography.h2,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 24,
     marginBottom: spacing.xs,
   },

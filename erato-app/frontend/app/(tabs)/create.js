@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    shadowColor: '#000',
+    shadowColor: colors.shadow.color,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
   },
   modalImageWrapper: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   modalScrollView: {
     flex: 1,
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   portfolioImage: {
     width: width,
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: colors.text.primary + '4D', // 0.3 opacity
   },
   paginationDotActive: {
     width: 24,
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
   // Instructions Modal
   instructionsOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,

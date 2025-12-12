@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,9 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  Modal,
+  StatusBar,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -19,6 +22,7 @@ import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
+import ReviewsSection from '../../components/ReviewsSection';
 
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = (width - spacing.md * 4) / 3;
@@ -33,6 +37,11 @@ export default function ProfileScreen() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [avatarKey, setAvatarKey] = useState(0);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
+  const [selectedPortfolioIndex, setSelectedPortfolioIndex] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteAction, setDeleteAction] = useState(null);
+  const [portfolioTouchBlocked, setPortfolioTouchBlocked] = useState(false);
+  const portfolioModalClosingRef = useRef(false);
   const insets = useSafeAreaInsets();
 
   // Auto-refresh when screen comes into focus to get latest profile data
@@ -118,24 +127,29 @@ export default function ProfileScreen() {
   }, [profile?.avatar_url, user?.avatar_url]);
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            // Clear profile immediately to prevent flash
-            useProfileStore.getState().reset();
-            await logout();
-            // Navigate immediately without delay
-            router.replace('/auth/login');
-          },
-        },
-      ]
-    );
+    setDeleteAction({
+      title: 'Logout',
+      message: 'Are you sure you want to logout?',
+      onConfirm: async () => {
+        try {
+          setShowDeleteModal(false);
+          // Clear profile immediately to prevent flash
+          useProfileStore.getState().reset();
+          await logout();
+          Toast.show({
+            type: 'success',
+            text1: 'Logged out',
+            text2: 'See you next time!',
+            visibilityTime: 2000,
+          });
+          // Navigate immediately without delay
+          router.replace('/auth/login');
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+      },
+    });
+    setShowDeleteModal(true);
   };
 
   // Early return if no user (prevents flash during logout)
@@ -157,84 +171,77 @@ export default function ProfileScreen() {
   const artistId = profile?.artist?.id || profile?.id;
   const isOwnProfile = user?.id === profile?.id;
 
-  const handleDeleteArtwork = async (artworkId) => {
+  const confirmDeleteArtwork = async (artworkId) => {
     if (!token || !isOwnProfile) return;
-    Alert.alert(
-      'Delete Artwork',
-      'Hold to confirm deleting this artwork. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const deleteResponse = await axios.delete(`${API_URL}/artworks/${artworkId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              
-              // Remove from feed store immediately
-              try {
-                feedStore.removeArtwork?.(artworkId);
-              } catch (e) {
-                console.warn('Feed store removal failed:', e?.message || e);
+    setDeleteAction({
+      title: 'Delete Artwork',
+      message: 'Are you sure you want to delete this artwork? This cannot be undone.',
+      onConfirm: async () => {
+        setShowDeleteModal(false);
+        try {
+          const deleteResponse = await axios.delete(`${API_URL}/artworks/${artworkId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          
+          // Remove from feed store immediately
+          try {
+            feedStore.removeArtwork?.(artworkId);
+          } catch (e) {
+            console.warn('Feed store removal failed:', e?.message || e);
+          }
+          
+          // Optimistically remove from local state immediately
+          const { profile: currentProfile } = useProfileStore.getState();
+          if (currentProfile?.artist?.artworks) {
+            useProfileStore.setState({
+              profile: {
+                ...currentProfile,
+                artist: {
+                  ...currentProfile.artist,
+                  artworks: currentProfile.artist.artworks.filter(a => String(a.id) !== String(artworkId))
+                }
               }
-              
-              // Optimistically remove from local state immediately
-              const { profile: currentProfile } = useProfileStore.getState();
-              if (currentProfile?.artist?.artworks) {
-                useProfileStore.setState({
-                  profile: {
-                    ...currentProfile,
-                    artist: {
-                      ...currentProfile.artist,
-                      artworks: currentProfile.artist.artworks.filter(a => String(a.id) !== String(artworkId))
-                    }
-                  }
-                });
-              }
-              
-              // Force refresh profile by resetting and fetching fresh data
-              reset();
-              await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure state clears
-              await fetchProfile(user.id, token);
-              
-              Toast.show({
-                type: 'success',
-                text1: 'Success',
-                text2: 'Artwork deleted successfully',
-                visibilityTime: 2000,
-              });
-            } catch (error) {
-              console.error('Error deleting artwork:', error);
-              const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: msg,
-                visibilityTime: 3000,
-              });
-            }
-          },
-        },
-      ]
-    );
+            });
+          }
+          
+          // Force refresh profile by resetting and fetching fresh data
+          reset();
+          await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure state clears
+          await fetchProfile(user.id, token);
+          
+          Toast.show({
+            type: 'success',
+            text1: 'Success',
+            text2: 'Artwork deleted successfully',
+            visibilityTime: 2000,
+          });
+        } catch (error) {
+          console.error('Error deleting artwork:', error);
+          const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: msg,
+            visibilityTime: 3000,
+          });
+        }
+      },
+    });
+    setShowDeleteModal(true);
   };
+
+  const handleDeleteArtwork = confirmDeleteArtwork;
 
   const handleDeletePortfolioImage = async (index) => {
     if (!token || !isOwnProfile) return;
     const currentImages = profile?.artist?.portfolio_images || [];
     const updated = currentImages.filter((_, idx) => idx !== index);
 
-    Alert.alert(
-      'Remove Portfolio Image',
-      'Remove this portfolio image?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-              onPress: async () => {
+    setDeleteAction({
+      title: 'Remove Portfolio Image',
+      message: 'Are you sure you want to remove this portfolio image?',
+      onConfirm: async () => {
+        setShowDeleteModal(false);
             try {
               // Filter out any empty/blank images before sending
               const cleanedImages = updated.filter(img => {
@@ -248,6 +255,12 @@ export default function ProfileScreen() {
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
               );
               await fetchProfile(user.id, token);
+              Toast.show({
+                type: 'success',
+                text1: 'Removed',
+                text2: 'Portfolio image removed successfully',
+                visibilityTime: 2000,
+              });
             } catch (error) {
               console.error('Error removing portfolio image:', error);
               const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
@@ -258,10 +271,9 @@ export default function ProfileScreen() {
                 visibilityTime: 3000,
               });
             }
-          },
-        },
-      ]
-    );
+      },
+    });
+    setShowDeleteModal(true);
   };
 
   const handleDeletePortfolioImageByUrl = async (urlToDelete) => {
@@ -273,15 +285,11 @@ export default function ProfileScreen() {
       return img.trim() !== urlToDelete.trim();
     });
 
-    Alert.alert(
-      'Remove Portfolio Image',
-      'Remove this portfolio image?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-              onPress: async () => {
+    setDeleteAction({
+      title: 'Remove Portfolio Image',
+      message: 'Are you sure you want to remove this portfolio image?',
+      onConfirm: async () => {
+        setShowDeleteModal(false);
             try {
               // Filter out any empty/blank images before sending
               const cleanedImages = updated.filter(img => {
@@ -295,6 +303,12 @@ export default function ProfileScreen() {
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
               );
               await fetchProfile(user.id, token);
+              Toast.show({
+                type: 'success',
+                text1: 'Removed',
+                text2: 'Portfolio image removed successfully',
+                visibilityTime: 2000,
+              });
             } catch (error) {
               console.error('Error removing portfolio image:', error);
               const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
@@ -305,10 +319,9 @@ export default function ProfileScreen() {
                 visibilityTime: 3000,
               });
             }
-          },
-        },
-      ]
-    );
+      },
+    });
+    setShowDeleteModal(true);
   };
 
   // Show loading only on initial load with no cached data
@@ -365,7 +378,15 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          <Text style={styles.username}>@{profile?.username}</Text>
+          <View style={styles.usernameRow}>
+            <Text style={styles.username}>@{profile?.username}</Text>
+            <Ionicons 
+              name="checkmark-circle" 
+              size={18} 
+              color={(profile?.is_verified || profile?.verified) ? colors.error : colors.text.disabled}
+              style={styles.verifiedBadge}
+            />
+          </View>
           {profile?.full_name && (
             <Text style={styles.fullName}>{profile.full_name}</Text>
           )}
@@ -418,10 +439,10 @@ export default function ProfileScreen() {
                     size={20}
                     color={
                       profile.artist.commission_status === 'open'
-                        ? colors.status.success
+                        ? colors.success
                         : profile.artist.commission_status === 'limited'
                         ? colors.status.warning
-                        : colors.status.error
+                        : colors.error
                     }
                   />
                   <Text
@@ -429,10 +450,10 @@ export default function ProfileScreen() {
                       styles.statusBadgeText,
                       {
                         color: profile.artist.commission_status === 'open'
-                          ? colors.status.success
+                          ? colors.success
                           : profile.artist.commission_status === 'limited'
                           ? colors.status.warning
-                          : colors.status.error
+                          : colors.error
                       }
                     ]}
                   >
@@ -468,7 +489,7 @@ export default function ProfileScreen() {
                 {profile.artist.specialties && profile.artist.specialties.length > 0 && (
                   <View style={styles.specialtiesContainer}>
                     <View style={styles.rowLeft}>
-                      <Ionicons name="brush" size={18} color={colors.text.secondary} />
+                      <Ionicons name="brush" size={18} color={colors.primary} />
                       <Text style={styles.infoLabel}>Specialties</Text>
                     </View>
                     <View style={styles.tagContainer}>
@@ -494,58 +515,55 @@ export default function ProfileScreen() {
                 </View>
 
 {(() => {
-                  // Filter out empty/null/blank images and create array with original indices
+                  // Filter out empty/null/blank images
                   const portfolioImages = profile.artist.portfolio_images || [];
-                  const imagesWithIndices = portfolioImages
-                    .map((img, index) => ({ url: img, originalIndex: index }))
-                    .filter(item => {
-                      // More strict filtering: must be a string, non-empty after trim, and look like a valid URL
-                      if (!item.url || typeof item.url !== 'string') return false;
-                      const trimmed = item.url.trim();
-                      if (!trimmed) return false;
-                      // Check if it looks like a valid URL (starts with http:// or https://)
-                      return trimmed.startsWith('http://') || trimmed.startsWith('https://');
-                    });
+                  const validImages = portfolioImages.filter(img => {
+                    if (!img || typeof img !== 'string') return false;
+                    const trimmed = img.trim();
+                    return trimmed && (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
+                  });
                   
-                  if (imagesWithIndices.length > 0) {
-                    // Filter out any items with invalid URLs one more time before rendering
-                    const validImages = imagesWithIndices.filter(item => {
-                      const imageUrl = item.url?.trim();
-                      return imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'));
-                    });
-                    
-                    if (validImages.length > 0) {
-                      return (
-                        <View style={styles.portfolioGrid}>
-                          {validImages.map((item, displayIndex) => {
-                            const imageUrl = item.url.trim();
-                            return (
-                              <TouchableOpacity
-                                key={`portfolio-${imageUrl}-${displayIndex}`}
-                                style={styles.portfolioItem}
-                                activeOpacity={0.85}
-                                onLongPress={() => {
-                                  if (isOwnProfile) {
-                                    // Find the actual URL in the original array to delete by URL, not index
-                                    handleDeletePortfolioImageByUrl(imageUrl);
-                                  }
+                  if (validImages.length > 0) {
+                    return (
+                      <View style={styles.portfolioScrollContainer}>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.portfolioScrollContent}
+                          snapToAlignment="start"
+                          decelerationRate="fast"
+                        >
+                          {validImages.map((imageUrl, index) => (
+                            <TouchableOpacity
+                              key={`portfolio-${imageUrl}-${index}`}
+                              style={styles.portfolioScrollItem}
+                              activeOpacity={0.85}
+                              disabled={portfolioTouchBlocked}
+                              onPress={() => {
+                                if (!portfolioTouchBlocked) {
+                                  setSelectedPortfolioIndex(index);
+                                }
+                              }}
+                              onLongPress={() => {
+                                if (isOwnProfile && !portfolioTouchBlocked) {
+                                  handleDeletePortfolioImageByUrl(imageUrl);
+                                }
+                              }}
+                            >
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.portfolioScrollImage}
+                                contentFit="cover"
+                                transition={200}
+                                onError={(error) => {
+                                  console.warn('Portfolio image failed to load:', imageUrl, error);
                                 }}
-                              >
-                                <Image
-                                  source={{ uri: imageUrl }}
-                                  style={styles.portfolioImage}
-                                  contentFit="cover"
-                                  transition={200}
-                                  onError={(error) => {
-                                    console.warn('Portfolio image failed to load:', imageUrl, error);
-                                  }}
-                                />
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      );
-                    }
+                              />
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    );
                   } else {
                     return (
                       <TouchableOpacity
@@ -603,14 +621,20 @@ export default function ProfileScreen() {
             {/* Reviews */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Reviews</Text>
-                <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={16} color={colors.status.warning} />
-                  <Text style={styles.ratingText}>
-                    {profile.artist.average_rating ? profile.artist.average_rating.toFixed(1) : 'N/A'} ({profile.artist.review_count || 0})
-                  </Text>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="star-outline" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Reviews</Text>
                 </View>
+                {profile.artist.average_rating > 0 && (
+                  <View style={styles.ratingContainer}>
+                    <Ionicons name="star" size={16} color={colors.status.warning} />
+                    <Text style={styles.ratingText}>
+                      {profile.artist.average_rating.toFixed(1)} ({profile.artist.review_count || 0})
+                    </Text>
+                  </View>
+                )}
               </View>
+              <ReviewsSection artistId={profile.artist.id} isArtistView={isOwnProfile} />
             </View>
           </>
         )}
@@ -856,6 +880,125 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
+      {/* Portfolio Modal Viewer */}
+      {(() => {
+        const portfolioImages = profile?.artist?.portfolio_images || [];
+        const validImages = portfolioImages.filter(img => {
+          if (!img || typeof img !== 'string') return false;
+          const trimmed = img.trim();
+          return trimmed && (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
+        });
+        
+        return (
+          <Modal
+            visible={selectedPortfolioIndex !== null && validImages.length > 0}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => {
+              portfolioModalClosingRef.current = true;
+              setSelectedPortfolioIndex(null);
+              setPortfolioTouchBlocked(true);
+              setTimeout(() => {
+                setPortfolioTouchBlocked(false);
+                portfolioModalClosingRef.current = false;
+              }, 1500);
+            }}
+          >
+            <View style={styles.portfolioModalContainer}>
+              <StatusBar barStyle="light-content" />
+              
+              {/* Header */}
+              <View style={styles.portfolioModalHeader}>
+                <TouchableOpacity
+                  style={styles.portfolioModalCloseButton}
+                  onPress={() => {
+                    portfolioModalClosingRef.current = true;
+                    setSelectedPortfolioIndex(null);
+                    setPortfolioTouchBlocked(true);
+                    setTimeout(() => {
+                      setPortfolioTouchBlocked(false);
+                      portfolioModalClosingRef.current = false;
+                    }, 1500);
+                  }}
+                >
+                  <Ionicons name="close" size={28} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.portfolioModalCounter}>
+                  {selectedPortfolioIndex !== null ? `${selectedPortfolioIndex + 1} / ${validImages.length}` : ''}
+                </Text>
+                <View style={{ width: 40 }} />
+              </View>
+
+              {/* Image Viewer */}
+              <FlatList
+                data={validImages}
+                renderItem={({ item }) => (
+                  <View style={styles.portfolioModalImageContainer}>
+                    <Image
+                      source={{ uri: item }}
+                      style={styles.portfolioModalImage}
+                      contentFit="contain"
+                    />
+                  </View>
+                )}
+                keyExtractor={(item, index) => `${item}-${index}`}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={selectedPortfolioIndex !== null && selectedPortfolioIndex < validImages.length ? selectedPortfolioIndex : 0}
+                getItemLayout={(data, index) => ({
+                  length: width,
+                  offset: width * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(event) => {
+                  // Prevent reopening modal if it's being closed
+                  if (portfolioModalClosingRef.current) {
+                    return;
+                  }
+                  const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+                  if (newIndex >= 0 && newIndex < validImages.length && selectedPortfolioIndex !== null) {
+                    setSelectedPortfolioIndex(newIndex);
+                  }
+                }}
+              />
+            </View>
+          </Modal>
+        );
+      })()}
+
+      {/* Custom Delete Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <Ionicons name="alert-circle" size={48} color={colors.error} />
+            </View>
+            <Text style={styles.deleteModalTitle}>{deleteAction?.title}</Text>
+            <Text style={styles.deleteModalMessage}>{deleteAction?.message}</Text>
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalButtonCancel]}
+                onPress={() => setShowDeleteModal(false)}
+              >
+                <Text style={styles.deleteModalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalButtonDelete]}
+                onPress={() => deleteAction?.onConfirm?.()}
+              >
+                <Text style={styles.deleteModalButtonTextDelete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Style Preference Quiz Modal */}
       {!isArtist && (
         <StylePreferenceQuiz
@@ -914,11 +1057,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
   username: {
     ...typography.h2,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 22 : 24,
-    marginBottom: spacing.xs,
+  },
+  verifiedBadge: {
+    marginTop: 2,
   },
   fullName: {
     ...typography.body,
@@ -934,26 +1085,25 @@ const styles = StyleSheet.create({
   editButton: {
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
   },
   editButtonText: {
     ...typography.button,
     color: colors.text.primary,
   },
   section: {
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: spacing.sm,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
@@ -963,7 +1113,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 18 : 20,
+    fontSize: IS_SMALL_SCREEN ? 17 : 20,
+    fontWeight: '700',
   },
   editIconButton: {
     padding: spacing.xs,
@@ -978,54 +1129,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  portfolioGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  portfolioScrollContainer: {
+    marginLeft: -(IS_SMALL_SCREEN ? spacing.md : spacing.lg),
+    marginRight: -(IS_SMALL_SCREEN ? spacing.md : spacing.lg),
+  },
+  portfolioScrollContent: {
+    paddingLeft: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingRight: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     gap: spacing.sm,
   },
-  portfolioItem: {
-    width: (width - (IS_SMALL_SCREEN ? spacing.sm : spacing.md) * 4) / 2,
+  portfolioScrollItem: {
+    width: width * 0.75,
     aspectRatio: 3 / 4,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
   },
-  portfolioImage: {
+  portfolioScrollImage: {
     width: '100%',
     height: '100%',
   },
   commissionCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.lg,
+    padding: 0,
+    gap: spacing.md,
   },
   statusBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1.5,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
     justifyContent: 'center',
   },
   statusBadgeOpen: {
-    borderColor: colors.success + '40',
-    backgroundColor: colors.success + '10',
+    borderColor: colors.success,
+    backgroundColor: colors.success + '20',
   },
   statusBadgeLimited: {
-    borderColor: colors.warning + '40',
-    backgroundColor: colors.warning + '10',
+    borderColor: colors.status.warning,
+    backgroundColor: colors.status.warning + '20',
   },
   statusBadgeClosed: {
-    borderColor: colors.text.disabled + '40',
-    backgroundColor: colors.text.disabled + '10',
+    borderColor: colors.error,
+    backgroundColor: colors.error + '20',
   },
   statusBadgeText: {
     ...typography.bodyBold,
-    fontSize: 15,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '700',
   },
   commissionStatus: {
@@ -1049,23 +1204,23 @@ const styles = StyleSheet.create({
   },
   infoGrid: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xs,
+    gap: spacing.sm,
   },
   infoGridItem: {
     flex: 1,
     alignItems: 'center',
-    padding: spacing.md,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
   },
   infoIconContainer: {
-    width: 44,
-    height: 44,
+    width: IS_SMALL_SCREEN ? 36 : 44,
+    height: IS_SMALL_SCREEN ? 36 : 44,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '15',
+    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.sm,
@@ -1073,23 +1228,27 @@ const styles = StyleSheet.create({
   infoGridLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
-    marginBottom: spacing.xs - 2,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
   },
   infoGridValue: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
+    fontSize: IS_SMALL_SCREEN ? 14 : 16,
     fontWeight: '700',
+    textAlign: 'center',
   },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
   infoLabel: {
     ...typography.bodyBold,
-    color: colors.text.secondary,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
   },
   infoValue: {
     ...typography.bodyBold,
@@ -1097,31 +1256,42 @@ const styles = StyleSheet.create({
   },
   statusOpenText: {
     color: colors.status.success,
+    fontWeight: '600',
   },
   statusLimitedText: {
     color: colors.status.warning,
+    fontWeight: '600',
   },
   statusClosedText: {
     color: colors.status.error,
+    fontWeight: '600',
   },
   specialtiesContainer: {
-    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '80',
+    gap: spacing.sm,
   },
   tagContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
   tag: {
-    backgroundColor: colors.surfaceLight,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
   },
   tagText: {
     ...typography.caption,
     color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
+    fontWeight: '500',
   },
   artworkGrid: {
     flexDirection: 'row',
@@ -1148,20 +1318,26 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   boardsList: {
-    gap: spacing.sm,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   boardItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border + '80',
+    ...shadows.small,
   },
   boardName: {
     ...typography.body,
     color: colors.text.primary,
     flex: 1,
+    fontSize: IS_SMALL_SCREEN ? 14 : 16,
   },
   seeAllText: {
     ...typography.body,
@@ -1171,48 +1347,53 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
   },
   addPortfolioButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
   addPortfolioText: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
   },
   addPortfolioSubtext: {
     ...typography.small,
     color: colors.text.secondary,
-    marginTop: spacing.xs,
+    marginTop: spacing.xs / 2,
     textAlign: 'center',
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   statCard: {
     flex: 1,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
+    ...shadows.small,
   },
   statIconContainer: {
-    width: 48,
-    height: 48,
+    width: IS_SMALL_SCREEN ? 40 : 48,
+    height: IS_SMALL_SCREEN ? 40 : 48,
     borderRadius: borderRadius.full,
-    backgroundColor: `${colors.primary}15`,
+    backgroundColor: `${colors.primary}20`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.sm,
@@ -1220,37 +1401,41 @@ const styles = StyleSheet.create({
   statValue: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 20,
-    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '700',
+    marginBottom: spacing.xs / 2,
   },
   statLabel: {
     ...typography.caption,
     color: colors.text.secondary,
     textAlign: 'center',
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   clientStatsCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
     overflow: 'hidden',
+    ...shadows.small,
   },
   clientStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
   clientStatDivider: {
     height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
+    backgroundColor: colors.border + '60',
+    marginHorizontal: spacing.lg,
   },
   clientStatIconContainer: {
-    width: 44,
-    height: 44,
+    width: IS_SMALL_SCREEN ? 48 : 52,
+    height: IS_SMALL_SCREEN ? 48 : 52,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '15',
+    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1260,32 +1445,35 @@ const styles = StyleSheet.create({
   clientStatValue: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: spacing.xs / 2,
   },
   clientStatLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
   },
   quickActionsList: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
   quickActionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    gap: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border + '80',
   },
   quickActionIcon: {
-    width: 44,
-    height: 44,
+    width: IS_SMALL_SCREEN ? 40 : 44,
+    height: IS_SMALL_SCREEN ? 40 : 44,
     borderRadius: borderRadius.full,
-    backgroundColor: `${colors.primary}15`,
+    backgroundColor: `${colors.primary}20`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1300,5 +1488,106 @@ const styles = StyleSheet.create({
   quickActionSubtitle: {
     ...typography.caption,
     color: colors.text.secondary,
+  },
+  // Portfolio Modal Styles
+  portfolioModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  portfolioModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: Constants.statusBarHeight + spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  portfolioModalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  portfolioModalCounter: {
+    ...typography.body,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  portfolioModalImageContainer: {
+    width: width,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  portfolioModalImage: {
+    width: width,
+    height: '80%',
+  },
+  // Custom Delete Modal Styles
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  deleteModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '80',
+  },
+  deleteModalHeader: {
+    marginBottom: spacing.md,
+  },
+  deleteModalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  deleteModalMessage: {
+    ...typography.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 22,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  deleteModalButtonCancel: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border + '80',
+  },
+  deleteModalButtonDelete: {
+    backgroundColor: colors.error,
+  },
+  deleteModalButtonTextCancel: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  deleteModalButtonTextDelete: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '600',
   },
 });

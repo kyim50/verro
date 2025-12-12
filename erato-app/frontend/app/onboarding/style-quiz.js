@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuthStore } from '../../store';
 
 const { width, height } = Dimensions.get('window');
 const IS_SMALL_SCREEN = height < 700;
@@ -54,7 +54,7 @@ export default function StyleQuizScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const insets = useSafeAreaInsets();
-  const { token } = useAuth();
+  const { token } = useAuthStore();
 
   const STEPS = [
     {

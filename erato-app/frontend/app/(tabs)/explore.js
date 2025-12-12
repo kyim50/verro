@@ -29,6 +29,8 @@ import EscrowStatus from '../../components/EscrowStatus';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
+const IS_SMALL_SCREEN = width < 400;
+const IS_VERY_SMALL_SCREEN = width < 380;
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 // Commission Files Tab Component
@@ -176,6 +178,9 @@ export default function CommissionDashboard() {
   const [batchMode, setBatchMode] = useState(false);
   const [totalSpent, setTotalSpent] = useState(0);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showEngagementModal, setShowEngagementModal] = useState(false);
+  const [engagementMetrics, setEngagementMetrics] = useState(null);
+  const [loadingEngagement, setLoadingEngagement] = useState(false);
   const [detailTab, setDetailTab] = useState('details'); // details, progress, files
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -194,17 +199,26 @@ export default function CommissionDashboard() {
     }, [token, user?.user_type, user?.artists])
   );
 
-  // Handle incoming commissionId from navigation params
+  // Handle incoming commissionId from navigation params (only once, not on every load)
+  const hasOpenedCommissionRef = useRef(false);
   useEffect(() => {
-    if (params.commissionId && commissions.length > 0) {
+    // Reset ref when component unmounts or when navigating away
+    return () => {
+      hasOpenedCommissionRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (params.commissionId && commissions.length > 0 && !hasOpenedCommissionRef.current && !showCommissionModal) {
       const commission = commissions.find(c => c.id === params.commissionId);
       if (commission) {
         setSelectedCommission(commission);
         setShowCommissionModal(true);
         setDetailTab('details');
+        hasOpenedCommissionRef.current = true;
       }
     }
-  }, [params.commissionId, commissions]);
+  }, [params.commissionId, commissions, showCommissionModal]);
 
   const loadCommissions = async () => {
     if (!token) return;
@@ -293,6 +307,122 @@ export default function CommissionDashboard() {
       .filter(c => c.final_price && (c.status === 'completed' || c.status === 'in_progress'))
       .reduce((sum, c) => sum + parseFloat(c.final_price || 0), 0);
     setTotalSpent(total);
+  };
+
+  const loadEngagementMetrics = async () => {
+    if (!token || !isArtist) return;
+    
+    setLoadingEngagement(true);
+    try {
+      // Get artist ID - handle both array and object formats
+      let artistId;
+      if (Array.isArray(user?.artists) && user.artists.length > 0) {
+        artistId = user.artists[0].id;
+      } else if (user?.artists?.id) {
+        artistId = user.artists.id;
+      } else if (user?.artist_id) {
+        artistId = user.artist_id;
+      } else {
+        // Try to get from user_id if artist profile exists
+        const artistResponse = await axios.get(
+          `${API_URL}/artists?user_id=${user.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const artists = artistResponse.data?.artists || [];
+        if (artists.length > 0) {
+          artistId = artists[0].id;
+        } else {
+          throw new Error('No artist profile found');
+        }
+      }
+      const response = await axios.get(
+        `${API_URL}/engagement/artist/${artistId}/metrics`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setEngagementMetrics(response.data.data);
+    } catch (error) {
+      console.error('Error loading engagement metrics:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load engagement metrics',
+        visibilityTime: 2000,
+      });
+    } finally {
+      setLoadingEngagement(false);
+    }
+  };
+
+  const loadClientEngagementMetrics = async () => {
+    if (!token || isArtist) return;
+    
+    setLoadingEngagement(true);
+    try {
+      // Get client's engagement history
+      const historyResponse = await axios.get(
+        `${API_URL}/engagement/user/history`,
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          params: { limit: 100 }
+        }
+      );
+      
+      const engagements = historyResponse.data.data || [];
+      
+      // Calculate statistics
+      const stats = {
+        total_views: engagements.filter(e => e.engagement_type === 'view').length,
+        total_clicks: engagements.filter(e => e.engagement_type === 'click').length,
+        total_likes: engagements.filter(e => e.engagement_type === 'like').length,
+        total_saves: engagements.filter(e => e.engagement_type === 'save').length,
+        total_shares: engagements.filter(e => e.engagement_type === 'share').length,
+        total_commission_inquiries: engagements.filter(e => e.engagement_type === 'commission_inquiry').length,
+        unique_artworks: new Set(engagements.map(e => e.artwork_id)).size,
+        unique_artists: new Set(engagements.map(e => e.artwork?.artist_id).filter(Boolean)).size,
+      };
+
+      // Get most engaged artworks
+      const artworkEngagementCounts = {};
+      engagements.forEach(e => {
+        if (!artworkEngagementCounts[e.artwork_id]) {
+          artworkEngagementCounts[e.artwork_id] = {
+            artwork_id: e.artwork_id,
+            artwork: e.artwork,
+            count: 0,
+            types: new Set()
+          };
+        }
+        artworkEngagementCounts[e.artwork_id].count++;
+        artworkEngagementCounts[e.artwork_id].types.add(e.engagement_type);
+      });
+
+      const topArtworks = Object.values(artworkEngagementCounts)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map(item => ({
+          artwork_id: item.artwork_id,
+          title: item.artwork?.title || 'Untitled',
+          image_url: item.artwork?.image_url || item.artwork?.thumbnail_url,
+          engagement_count: item.count,
+          engagement_types: Array.from(item.types)
+        }));
+
+      setEngagementMetrics({
+        ...stats,
+        top_artworks: topArtworks,
+        recent_engagements: engagements.slice(0, 10)
+      });
+    } catch (error) {
+      console.error('Error loading client engagement metrics:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load engagement metrics',
+        visibilityTime: 2000,
+      });
+    } finally {
+      setLoadingEngagement(false);
+    }
   };
 
   const onRefresh = async () => {
@@ -782,6 +912,20 @@ export default function CommissionDashboard() {
               <Ionicons name="stats-chart" size={20} color={colors.primary} />
               <Text style={styles.actionButtonText}>Stats</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={async () => {
+                setShowEngagementModal(true);
+                if (isArtist) {
+                  await loadEngagementMetrics();
+                } else {
+                  await loadClientEngagementMetrics();
+                }
+              }}
+            >
+              <Ionicons name="analytics-outline" size={20} color={colors.primary} />
+              <Text style={styles.actionButtonText}>Engagement</Text>
+            </TouchableOpacity>
             {isArtist && (
               <TouchableOpacity
                 style={styles.actionButton}
@@ -882,7 +1026,7 @@ export default function CommissionDashboard() {
           contentContainerStyle={[
             styles.listContent,
             filteredCommissions.length === 0 && { flexGrow: 1, justifyContent: 'center' },
-            { paddingBottom: Math.max(insets.bottom, 20) + (batchMode ? 140 : 80) }
+            { paddingBottom: Math.max(insets.bottom, spacing.lg) + (batchMode ? 140 : 80) }
           ]}
           renderItem={({ item }) => renderListCard(item)}
           keyExtractor={(item) => String(item.id)}
@@ -1012,6 +1156,191 @@ export default function CommissionDashboard() {
                       </Text>
                     </View>
                   </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Engagement Analytics Modal */}
+      <Modal
+        visible={showEngagementModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEngagementModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.statsModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isArtist ? 'Engagement Analytics' : 'My Engagement Activity'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowEngagementModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
+              {loadingEngagement ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.loadingText}>Loading metrics...</Text>
+                </View>
+              ) : engagementMetrics ? (
+                <>
+                  {/* Overview Stats */}
+                  <View style={styles.statsSection}>
+                    <Text style={styles.statsSectionTitle}>Overview</Text>
+                    <View style={styles.statsGrid}>
+                      {isArtist ? (
+                        <>
+                          <View style={styles.statBox}>
+                            <Text style={styles.statBoxValue}>{engagementMetrics.total_artworks || 0}</Text>
+                            <Text style={styles.statBoxLabel}>Artworks</Text>
+                          </View>
+                          <View style={styles.statBox}>
+                            <Text style={styles.statBoxValue}>
+                              {engagementMetrics.average_engagement_score?.toFixed(1) || '0.0'}
+                            </Text>
+                            <Text style={styles.statBoxLabel}>Avg Score</Text>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.statBox}>
+                            <Text style={styles.statBoxValue}>{engagementMetrics.unique_artworks || 0}</Text>
+                            <Text style={styles.statBoxLabel}>Artworks Viewed</Text>
+                          </View>
+                          <View style={styles.statBox}>
+                            <Text style={styles.statBoxValue}>{engagementMetrics.unique_artists || 0}</Text>
+                            <Text style={styles.statBoxLabel}>Artists Discovered</Text>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Engagement Metrics */}
+                  <View style={styles.statsSection}>
+                    <Text style={styles.statsSectionTitle}>
+                      {isArtist ? 'Engagement Metrics' : 'My Activity'}
+                    </Text>
+                    <View style={styles.statCard}>
+                      <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                        <Text style={styles.statCardLabel}>Views</Text>
+                        <Text style={styles.statCardValue}>{engagementMetrics.total_views || 0}</Text>
+                      </View>
+                      {isArtist && (
+                        <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                          <Text style={styles.statCardLabel}>Clicks</Text>
+                          <Text style={styles.statCardValue}>{engagementMetrics.total_clicks || 0}</Text>
+                        </View>
+                      )}
+                      <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                        <Text style={styles.statCardLabel}>Likes</Text>
+                        <Text style={styles.statCardValue}>{engagementMetrics.total_likes || 0}</Text>
+                      </View>
+                      <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                        <Text style={styles.statCardLabel}>Saves</Text>
+                        <Text style={styles.statCardValue}>{engagementMetrics.total_saves || 0}</Text>
+                      </View>
+                      {isArtist && (
+                        <View style={[styles.statCardRow, styles.statCardRowWithBorder]}>
+                          <Text style={styles.statCardLabel}>Shares</Text>
+                          <Text style={styles.statCardValue}>{engagementMetrics.total_shares || 0}</Text>
+                        </View>
+                      )}
+                      <View style={styles.statCardRow}>
+                        <Text style={styles.statCardLabel}>
+                          {isArtist ? 'Commission Inquiries' : 'Inquiries Sent'}
+                        </Text>
+                        <Text style={styles.statCardValue}>
+                          {engagementMetrics.total_commission_inquiries || 0}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Top Artworks */}
+                  {engagementMetrics.top_artworks && engagementMetrics.top_artworks.length > 0 && (
+                    <View style={styles.statsSection}>
+                      <Text style={styles.statsSectionTitle}>
+                        {isArtist ? 'Top Performing Artworks' : 'Most Engaged Artworks'}
+                      </Text>
+                      {engagementMetrics.top_artworks.map((artwork, index) => (
+                        <TouchableOpacity
+                          key={artwork.artwork_id}
+                          style={styles.topArtworkCard}
+                          onPress={() => {
+                            setShowEngagementModal(false);
+                            router.push(`/artwork/${artwork.artwork_id}`);
+                          }}
+                        >
+                          <Image
+                            source={{ uri: artwork.image_url }}
+                            style={styles.topArtworkImage}
+                            contentFit="cover"
+                          />
+                          <View style={styles.topArtworkInfo}>
+                            <Text style={styles.topArtworkTitle} numberOfLines={1}>
+                              {artwork.title || `Artwork #${index + 1}`}
+                            </Text>
+                            <View style={styles.topArtworkStats}>
+                              {isArtist ? (
+                                <>
+                                  <View style={styles.topArtworkStatItem}>
+                                    <Ionicons name="eye-outline" size={14} color={colors.text.secondary} />
+                                    <Text style={styles.topArtworkStatText}>{artwork.total_views || 0}</Text>
+                                  </View>
+                                  <View style={styles.topArtworkStatItem}>
+                                    <Ionicons name="bookmark-outline" size={14} color={colors.text.secondary} />
+                                    <Text style={styles.topArtworkStatText}>{artwork.total_saves || 0}</Text>
+                                  </View>
+                                  <View style={styles.topArtworkStatItem}>
+                                    <Ionicons name="trending-up-outline" size={14} color={colors.primary} />
+                                    <Text style={[styles.topArtworkStatText, { color: colors.primary }]}>
+                                      {artwork.engagement_score?.toFixed(1) || '0.0'}
+                                    </Text>
+                                  </View>
+                                </>
+                              ) : (
+                                <>
+                                  <View style={styles.topArtworkStatItem}>
+                                    <Ionicons name="heart-outline" size={14} color={colors.text.secondary} />
+                                    <Text style={styles.topArtworkStatText}>
+                                      {artwork.engagement_count || 0} interactions
+                                    </Text>
+                                  </View>
+                                  {artwork.engagement_types && artwork.engagement_types.length > 0 && (
+                                    <View style={styles.topArtworkStatItem}>
+                                      <Ionicons name="apps-outline" size={14} color={colors.text.secondary} />
+                                      <Text style={styles.topArtworkStatText}>
+                                        {artwork.engagement_types.join(', ')}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </>
+                              )}
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="analytics-outline" size={64} color={colors.text.disabled} />
+                  <Text style={styles.emptyTitle}>No Engagement Data</Text>
+                  <Text style={styles.emptyText}>
+                    {isArtist 
+                      ? 'Start sharing your artworks to see engagement metrics here.'
+                      : 'Start browsing and engaging with artworks to see your activity here.'}
+                  </Text>
                 </View>
               )}
             </ScrollView>
@@ -1176,7 +1505,7 @@ export default function CommissionDashboard() {
                 {detailTab === 'details' ? (
                   <ScrollView
                     style={styles.commissionDetailContent}
-                    contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl, minHeight: 400 }}
+                    contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg, minHeight: 400 }}
                     showsVerticalScrollIndicator={false}
                   >
                     {/* Clean User Header - Pinterest Style */}
@@ -1556,7 +1885,7 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: 28,
+    fontSize: IS_SMALL_SCREEN ? 24 : 28,
     fontWeight: '800',
     marginBottom: spacing.xs / 2,
     letterSpacing: -0.5,
@@ -1564,7 +1893,7 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
     fontWeight: '500',
   },
   cancelBatchButton: {
@@ -1606,7 +1935,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: colors.text.primary,
-    marginBottom: 2,
+    marginBottom: spacing.xs / 2,
   },
   statLabel: {
     ...typography.caption,
@@ -1769,7 +2098,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   kanbanColumnBadge: {
-    paddingHorizontal: spacing.sm + 2,
+    paddingHorizontal: spacing.sm + spacing.xs / 2,
     paddingVertical: 4,
     borderRadius: borderRadius.full,
     minWidth: 28,
@@ -1852,7 +2181,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   avatarFrame: {
-    padding: 2,
+    padding: spacing.xs / 2,
     borderRadius: borderRadius.full,
     borderWidth: 2,
   },
@@ -1870,7 +2199,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: spacing.xs / 2,
   },
   subMeta: {
     ...typography.caption,
@@ -1970,7 +2299,7 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   commissionDetailModal: {
@@ -2000,34 +2329,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '700',
   },
   modalCloseButton: {
-    width: 36,
-    height: 36,
+    width: IS_SMALL_SCREEN ? 32 : 36,
+    height: IS_SMALL_SCREEN ? 32 : 36,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   templatesContent: {
-    padding: spacing.lg,
+    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   templateCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -2081,7 +2412,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: spacing.xs / 2,
   },
   detailRoleBadge: {
     backgroundColor: colors.primary + '20',
@@ -2380,7 +2711,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 15,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: spacing.xs / 2,
   },
   pinterestCardDate: {
     ...typography.caption,
@@ -2424,15 +2755,15 @@ const styles = StyleSheet.create({
   // Compact Header Styles
   compactHeader: {
     backgroundColor: colors.background,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   compactHeaderTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   headerTitleContainer: {
     flex: 1,
@@ -2440,23 +2771,24 @@ const styles = StyleSheet.create({
   headerDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
     marginTop: spacing.xs / 2,
-    lineHeight: 18,
+    lineHeight: IS_SMALL_SCREEN ? 16 : 18,
   },
   statsSection: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingBottom: spacing.sm,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: spacing.xs,
   },
   statItem: {
     alignItems: 'center',
@@ -2476,8 +2808,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionsSection: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingBottom: spacing.sm,
   },
   actionsScrollContent: {
     gap: spacing.sm,
@@ -2487,24 +2819,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    minWidth: 110,
+    minWidth: IS_SMALL_SCREEN ? 90 : 110,
   },
   actionButtonText: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
     fontWeight: '600',
   },
   compactTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 24,
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
@@ -2557,7 +2889,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: spacing.xs / 2,
   },
   compactMetaRow: {
     flexDirection: 'row',
@@ -2577,17 +2909,18 @@ const styles = StyleSheet.create({
   compactPrice: {
     alignItems: 'flex-end',
     marginRight: spacing.xs,
+    minWidth: 60,
   },
   compactPriceText: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
     fontWeight: '700',
   },
   compactBudgetText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   compactActions: {
     marginLeft: spacing.xs,
@@ -2612,14 +2945,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   statsSection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   statsSectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
+    fontSize: IS_SMALL_SCREEN ? 16 : 18,
     fontWeight: '700',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -2630,26 +2963,31 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '45%',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statBoxValue: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 32,
+    fontSize: IS_SMALL_SCREEN ? 26 : 28,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs / 2,
   },
   statBoxLabel: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   statCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statCardRow: {
     flexDirection: 'row',
@@ -2664,13 +3002,55 @@ const styles = StyleSheet.create({
   statCardLabel: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
   },
   statCardValue: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '700',
+  },
+  topArtworkCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  topArtworkImage: {
+    width: IS_SMALL_SCREEN ? 50 : 60,
+    height: IS_SMALL_SCREEN ? 50 : 60,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.surfaceLight,
+  },
+  topArtworkInfo: {
+    flex: 1,
+  },
+  topArtworkTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    marginBottom: spacing.xs / 2,
+  },
+  topArtworkStats: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  topArtworkStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+  },
+  topArtworkStatText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
   },
   filesTabContent: {
     flex: 1,
@@ -2679,7 +3059,7 @@ const styles = StyleSheet.create({
   filesEmptyContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: spacing.xxl * 2,
+    paddingVertical: spacing.xl,
   },
   filesGrid: {
     flexDirection: 'row',
@@ -2704,7 +3084,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: colors.overlay,
     padding: spacing.sm,
   },
   fileNoteText: {
@@ -2768,6 +3148,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
-    marginTop: 2,
+    marginTop: spacing.xs / 2,
   },
 });

@@ -110,60 +110,10 @@ function CommissionsTabIcon({ color }) {
 }
 
 function BoardsTabIcon({ color }) {
-  const { token, user } = useAuthStore();
-  const [newCommissionCount, setNewCommissionCount] = useState(0);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchNewCommissions = async () => {
-      if (!token || !isMounted || !user) return;
-      
-      // Only show for artists (they receive commissions)
-      const isArtist = user?.user_type === 'artist' || 
-                       (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
-      
-      if (!isArtist) {
-        setNewCommissionCount(0);
-        return;
-      }
-
-      try {
-        const response = await axios.get(`${API_URL}/commissions?type=received&status=pending`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (isMounted) {
-          const pendingCommissions = response.data.commissions || [];
-          setNewCommissionCount(pendingCommissions.length);
-        }
-      } catch (error) {
-        // Silently fail to avoid spamming console
-        if (error.response?.status !== 429) {
-          console.error('Error fetching new commissions:', error.message);
-        }
-      }
-    };
-
-    // Fetch once on mount
-    fetchNewCommissions();
-
-    // Poll every 2 minutes to check for new commissions
-    const interval = setInterval(fetchNewCommissions, 120000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [token, user]);
-
+  // Boards tab should not show any notifications - it's just for saved boards
   return (
     <View style={{ position: 'relative' }}>
       <Ionicons name="library" size={22} color={color} />
-      {newCommissionCount > 0 && (
-        <View style={styles.unreadBadge}>
-          <Text style={styles.unreadBadgeText}>{Math.min(newCommissionCount, 9)}{newCommissionCount > 9 ? '+' : ''}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -199,9 +149,9 @@ export default function TabsLayout() {
         tabBarBackground: () => (
           <View style={{ 
             flex: 1, 
-            backgroundColor: 'rgba(26, 26, 26, 0.45)',
+            backgroundColor: colors.surface + '73', // 0.45 opacity
             borderTopWidth: 1,
-            borderTopColor: 'rgba(58, 58, 58, 0.25)',
+            borderTopColor: colors.border + '40', // 0.25 opacity
           }} />
         ),
       }}
