@@ -349,45 +349,47 @@ export default function CommissionDashboard() {
     ? commissions.filter(c => c.status === 'in_progress' || c.status === 'accepted')
     : commissions.filter(c => c.status === selectedFilter);
 
-  const handleUpdateStatus = async (commissionId, newStatus, closeModal = false) => {
-    // Close modal immediately if requested (before any async operations)
+  const handleUpdateStatus = (commissionId, newStatus, closeModal = false) => {
+    // Close modal immediately if requested (synchronously, before any async operations)
     if (closeModal) {
       setShowCommissionModal(false);
       setSelectedCommission(null);
     }
     
-    // Use setTimeout to ensure UI updates happen first
-    setTimeout(async () => {
-      try {
-        // Perform API call
-        await axios.patch(
+    // Use requestAnimationFrame + setTimeout to ensure UI updates happen first
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        // Perform API call in background (fire-and-forget pattern)
+        axios.patch(
           `${API_URL}/commissions/${commissionId}/status`,
           { status: newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
-        );
-        
-        // Reload commissions list in background
-        loadCommissions().catch(err => {
-          console.error('Error reloading commissions:', err);
+        )
+        .then(() => {
+          // Reload commissions list in background
+          loadCommissions().catch(err => {
+            console.error('Error reloading commissions:', err);
+          });
+          
+          Toast.show({
+            type: 'success',
+            text1: 'Success',
+            text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
+            visibilityTime: 2000,
+          });
+        })
+        .catch((error) => {
+          console.error('Error updating status:', error);
+          const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: errorMessage,
+            visibilityTime: 3000,
+          });
         });
-        
-        Toast.show({
-          type: 'success',
-          text1: 'Success',
-          text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
-          visibilityTime: 2000,
-        });
-      } catch (error) {
-        console.error('Error updating status:', error);
-        const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: errorMessage,
-          visibilityTime: 3000,
-        });
-      }
-    }, 100);
+      }, 50);
+    });
   };
 
   const handleBatchAction = async (action) => {
@@ -558,8 +560,8 @@ export default function CommissionDashboard() {
                       {
                         text: 'Accept',
                         style: 'default',
-                        onPress: async () => {
-                          await handleUpdateStatus(item.id, 'accepted');
+                        onPress: () => {
+                          handleUpdateStatus(item.id, 'accepted');
                         }
                       }
                     ]
@@ -696,8 +698,8 @@ export default function CommissionDashboard() {
                       {
                         text: 'Accept',
                         style: 'default',
-                        onPress: async () => {
-                          await handleUpdateStatus(item.id, 'accepted');
+                        onPress: () => {
+                          handleUpdateStatus(item.id, 'accepted');
                         }
                       }
                     ]
@@ -1418,9 +1420,8 @@ export default function CommissionDashboard() {
                           {
                             text: 'Complete',
                             style: 'default',
-                            onPress: async () => {
-                              await handleUpdateStatus(selectedCommission.id, 'completed');
-                              setShowCommissionModal(false);
+                            onPress: () => {
+                              handleUpdateStatus(selectedCommission.id, 'completed', true);
                             }
                           }
                         ]

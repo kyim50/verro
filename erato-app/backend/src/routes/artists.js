@@ -937,6 +937,7 @@ router.get('/matches/smart', authenticate, async (req, res) => {
 router.get('/settings', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('Fetching settings for user:', userId);
 
     // Get artist profile - artists.id = user_id
     const { data: artist, error: artistError } = await supabaseAdmin
@@ -945,12 +946,23 @@ router.get('/settings', authenticate, async (req, res) => {
       .eq('id', userId)
       .maybeSingle();
 
-    if (artistError || !artist) {
+    if (artistError) {
+      console.error('Error fetching artist:', artistError);
+      return res.status(500).json({
+        success: false,
+        error: 'Database error: ' + artistError.message
+      });
+    }
+
+    if (!artist) {
+      console.log('Artist profile not found for user:', userId);
       return res.status(404).json({
         success: false,
         error: 'Artist profile not found'
       });
     }
+
+    console.log('Found artist:', artist.id);
 
     // Get commission settings from artist_commission_settings table
     const { data: settings, error: settingsError } = await supabaseAdmin
@@ -963,9 +975,11 @@ router.get('/settings', authenticate, async (req, res) => {
       console.error('Error fetching commission settings:', settingsError);
       return res.status(500).json({
         success: false,
-        error: 'Failed to fetch settings'
+        error: 'Failed to fetch settings: ' + settingsError.message
       });
     }
+
+    console.log('Settings found:', !!settings);
 
     // Return settings or defaults
     res.json({
