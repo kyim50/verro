@@ -84,6 +84,8 @@ export default function HomeScreen() {
   const [forYouPage, setForYouPage] = useState(1);
   const [forYouLoading, setForYouLoading] = useState(false);
   const [forYouHasMore, setForYouHasMore] = useState(true);
+  const [sortOption, setSortOption] = useState('personalized'); // 'personalized', 'recent', 'trending', 'most_liked'
+  const [showSortFilterModal, setShowSortFilterModal] = useState(false);
   const scrollViewRef = useRef(null);
   const loadingRef = useRef(false);
   const lastFocusTimeRef = useRef(0);
@@ -117,17 +119,17 @@ export default function HomeScreen() {
     }
   }, [token, boards.length]);
 
-  // Load art styles and curate based on quiz preferences
+  // Load art styles and curate based on quiz preferences (for both clients and artists)
   useEffect(() => {
     const loadArtStyles = async () => {
-      if (!token || isArtist) return;
+      if (!token) return;
       setLoadingStyles(true);
       try {
         // Load all styles
         const stylesResponse = await axios.get(`${API_URL}/artists/styles/list`);
         const allStyles = stylesResponse.data.styles || [];
         
-        // Load user's style preferences
+        // Load user's style preferences (works for both clients and artists)
         try {
           const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -146,7 +148,7 @@ export default function HomeScreen() {
               return bWeight - aWeight;
             });
             
-            setCuratedStyles([...preferredStyles, ...otherStyles]);
+            setCuratedStyles(preferredStyles);
             setArtStyles([...preferredStyles, ...otherStyles]);
           } else {
             setArtStyles(allStyles);
@@ -164,7 +166,7 @@ export default function HomeScreen() {
       }
     };
     loadArtStyles();
-  }, [token, isArtist]);
+  }, [token]);
 
   // Load suggested artists for "Artists you might like" cards
   useEffect(() => {
@@ -256,18 +258,28 @@ export default function HomeScreen() {
     loadFilteredArtists(newFilters);
   };
 
-  // Load For You artworks
+  // Load For You artworks - using personalized algorithm
   const loadForYouArtworks = useCallback(async (reset = false) => {
     if (loadingRef.current || forYouLoading || (!reset && !forYouHasMore)) return;
+    if (!token) {
+      // If not logged in, fall back to regular feed
+      const response = await axios.get(`${API_URL}/artworks`, {
+        params: { page: reset ? 1 : forYouPage, limit: 20 }
+      });
+      const newArtworks = response.data.artworks || [];
+      setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
+      return;
+    }
     
     loadingRef.current = true;
     setForYouLoading(true);
     const page = reset ? 1 : forYouPage;
 
     try {
-      const response = await axios.get(`${API_URL}/artworks`, {
+      // Use personalized feed endpoint
+      const response = await axios.get(`${API_URL}/artworks/personalized/feed`, {
         params: { page, limit: 20 },
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       const newArtworks = response.data.artworks || [];
@@ -279,6 +291,17 @@ export default function HomeScreen() {
     } catch (error) {
       if (error.response?.status !== 429) {
         console.error('Error loading for you artworks:', error);
+        // Fallback to regular feed if personalized fails
+        try {
+          const fallbackResponse = await axios.get(`${API_URL}/artworks`, {
+            params: { page, limit: 20 },
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const newArtworks = fallbackResponse.data.artworks || [];
+          setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
+        } catch (fallbackError) {
+          console.error('Fallback feed also failed:', fallbackError);
+        }
       }
     } finally {
       setForYouLoading(false);
@@ -301,7 +324,7 @@ export default function HomeScreen() {
         try {
           if (activeTab === 'explore') {
             if (artworks.length === 0) {
-              await fetchArtworks(true);
+              await fetchArtworks(true, sortOption);
             }
           } else {
             if (forYouArtworks.length === 0) {
@@ -330,9 +353,15 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    fetchArtworks(true);
+    fetchArtworks(true, sortOption);
     fetchBoards();
-  }, []);
+  }, [sortOption]);
+
+  // Handle sort change
+  const handleSortChange = (newSort) => {
+    setSortOption(newSort);
+    setShowSortFilterModal(false);
+  };
 
   // Load liked artworks when boards are loaded
   useEffect(() => {
@@ -448,9 +477,9 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     reset();
-    await fetchArtworks(true);
+    await fetchArtworks(true, sortOption);
     setRefreshing(false);
-  }, []);
+  }, [sortOption]);
 
   const handleOpenSaveMenu = (artwork, e) => {
     if (e) {
@@ -620,11 +649,16 @@ export default function HomeScreen() {
     return (
       <View key={item.id} style={styles.suggestedArtistCard}>
         <View style={styles.suggestedArtistHeader}>
-          <Text style={styles.suggestedArtistTitle}>Artists you might like</Text>
-          <Text style={styles.suggestedArtistSubtitle}>Based on your preferences</Text>
+          <View>
+            <Text style={styles.suggestedArtistTitle}>Artists you might like</Text>
+            <Text style={styles.suggestedArtistSubtitle}>Based on your preferences</Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/explore')}>
+            <Text style={styles.suggestedArtistViewAll}>View All</Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.suggestedArtistList}>
-          {item.artists.map((artist) => (
+          {item.artists.slice(0, 3).map((artist) => (
             <TouchableOpacity
               key={artist.id}
               style={styles.suggestedArtistItem}
@@ -640,22 +674,32 @@ export default function HomeScreen() {
                 <Text style={styles.suggestedArtistName} numberOfLines={1}>
                   {artist.users?.full_name || artist.users?.username}
                 </Text>
-                <View style={styles.suggestedArtistStats}>
-                  <Ionicons name="star" size={12} color={colors.primary} />
-                  <Text style={styles.suggestedArtistRating}>
-                    {artist.rating?.toFixed(1) || '0.0'}
-                  </Text>
-                  {artist.min_price && artist.max_price && (
-                    <>
-                      <Text style={styles.suggestedArtistRating}> • </Text>
-                      <Text style={styles.suggestedArtistRating}>
-                        ${artist.min_price}-${artist.max_price}
-                      </Text>
-                    </>
-                  )}
+                <View style={styles.suggestedArtistMeta}>
+                  <View style={styles.suggestedArtistStats}>
+                    <Ionicons name="star" size={12} color={colors.status.warning} />
+                    <Text style={styles.suggestedArtistRating}>
+                      {artist.rating?.toFixed(1) || '0.0'}
+                    </Text>
+                  </View>
+                  {artist.commission_status === 'open' ? (
+                    <View style={styles.commissionStatusOpen}>
+                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                      <Text style={styles.commissionStatusText}>Open</Text>
+                    </View>
+                  ) : artist.commission_status === 'limited' ? (
+                    <View style={styles.commissionStatusLimited}>
+                      <Ionicons name="time" size={12} color={colors.status.warning} />
+                      <Text style={styles.commissionStatusTextLimited}>Limited</Text>
+                    </View>
+                  ) : null}
                 </View>
+                {artist.min_price && artist.max_price && (
+                  <Text style={styles.suggestedArtistPrice}>
+                    ${artist.min_price}-${artist.max_price}
+                  </Text>
+                )}
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.text.disabled} />
+              <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
             </TouchableOpacity>
           ))}
         </View>
@@ -673,6 +717,10 @@ export default function HomeScreen() {
     const currentLikedState = useFeedStore.getState().likedArtworks;
     const isLiked = currentLikedState.has(String(item.id));
     
+    // Check if artwork is trending (high engagement score)
+    const engagementScore = item.engagement_score || item.engagement?.engagement_score || 0;
+    const isTrending = engagementScore > 50; // Threshold for trending badge
+
     return (
       <View key={item.id} style={styles.card}>
         <View style={styles.imageContainer}>
@@ -686,6 +734,12 @@ export default function HomeScreen() {
               />
             </TouchableOpacity>
           </Link>
+          {isTrending && (
+            <View style={styles.trendingBadge}>
+              <Ionicons name="flame" size={14} color={colors.text.primary} />
+              <Text style={styles.trendingBadgeText}>Trending</Text>
+            </View>
+          )}
           {showLikeButton && token && (
             <TouchableOpacity
               style={styles.likeButtonOverlay}
@@ -699,7 +753,7 @@ export default function HomeScreen() {
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={24}
-                color={isLiked ? "#FF6B6B" : "rgba(255, 255, 255, 0.9)"}
+                color={isLiked ? colors.likeColor : colors.text.primary}
                 style={styles.likeIcon}
               />
             </TouchableOpacity>
@@ -841,76 +895,193 @@ export default function HomeScreen() {
       item.created_by_avatar ||
       item.avatar_url;
     
+    // Get artist commission status
+    const artistCommissionStatus =
+      primaryArtist?.commission_status ||
+      item.artist_commission_status ||
+      item.commission_status ||
+      'closed'; // Default to closed if not available
+    
+    // Get artist stats
+    const artistFollowerCount = 
+      primaryArtist?.follower_count ||
+      primaryArtist?.followers_count ||
+      item.artist_follower_count ||
+      item.followers_count ||
+      null;
+    
+    const artistRating = 
+      primaryArtist?.rating ||
+      primaryArtist?.average_rating ||
+      item.artist_rating ||
+      item.average_rating ||
+      null;
+    
+    // Get verification status
+    const isVerified = 
+      primaryArtist?.is_verified ||
+      primaryArtist?.verified ||
+      artistUser?.is_verified ||
+      artistUser?.verified ||
+      item.is_verified ||
+      item.verified ||
+      item.artist_is_verified ||
+      item.artist_verified ||
+      false;
+    
+    console.log('Verification Status:', {
+      primaryArtist: primaryArtist?.is_verified || primaryArtist?.verified,
+      artistUser: artistUser?.is_verified || artistUser?.verified,
+      item: item.is_verified || item.verified,
+      final: isVerified
+    });
+    
+    console.log('Artist Commission Status:', {
+      primaryArtist: primaryArtist?.commission_status,
+      item_artist: item.artist_commission_status,
+      item: item.commission_status,
+      final: artistCommissionStatus
+    });
+    
     return (
       <View style={styles.tikTokCard}>
-        <TouchableOpacity
-          style={styles.tikTokImageContainer}
-          activeOpacity={1}
-          onPress={handleDoubleTap}
-        >
-          <Image
-            source={{ uri: item.image_url || item.thumbnail_url }}
-            style={styles.tikTokImage}
-            contentFit="contain"
-            transition={200}
-            cachePolicy="memory-disk"
-            priority="high"
-          />
-          {showHeartAnimation && (
-            <Animated.View 
-              style={[
-                styles.heartAnimation,
-                {
-                  transform: [{ scale: heartScaleAnims.current[artworkId] }],
-                  opacity: heartOpacityAnims.current[artworkId],
-                }
-              ]}
-            >
-              <Ionicons name="heart" size={100} color="#FF6B6B" />
-            </Animated.View>
-          )}
-          
-          {item.view_count > 0 && (
-            <View style={styles.viewCountBadge}>
-              <Ionicons name="eye" size={14} color="#fff" />
-              <Text style={styles.viewCountText}>{item.view_count}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        
-        <LinearGradient
-          colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.95)']}
-          style={styles.tikTokInfoGradient}
-        >
-          <View style={styles.tikTokInfo}>
-            <TouchableOpacity
-              onPress={() => router.push(`/artist/${item.artist_id}`)}
-              style={styles.tikTokArtistInfo}
-              activeOpacity={0.8}
-            >
-              {artistAvatar ? (
-                <Image
-                  source={{ uri: artistAvatar }}
-                  style={styles.tikTokAvatar}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                />
-              ) : (
-                <View style={styles.tikTokAvatarPlaceholder}>
-                  <Ionicons name="person" size={24} color={colors.text.secondary} />
+        <View style={styles.tikTokImageWrapper}>
+          <TouchableOpacity
+            style={styles.tikTokImageContainer}
+            activeOpacity={1}
+            onPress={handleDoubleTap}
+          >
+            <Image
+              source={{ uri: item.image_url || item.thumbnail_url }}
+              style={styles.tikTokImage}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+              priority="high"
+            />
+            {showHeartAnimation && (
+              <Animated.View 
+                style={[
+                  styles.heartAnimation,
+                  {
+                    transform: [{ scale: heartScaleAnims.current[artworkId] }],
+                    opacity: heartOpacityAnims.current[artworkId],
+                  }
+                ]}
+              >
+                <Ionicons name="heart" size={100} color={colors.likeColor} />
+              </Animated.View>
+            )}
+            
+            {/* Top badges */}
+            <View style={styles.tikTokTopBadges}>
+              {item.view_count > 0 && (
+                <View style={styles.viewCountBadge}>
+                  <Ionicons name="eye" size={12} color={colors.text.primary} />
+                  <Text style={styles.viewCountText}>{item.view_count}</Text>
                 </View>
               )}
-              <View style={styles.tikTokArtistText}>
+              {artistCommissionStatus === 'open' && (
+                <View style={styles.commissionBadgeOpen}>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                  <Text style={styles.commissionBadgeText}>Open</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Artist Profile Card */}
+        <View style={[
+          styles.tikTokProfileCard,
+          {
+            borderColor: artistCommissionStatus === 'open' 
+              ? colors.success + '60' 
+              : colors.error + '40',
+            borderWidth: 2,
+          }
+        ]}>
+          <TouchableOpacity
+            onPress={() => router.push(`/artist/${item.artist_id}`)}
+            style={styles.tikTokProfileCardContent}
+            activeOpacity={0.7}
+          >
+            {artistAvatar ? (
+              <Image
+                source={{ uri: artistAvatar }}
+                style={styles.tikTokAvatar}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <View style={styles.tikTokAvatarPlaceholder}>
+                <Ionicons name="person" size={22} color={colors.text.secondary} />
+              </View>
+            )}
+            <View style={styles.tikTokArtistText}>
+              <View style={styles.tikTokArtistNameRow}>
                 <Text style={styles.tikTokArtistName}>
                   @{artistUsername}
                 </Text>
-                <Text style={styles.tikTokTitle} numberOfLines={2}>
-                  {item.title}
+                <Ionicons 
+                  name="checkmark-circle" 
+                  size={16} 
+                  color={isVerified ? colors.error : colors.text.disabled}
+                  style={styles.tikTokVerifiedBadge}
+                />
+              </View>
+              <View style={[
+                styles.tikTokStatusBadge,
+                artistCommissionStatus === 'open' && styles.tikTokStatusBadgeOpen,
+                artistCommissionStatus === 'closed' && styles.tikTokStatusBadgeClosed,
+              ]}>
+                <Ionicons 
+                  name={artistCommissionStatus === 'open' ? 'checkmark-circle' : 'close-circle'} 
+                  size={13} 
+                  color={artistCommissionStatus === 'open' ? colors.success : colors.error}
+                />
+                <Text style={[
+                  styles.tikTokStatusBadgeText,
+                  {
+                    color: artistCommissionStatus === 'open' ? colors.success : colors.error
+                  }
+                ]}>
+                  {artistCommissionStatus === 'open' ? 'Open for Commissions' : 'Closed for Commissions'}
                 </Text>
               </View>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
+              {(artistFollowerCount !== null || artistRating !== null) && (
+                <View style={styles.tikTokArtistStats}>
+                  {artistRating !== null && (
+                    <View style={styles.tikTokStatItem}>
+                      <Ionicons name="star" size={11} color={colors.status.warning} />
+                      <Text style={styles.tikTokStatText}>{artistRating.toFixed(1)}</Text>
+                    </View>
+                  )}
+                  {artistFollowerCount !== null && artistRating !== null && (
+                    <View style={styles.tikTokStatDivider} />
+                  )}
+                  {artistFollowerCount !== null && (
+                    <View style={styles.tikTokStatItem}>
+                      <Ionicons name="people" size={11} color={colors.text.secondary} />
+                      <Text style={styles.tikTokStatText}>
+                        {artistFollowerCount >= 1000 
+                          ? `${(artistFollowerCount / 1000).toFixed(1)}K` 
+                          : artistFollowerCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} style={{ opacity: 0.6 }} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom gradient */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']}
+          style={styles.tikTokInfoGradient}
+        />
 
         <View style={styles.tikTokActions}>
           {token && (
@@ -921,7 +1092,7 @@ export default function HomeScreen() {
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={32}
-                color={isLiked ? "#FF6B6B" : "#fff"}
+                color={isLiked ? colors.likeColor : colors.text.primary}
               />
               <Text style={styles.tikTokActionLabel}>
                 {isLiked ? 'Liked' : 'Like'}
@@ -933,7 +1104,7 @@ export default function HomeScreen() {
             style={styles.tikTokActionButton}
             onPress={() => router.push(`/artwork/${item.id}`)}
           >
-            <Ionicons name="information-circle-outline" size={32} color="#fff" />
+            <Ionicons name="information-circle-outline" size={32} color={colors.text.primary} />
             <Text style={styles.tikTokActionLabel}>Details</Text>
           </TouchableOpacity>
 
@@ -945,7 +1116,7 @@ export default function HomeScreen() {
               handleOpenSaveMenu(item, e);
             }}
           >
-            <Ionicons name="bookmark-outline" size={32} color="#fff" />
+            <Ionicons name="bookmark-outline" size={32} color={colors.text.primary} />
             <Text style={styles.tikTokActionLabel}>Save</Text>
           </TouchableOpacity>
         </View>
@@ -1011,22 +1182,28 @@ export default function HomeScreen() {
         </View>
         
         <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setShowSortFilterModal(true)}
+          >
+            <Ionicons name="funnel-outline" size={20} color={colors.text.primary} />
+            {(sortOption !== 'personalized' || Object.keys(artistFilters).length > 0) && (
+              <View style={styles.filterBadge} />
+            )}
+          </TouchableOpacity>
           {!isArtist && token && (
             <TouchableOpacity
               style={styles.iconButton}
               onPress={() => setShowFilters(true)}
             >
-              <Ionicons name="filter" size={22} color={colors.text.primary} />
-              {Object.keys(artistFilters).length > 0 && (
-                <View style={styles.filterBadge} />
-              )}
+              <Ionicons name="options-outline" size={20} color={colors.text.primary} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => setShowSearchModal(true)}
           >
-            <Ionicons name="search" size={22} color={colors.text.primary} />
+            <Ionicons name="search-outline" size={20} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.profileButton}
@@ -1054,8 +1231,8 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Pinterest-style Filter Bar - Only show on Explore tab */}
-      {!isArtist && token && artStyles.length > 0 && activeTab === 'explore' && (
+      {/* Pinterest-style Filter Bar - Show curated styles first for all users */}
+      {token && artStyles.length > 0 && activeTab === 'explore' && (
         <View style={styles.pinterestFilterBar}>
           <ScrollView 
             horizontal 
@@ -1080,7 +1257,8 @@ export default function HomeScreen() {
               </Text>
               {!selectedStyleFilter && Object.keys(artistFilters).length === 0 && <View style={styles.pinterestFilterUnderline} />}
             </TouchableOpacity>
-            {artStyles.map((style) => {
+            {/* Show curated styles first, then others */}
+            {[...curatedStyles, ...artStyles.filter(s => !curatedStyles.some(cs => cs.id === s.id))].map((style) => {
               const isSelected = selectedStyleFilter === style.id;
               const isCurated = curatedStyles.some(cs => cs.id === style.id);
               return (
@@ -1342,6 +1520,130 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* Sort & Filter Modal */}
+      <Modal
+        visible={showSortFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSortFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.sortFilterModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort & Filter</Text>
+              <TouchableOpacity
+                onPress={() => setShowSortFilterModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.sortFilterContent} showsVerticalScrollIndicator={false}>
+              {/* Sort Options */}
+              <View style={styles.sortSection}>
+                <Text style={styles.sortSectionTitle}>Sort By</Text>
+                {[
+                  { id: 'personalized', label: 'For You', icon: 'sparkles', desc: 'Personalized recommendations' },
+                  { id: 'recent', label: 'Most Recent', icon: 'time', desc: 'Newest uploads first' },
+                  { id: 'trending', label: 'Trending', icon: 'flame', desc: 'High engagement artworks' },
+                  { id: 'most_liked', label: 'Most Liked', icon: 'heart', desc: 'Most popular artworks' },
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.sortOption,
+                      sortOption === option.id && styles.sortOptionActive
+                    ]}
+                    onPress={() => handleSortChange(option.id)}
+                  >
+                    <View style={styles.sortOptionContent}>
+                      <View style={[
+                        styles.sortOptionIcon,
+                        sortOption === option.id && styles.sortOptionIconActive
+                      ]}>
+                        <Ionicons 
+                          name={option.icon} 
+                          size={20} 
+                          color={sortOption === option.id ? colors.text.primary : colors.text.secondary} 
+                        />
+                      </View>
+                      <View style={styles.sortOptionText}>
+                        <Text style={[
+                          styles.sortOptionLabel,
+                          sortOption === option.id && styles.sortOptionLabelActive
+                        ]}>
+                          {option.label}
+                        </Text>
+                        <Text style={styles.sortOptionDesc}>{option.desc}</Text>
+                      </View>
+                    </View>
+                    {sortOption === option.id && (
+                      <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Style Filters (for all users) */}
+              {token && artStyles.length > 0 && (
+                <View style={styles.filterSection}>
+                  <Text style={styles.sortSectionTitle}>Filter by Style</Text>
+                  <View style={styles.styleFilterGrid}>
+                    <TouchableOpacity
+                      style={[
+                        styles.styleFilterChip,
+                        !selectedStyleFilter && styles.styleFilterChipActive
+                      ]}
+                      onPress={() => {
+                        setSelectedStyleFilter(null);
+                        setShowSortFilterModal(false);
+                        fetchArtworks(true, sortOption);
+                      }}
+                    >
+                      <Text style={[
+                        styles.styleFilterChipText,
+                        !selectedStyleFilter && styles.styleFilterChipTextActive
+                      ]}>
+                        All Styles
+                      </Text>
+                    </TouchableOpacity>
+                    {/* Show curated styles first, then others */}
+                    {[...curatedStyles, ...artStyles.filter(s => !curatedStyles.some(cs => cs.id === s.id))].map((style) => {
+                      const isSelected = selectedStyleFilter === style.id;
+                      const isCurated = curatedStyles.some(cs => cs.id === style.id);
+                      return (
+                        <TouchableOpacity
+                          key={style.id}
+                          style={[
+                            styles.styleFilterChip,
+                            isSelected && styles.styleFilterChipActive,
+                            isCurated && !isSelected && styles.styleFilterChipCurated
+                          ]}
+                          onPress={() => {
+                            setSelectedStyleFilter(isSelected ? null : style.id);
+                            setShowSortFilterModal(false);
+                            fetchArtworks(true, sortOption);
+                          }}
+                        >
+                          <Text style={[
+                            styles.styleFilterChipText,
+                            isSelected && styles.styleFilterChipTextActive,
+                            isCurated && !isSelected && styles.styleFilterChipTextCurated
+                          ]}>
+                            {style.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Search Modal */}
       <SearchModal
         visible={showSearchModal}
@@ -1389,12 +1691,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
-    padding: 3,
+    padding: spacing.xs - 1,
     alignItems: 'center',
   },
   tab: {
-    paddingHorizontal: IS_SMALL_SCREEN ? 16 : 20,
-    paddingVertical: IS_SMALL_SCREEN ? 6 : 8,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg - spacing.xs,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.xs + 2 : spacing.sm,
     borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1424,7 +1726,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingBottom: 100, // Base padding, will be overridden by inline style with safe area
+    paddingBottom: spacing.xxl * 2 + spacing.md, // Base padding, will be overridden by inline style with safe area
   },
   masonryContainer: {
     flexDirection: 'row',
@@ -1452,20 +1754,40 @@ const styles = StyleSheet.create({
   },
   likeButtonOverlay: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: spacing.sm,
+    right: spacing.sm,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlayLight,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
   },
   likeIcon: {
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: colors.overlayLight,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  trendingBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 87, 34, 0.95)', // Keep trending badge orange
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    zIndex: 10,
+    gap: spacing.xs,
+  },
+  trendingBadgeText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   loadMoreContainer: {
     width: '100%',
@@ -1491,19 +1813,26 @@ const styles = StyleSheet.create({
     width: width,
     height: height - 180,
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
-  tikTokImageContainer: {
+  tikTokImageWrapper: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: 120,
+    left: 6,
+    right: 6,
+    bottom: 125,
+    overflow: 'hidden',
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.surface,
+    zIndex: 1,
+  },
+  tikTokImageContainer: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000',
-    zIndex: 1,
+    backgroundColor: colors.surface,
   },
   heartAnimation: {
     position: 'absolute',
@@ -1519,81 +1848,131 @@ const styles = StyleSheet.create({
   tikTokImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#000',
+  },
+  tikTokTopBadges: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    zIndex: 5,
   },
   tikTokInfoGradient: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    left: 6,
+    right: 6,
+    height: 80,
     zIndex: 2,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    borderBottomLeftRadius: borderRadius.xl,
+    borderBottomRightRadius: borderRadius.xl,
+    overflow: 'hidden',
   },
-  tikTokInfo: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl + spacing.lg,
-    minHeight: 120,
-    justifyContent: 'flex-start',
+  tikTokProfileCard: {
+    position: 'absolute',
+    bottom: 40,
+    left: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    zIndex: 4,
+    ...shadows.small,
   },
-  tikTokArtistInfo: {
+  tikTokProfileCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    width: '100%',
-    marginBottom: spacing.xs,
+    gap: spacing.sm - 2,
   },
   tikTokAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: colors.primary + '60',
   },
   tikTokAvatarPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 1,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
     borderColor: colors.border,
-    backgroundColor: colors.surface + '90',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tikTokArtistText: {
     flex: 1,
+    gap: spacing.xs / 2,
+  },
+  tikTokArtistNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
   },
   tikTokArtistName: {
     ...typography.bodyBold,
-    color: '#fff',
-    fontSize: 17,
-    marginBottom: 4,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-    letterSpacing: 0.3,
-  },
-  tikTokTitle: {
-    ...typography.h3,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 15,
-    fontWeight: '500',
-    opacity: 0.9,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-    lineHeight: 20,
+    fontWeight: '700',
+  },
+  tikTokVerifiedBadge: {
+    marginLeft: spacing.xs / 2,
+  },
+  tikTokStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1.5,
+    alignSelf: 'flex-start',
+  },
+  tikTokStatusBadgeOpen: {
+    borderColor: colors.success,
+    backgroundColor: colors.success + '18',
+  },
+  tikTokStatusBadgeClosed: {
+    borderColor: colors.error,
+    backgroundColor: colors.error + '18',
+  },
+  tikTokStatusBadgeText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tikTokArtistStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs / 2,
+  },
+  tikTokStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+  },
+  tikTokStatDivider: {
+    width: 1,
+    height: 10,
+    backgroundColor: colors.border,
+    opacity: 0.5,
+  },
+  tikTokStatText: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.text.secondary,
+    fontWeight: '600',
   },
   tikTokActions: {
     position: 'absolute',
     right: spacing.md,
-    bottom: 40,
+    bottom: 130,
     alignItems: 'center',
     gap: spacing.xl,
     zIndex: 3,
@@ -1607,34 +1986,51 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
     letterSpacing: 0.2,
   },
   viewCountBadge: {
-    position: 'absolute',
-    top: spacing.lg,
-    right: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    gap: spacing.xs / 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    zIndex: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   viewCountText: {
     ...typography.caption,
     color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  commissionBadgeOpen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  commissionBadgeText: {
+    ...typography.caption,
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
     fontSize: 12,
     fontWeight: '600',
   },
   textContainer: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   titleRow: {
     flexDirection: 'row',
@@ -1648,7 +2044,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
-    marginRight: 4,
+    marginRight: spacing.xs,
   },
   artistName: {
     ...typography.caption,
@@ -1656,7 +2052,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   menuButton: {
-    padding: 3,
+    padding: spacing.xs - 1,
     borderRadius: borderRadius.sm,
     width: 26,
     height: 26,
@@ -1679,7 +2075,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingTop: IS_SMALL_SCREEN ? 60 : 80,
+    paddingTop: IS_SMALL_SCREEN ? spacing.xxl + spacing.lg : spacing.xxl * 2,
   },
   emptyTitle: {
     ...typography.h2,
@@ -1707,7 +2103,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1721,9 +2117,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
-    paddingTop: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + spacing.xs : spacing.lg,
+    paddingTop: IS_SMALL_SCREEN ? spacing.md + spacing.xs : spacing.lg,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + spacing.xs,
     borderBottomWidth: 0,
   },
   modalTitle: {
@@ -1731,6 +2127,129 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 22 : 24,
     fontWeight: '700',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sortFilterModal: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '85%',
+    width: '100%',
+  },
+  sortFilterContent: {
+    padding: spacing.lg,
+  },
+  sortSection: {
+    marginBottom: spacing.xl,
+  },
+  sortSectionTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  sortOptionActive: {
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}15`,
+  },
+  sortOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.md,
+  },
+  sortOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sortOptionIconActive: {
+    backgroundColor: colors.primary,
+  },
+  sortOptionText: {
+    flex: 1,
+  },
+  sortOptionLabel: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  sortOptionLabelActive: {
+    color: colors.text.primary,
+  },
+  sortOptionDesc: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 12,
+  },
+  filterSection: {
+    marginBottom: spacing.lg,
+  },
+  styleFilterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  styleFilterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  styleFilterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  styleFilterChipCurated: {
+    borderColor: colors.primary + '60',
+    borderWidth: 1.5,
+  },
+  styleFilterChipText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  styleFilterChipTextActive: {
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  styleFilterChipTextCurated: {
+    color: colors.primary,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   boardList: {
     maxHeight: 400,
@@ -1865,61 +2384,114 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
   },
   suggestedArtistHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border + '60',
   },
   suggestedArtistTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs / 2,
   },
   suggestedArtistSubtitle: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+  },
+  suggestedArtistViewAll: {
+    ...typography.body,
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   suggestedArtistList: {
     padding: spacing.sm,
+    gap: spacing.xs,
   },
   suggestedArtistItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.sm,
+    padding: spacing.md,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.xs,
     backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border + '60',
   },
   suggestedArtistAvatar: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     borderRadius: borderRadius.full,
-    marginRight: spacing.sm,
+    marginRight: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
   },
   suggestedArtistInfo: {
     flex: 1,
+    gap: spacing.xs / 2,
   },
   suggestedArtistName: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
+  },
+  suggestedArtistMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   suggestedArtistStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 2,
+    gap: spacing.xs / 2,
   },
   suggestedArtistRating: {
     ...typography.small,
     color: colors.text.secondary,
+    fontSize: 12,
+  },
+  suggestedArtistPrice: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  commissionStatusOpen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.success + '15',
+  },
+  commissionStatusLimited: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.status.warning + '15',
+  },
+  commissionStatusText: {
+    ...typography.small,
+    color: colors.success,
     fontSize: 11,
+    fontWeight: '600',
+  },
+  commissionStatusTextLimited: {
+    ...typography.small,
+    color: colors.status.warning,
+    fontSize: 11,
+    fontWeight: '600',
   },
   // Filter styles
   filterBadge: {

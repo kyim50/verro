@@ -54,6 +54,10 @@ export default function ArtistProfileScreen() {
   const [showSimilarArtists, setShowSimilarArtists] = useState(false);
   const [similarArtists, setSimilarArtists] = useState([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
+  const [availableStyles, setAvailableStyles] = useState([]);
+  const [curatedStyles, setCuratedStyles] = useState([]);
+  const [selectedStyleFilter, setSelectedStyleFilter] = useState(null);
+  const [filteredArtworks, setFilteredArtworks] = useState([]);
   const portfolioFlatListRef = useRef(null);
   const isClosingModal = useRef(false);
   const lastClosedIndex = useRef(null);
@@ -64,7 +68,69 @@ export default function ArtistProfileScreen() {
     if (token && user) {
       checkFavoriteStatus();
     }
+    fetchAvailableStyles();
   }, [id]);
+
+  const fetchAvailableStyles = async () => {
+    try {
+      const stylesResponse = await axios.get(`${API_URL}/artists/styles/list`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      const allStyles = stylesResponse.data.styles || [];
+      
+      // Load user's style preferences to show curated styles first
+      if (token) {
+        try {
+          const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (prefsResponse.data && prefsResponse.data.preferred_styles?.length > 0) {
+            const preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
+            const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
+            const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
+            
+            // Sort preferred by weight if available
+            preferredStyles.sort((a, b) => {
+              const aWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === a.id)?.weight || 0;
+              const bWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === b.id)?.weight || 0;
+              return bWeight - aWeight;
+            });
+            
+            setCuratedStyles(preferredStyles);
+            setAvailableStyles([...preferredStyles, ...otherStyles]);
+          } else {
+            setAvailableStyles(allStyles);
+            setCuratedStyles([]);
+          }
+        } catch (prefError) {
+          // No preferences set, use all styles
+          setAvailableStyles(allStyles);
+          setCuratedStyles([]);
+        }
+      } else {
+        setAvailableStyles(allStyles);
+        setCuratedStyles([]);
+      }
+    } catch (error) {
+      console.error('Error fetching styles:', error);
+      setAvailableStyles([]);
+      setCuratedStyles([]);
+    }
+  };
+
+  // Filter artworks by selected style
+  useEffect(() => {
+    if (selectedStyleFilter) {
+      const filtered = artworks.filter(artwork => {
+        const tags = artwork.tags || [];
+        return tags.includes(selectedStyleFilter);
+      });
+      setFilteredArtworks(filtered);
+    } else {
+      setFilteredArtworks(artworks);
+    }
+  }, [artworks, selectedStyleFilter]);
 
   const checkFavoriteStatus = async () => {
     if (!token || !user) return;
@@ -301,15 +367,26 @@ export default function ArtistProfileScreen() {
     lastClosedIndex.current = indexToClose;
     lastCloseTime.current = Date.now();
     
+    // Stop any scrolling in the FlatList to prevent momentum scroll events
+    if (portfolioFlatListRef.current) {
+      try {
+        portfolioFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
+      } catch (e) {
+        // Ignore errors if FlatList is not ready
+      }
+    }
+    
     // Close the modal immediately
     setSelectedPortfolioIndex(null);
     
     // Keep blocking for much longer to ensure no touches from closing propagate through
     // The fade animation is ~300ms, but we need extra time for React to process the state change
+    // Also need to prevent onMomentumScrollEnd from firing after close
     setTimeout(() => {
       isClosingModal.current = false;
       setIsModalClosing(false);
-    }, 1000);
+      lastCloseTime.current = 0; // Reset after timeout
+    }, 2000); // Increased to 2 seconds to prevent any delayed events
   };
 
   const handleCommission = () => {
@@ -359,11 +436,12 @@ export default function ArtistProfileScreen() {
 
   // Organize artworks into balanced columns (Pinterest masonry style)
   useEffect(() => {
-    if (artworks.length > 0) {
+    const artworksToOrganize = selectedStyleFilter ? filteredArtworks : artworks;
+    if (artworksToOrganize.length > 0) {
       const newColumns = [[], []];
       const columnHeights = [0, 0];
 
-      artworks.forEach((item) => {
+      artworksToOrganize.forEach((item) => {
         // Calculate image height based on aspect ratio if available
         let imageHeight;
         const ratio = item.aspect_ratio || item.aspectRatio; // Handle both snake_case and camelCase
@@ -404,7 +482,7 @@ export default function ArtistProfileScreen() {
     } else {
       setColumns([[], []]);
     }
-  }, [artworks]);
+  }, [artworks, filteredArtworks, selectedStyleFilter]);
 
   // Organize created board artworks into balanced columns
   useEffect(() => {
@@ -616,11 +694,18 @@ export default function ArtistProfileScreen() {
               <Text style={styles.artistName} numberOfLines={1}>
                 {artist.users?.full_name || artist.users?.username}
               </Text>
-              <VerificationBadges artist={artist} size="small" />
             </View>
-            <Text style={styles.artistUsername} numberOfLines={1}>
-              @{artist.users?.username}
-            </Text>
+            <View style={styles.artistUsernameRow}>
+              <Text style={styles.artistUsername} numberOfLines={1}>
+                @{artist.users?.username}
+              </Text>
+              <Ionicons 
+                name="checkmark-circle" 
+                size={20} 
+                color={(artist.users?.is_verified || artist.users?.verified) ? colors.error : colors.text.disabled}
+                style={styles.verifiedBadge}
+              />
+            </View>
           </View>
 
 
@@ -1144,8 +1229,62 @@ export default function ArtistProfileScreen() {
                 <Ionicons name="grid-outline" size={20} color={colors.primary} />
                 <Text style={styles.sectionTitle}>All Artworks</Text>
               </View>
-              <Text style={styles.artworkCountText}>{artworks.length} artworks</Text>
+              <Text style={styles.artworkCountText}>
+                {selectedStyleFilter ? filteredArtworks.length : artworks.length} artworks
+              </Text>
             </View>
+
+            {/* Style Filter - Show curated styles first */}
+            {availableStyles.length > 0 && (
+              <View style={styles.styleFilterContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.styleFilterScroll}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.styleFilterChip,
+                      !selectedStyleFilter && styles.styleFilterChipActive
+                    ]}
+                    onPress={() => setSelectedStyleFilter(null)}
+                  >
+                    <Text style={[
+                      styles.styleFilterChipText,
+                      !selectedStyleFilter && styles.styleFilterChipTextActive
+                    ]}>
+                      All
+                    </Text>
+                  </TouchableOpacity>
+                  {/* Show curated styles first, then others */}
+                  {[...curatedStyles, ...availableStyles.filter(s => !curatedStyles.some(cs => cs.id === s.id))].map((style) => {
+                    const isSelected = selectedStyleFilter === style.id;
+                    const hasArtworks = artworks.some(aw => (aw.tags || []).includes(style.id));
+                    const isCurated = curatedStyles.some(cs => cs.id === style.id);
+                    if (!hasArtworks) return null;
+                    return (
+                      <TouchableOpacity
+                        key={style.id}
+                        style={[
+                          styles.styleFilterChip,
+                          isSelected && styles.styleFilterChipActive,
+                          isCurated && !isSelected && styles.styleFilterChipCurated
+                        ]}
+                        onPress={() => setSelectedStyleFilter(isSelected ? null : style.id)}
+                      >
+                        <Text style={[
+                          styles.styleFilterChipText,
+                          isSelected && styles.styleFilterChipTextActive,
+                          isCurated && !isSelected && styles.styleFilterChipTextCurated
+                        ]}>
+                          {style.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
 
             <View style={styles.masonryContainer}>
               {/* Left Column */}
@@ -1289,9 +1428,22 @@ export default function ArtistProfileScreen() {
                 })}
                 onMomentumScrollEnd={(event) => {
                   // Don't update index if modal is closing or already closed
-                  if (isClosingModal.current || isModalClosing || selectedPortfolioIndex === null) {
+                  // Check ref first (fastest check), then state
+                  if (isClosingModal.current || isModalClosing) {
                     return;
                   }
+                  
+                  // Double-check that modal is still open
+                  if (selectedPortfolioIndex === null) {
+                    return;
+                  }
+                  
+                  // Additional safety: check if we recently closed this modal
+                  const timeSinceClose = Date.now() - lastCloseTime.current;
+                  if (timeSinceClose < 2000) {
+                    return;
+                  }
+                  
                   const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
                   // Only update if we have a valid index and modal is still visible
                   if (newIndex >= 0 && newIndex < filteredPortfolio.length && selectedPortfolioIndex !== null) {
@@ -1419,7 +1571,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   artistName: {
     ...typography.h1,
@@ -1428,11 +1580,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  artistUsernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   artistUsername: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
     textAlign: 'center',
+  },
+  verifiedBadge: {
+    marginTop: 2,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -1444,7 +1604,7 @@ const styles = StyleSheet.create({
   },
   ratingStars: {
     flexDirection: 'row',
-    gap: 3,
+    gap: spacing.xs - 1,
   },
   ratingText: {
     ...typography.caption,
@@ -1766,6 +1926,43 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 18 : 20,
   },
+  styleFilterContainer: {
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  styleFilterScroll: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  styleFilterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  styleFilterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  styleFilterChipText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  styleFilterChipTextActive: {
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  styleFilterChipCurated: {
+    borderColor: colors.primary + '60',
+    borderWidth: 1.5,
+  },
+  styleFilterChipTextCurated: {
+    color: colors.primary,
+  },
   manageLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1823,7 +2020,7 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   masonryArtistName: {
     ...typography.caption,
@@ -1883,7 +2080,7 @@ const styles = StyleSheet.create({
   packageBadge: {
     backgroundColor: colors.primary + '20',
     paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    paddingVertical: spacing.xs / 2,
     borderRadius: borderRadius.sm,
   },
   packageBadgeText: {
@@ -2136,7 +2333,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2150,13 +2347,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlayLight,
   },
   modalCloseButton: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.text.primary + '33', // 0.2 opacity
     justifyContent: 'center',
     alignItems: 'center',
   },

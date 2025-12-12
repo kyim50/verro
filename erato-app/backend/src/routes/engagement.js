@@ -315,6 +315,157 @@ router.get('/trending', optionalAuth, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/engagement/artist/:artistId/metrics
+ * @desc    Get engagement metrics for an artist's artworks
+ * @access  Private (artist only)
+ */
+router.get('/artist/:artistId/metrics', authenticate, async (req, res) => {
+  try {
+    const { artistId } = req.params;
+    const userId = req.user.id;
+
+    // Verify the artist belongs to the user
+    const { data: artist, error: artistError } = await supabaseAdmin
+      .from('artists')
+      .select('id, user_id')
+      .eq('id', artistId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (artistError || !artist) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: You can only view metrics for your own artworks'
+      });
+    }
+
+    // Get all artworks by this artist
+    const { data: artworks, error: artworksError } = await supabaseAdmin
+      .from('artworks')
+      .select('id')
+      .eq('artist_id', artistId);
+
+    if (artworksError) throw artworksError;
+
+    const artworkIds = artworks?.map(a => a.id) || [];
+
+    if (artworkIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          total_artworks: 0,
+          total_views: 0,
+          total_clicks: 0,
+          total_saves: 0,
+          total_shares: 0,
+          total_commission_inquiries: 0,
+          average_engagement_score: 0,
+          top_artworks: [],
+          engagement_by_type: {
+            views: 0,
+            clicks: 0,
+            saves: 0,
+            shares: 0,
+            commission_inquiries: 0
+          }
+        }
+      });
+    }
+
+    // Get aggregated engagement stats for all artworks
+    const { data: stats, error: statsError } = await supabaseAdmin
+      .from('artwork_engagement_stats')
+      .select('*')
+      .in('artwork_id', artworkIds);
+
+    if (statsError) throw statsError;
+
+    // Calculate totals
+    const totals = stats?.reduce((acc, stat) => ({
+      views: acc.views + (stat.total_views || 0),
+      clicks: acc.clicks + (stat.total_clicks || 0),
+      saves: acc.saves + (stat.total_saves || 0),
+      shares: acc.shares + (stat.total_shares || 0),
+      commission_inquiries: acc.commission_inquiries + (stat.total_commission_inquiries || 0),
+      engagement_scores: acc.engagement_scores.concat(stat.engagement_score || 0)
+    }), {
+      views: 0,
+      clicks: 0,
+      saves: 0,
+      shares: 0,
+      commission_inquiries: 0,
+      engagement_scores: []
+    }) || {
+      views: 0,
+      clicks: 0,
+      saves: 0,
+      shares: 0,
+      commission_inquiries: 0,
+      engagement_scores: []
+    };
+
+    const averageEngagementScore = totals.engagement_scores.length > 0
+      ? totals.engagement_scores.reduce((a, b) => a + b, 0) / totals.engagement_scores.length
+      : 0;
+
+    // Get top 5 artworks by engagement score
+    const topArtworks = (stats || [])
+      .sort((a, b) => (b.engagement_score || 0) - (a.engagement_score || 0))
+      .slice(0, 5)
+      .map(stat => ({
+        artwork_id: stat.artwork_id,
+        engagement_score: stat.engagement_score || 0,
+        total_views: stat.total_views || 0,
+        total_saves: stat.total_saves || 0
+      }));
+
+    // Get artwork details for top artworks
+    if (topArtworks.length > 0) {
+      const topArtworkIds = topArtworks.map(a => a.artwork_id);
+      const { data: artworkDetails } = await supabaseAdmin
+        .from('artworks')
+        .select('id, title, image_url, thumbnail_url')
+        .in('id', topArtworkIds);
+
+      topArtworks.forEach(top => {
+        const detail = artworkDetails?.find(a => a.id === top.artwork_id);
+        if (detail) {
+          top.title = detail.title;
+          top.image_url = detail.image_url || detail.thumbnail_url;
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        total_artworks: artworkIds.length,
+        total_views: totals.views,
+        total_clicks: totals.clicks,
+        total_saves: totals.saves,
+        total_shares: totals.shares,
+        total_commission_inquiries: totals.commission_inquiries,
+        average_engagement_score: Math.round(averageEngagementScore * 100) / 100,
+        top_artworks: topArtworks,
+        engagement_by_type: {
+          views: totals.views,
+          clicks: totals.clicks,
+          saves: totals.saves,
+          shares: totals.shares,
+          commission_inquiries: totals.commission_inquiries
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching artist engagement metrics:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * @route   GET /api/engagement/user/recommendations
  * @desc    Get personalized artwork recommendations based on user engagement
  * @access  Private

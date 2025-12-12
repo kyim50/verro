@@ -335,7 +335,7 @@ export default function ArtworkDetailScreen() {
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={28}
-                color={isLiked ? "#FF6B6B" : colors.text.secondary}
+                color={isLiked ? colors.likeColor : colors.text.secondary}
               />
             </TouchableOpacity>
           </View>
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     width: IS_SMALL_SCREEN ? 36 : 40,
     height: IS_SMALL_SCREEN ? 36 : 40,
     borderRadius: IS_SMALL_SCREEN ? 18 : 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   },
   menuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlayLight,
     justifyContent: 'flex-end',
   },
   menuContainer: {

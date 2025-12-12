@@ -371,7 +371,7 @@ export default function BoardsScreen() {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return '#FFA500';
-      case 'accepted': return '#4CAF50';
+      case 'accepted': return colors.status.success;
       case 'declined': return '#F44336';
       case 'in_progress': return '#2196F3';
       case 'completed': return '#9C27B0';
@@ -996,7 +996,7 @@ export default function BoardsScreen() {
                       style={styles.detailCompleteButton}
                       onPress={() => handleCompleteCommission(selectedCommission.id)}
                     >
-                      <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />
                       <Text style={styles.detailCompleteButtonText}>Complete</Text>
                     </TouchableOpacity>
                   </View>
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.status.success,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderBottomLeftRadius: borderRadius.xl,
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create({
   },
   completeCommissionText: {
     ...typography.button,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1374,7 +1374,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: colors.overlayMedium,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -1681,14 +1681,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.status.success,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
     gap: spacing.xs,
   },
   detailCompleteButtonText: {
     ...typography.bodyBold,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 15,
     fontWeight: '600',
   },

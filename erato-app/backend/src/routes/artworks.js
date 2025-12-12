@@ -17,6 +17,8 @@ router.get(
     query('tags').optional().isString(),
     query('artistId').optional().isUUID(),
     query('search').optional().isString(),
+    query('sort').optional().isIn(['created_at', 'like_count', 'engagement_score']),
+    query('order').optional().isIn(['asc', 'desc']),
   ],
   async (req, res, next) => {
     try {
@@ -32,18 +34,32 @@ router.get(
       const artistId = req.query.artistId;
       const searchQuery = req.query.search;
 
-      // Try to get from cache
-      const cacheKey = cacheKeys.artworksList({ page, limit, tags, artistId, search: searchQuery });
+      // Try to get from cache (include sort params in cache key)
+      const cacheKey = cacheKeys.artworksList({ page, limit, tags, artistId, search: searchQuery, sort: sortBy, order });
       const cached = await cache.get(cacheKey);
       if (cached) {
         return res.json(cached);
       }
 
-      let query = supabaseAdmin
-        .from('artworks')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      // Handle sorting
+      const sortBy = req.query.sort || 'created_at';
+      const order = req.query.order || 'desc';
+      
+      let query;
+      if (sortBy === 'engagement_score') {
+        // Use the view that includes engagement scores
+        query = supabaseAdmin
+          .from('artworks_with_engagement')
+          .select('*', { count: 'exact' })
+          .order('engagement_score', { ascending: order === 'asc', nullsFirst: false });
+      } else {
+        query = supabaseAdmin
+          .from('artworks')
+          .select('*', { count: 'exact' })
+          .order(sortBy, { ascending: order === 'asc' });
+      }
+      
+      query = query.range(offset, offset + limit - 1);
 
       if (tags && tags.length > 0) {
         query = query.contains('tags', tags);

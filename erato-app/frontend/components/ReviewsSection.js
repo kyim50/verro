@@ -88,29 +88,32 @@ export default function ReviewsSection({ artistId, isArtistView = false }) {
       {/* Stats Header */}
       {stats && (
         <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.averageRating}</Text>
-            <Text style={styles.statLabel}>Average Rating</Text>
+          <View style={styles.primaryStat}>
+            <View style={styles.ratingIconContainer}>
+              <Ionicons name="star" size={28} color={colors.status.warning} />
+            </View>
+            <View>
+              <Text style={styles.primaryStatValue}>{stats.averageRating || '0.0'}</Text>
+              <Text style={styles.primaryStatLabel}>Average Rating</Text>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.totalReviews}</Text>
-            <Text style={styles.statLabel}>Total Reviews</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.verifiedReviews}</Text>
-            <Text style={styles.statLabel}>Verified</Text>
-          </View>
-          {stats.responseRate && (
-            <>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.responseRate}%</Text>
-                <Text style={styles.statLabel}>Response Rate</Text>
+          
+          <View style={styles.secondaryStats}>
+            <View style={styles.secondaryStatItem}>
+              <Text style={styles.secondaryStatValue}>{stats.totalReviews || 0}</Text>
+              <Text style={styles.secondaryStatLabel}>Reviews</Text>
+            </View>
+            <View style={styles.secondaryStatItem}>
+              <Text style={styles.secondaryStatValue}>{stats.verifiedReviews || 0}</Text>
+              <Text style={styles.secondaryStatLabel}>Verified</Text>
+            </View>
+            {stats.responseRate != null && (
+              <View style={styles.secondaryStatItem}>
+                <Text style={styles.secondaryStatValue}>{stats.responseRate}%</Text>
+                <Text style={styles.secondaryStatLabel}>Response</Text>
               </View>
-            </>
-          )}
+            )}
+          </View>
         </View>
       )}
 
@@ -199,39 +202,69 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl,
   },
   statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginTop: 0,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
+    gap: spacing.md,
   },
-  statItem: {
+  primaryStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '60',
+  },
+  ratingIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.status.warning + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryStatValue: {
+    ...typography.h1,
+    color: colors.text.primary,
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 36,
+  },
+  primaryStatLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+  },
+  secondaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: spacing.sm,
+  },
+  secondaryStatItem: {
     flex: 1,
     alignItems: 'center',
   },
-  statValue: {
+  secondaryStatValue: {
     ...typography.h3,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: spacing.xs / 2,
   },
-  statLabel: {
+  secondaryStatLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 11,
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: colors.border,
+    fontSize: 12,
   },
   pinterestFilterBar: {
     backgroundColor: colors.background,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
   },
   pinterestFilterContent: {
     paddingHorizontal: spacing.lg,
@@ -262,8 +295,9 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   listContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
   },
   emptyContainer: {
     flex: 1,

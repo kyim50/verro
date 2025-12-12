@@ -311,23 +311,80 @@ export const useFeedStore = create((set, get) => ({
     }
   },
 
-  fetchArtworks: async (reset = false) => {
+  fetchArtworks: async (reset = false, sortBy = 'personalized') => {
     if (get().isLoading || (!reset && !get().hasMore)) return;
 
     set({ isLoading: true });
     const page = reset ? 1 : get().page;
 
     try {
-      const response = await axios.get(`${API_URL}/artworks`, {
-        params: { page, limit: 20 },
-        timeout: 15000,
-      });
+      // Check if user is a client (not an artist) - use personalized feed for clients
+      const token = useAuthStore.getState().token;
+      const user = useAuthStore.getState().user;
+      const isClient = token && user && user.user_type !== 'artist' && !user.artists;
+      
+      let response;
+      const params = { page, limit: 20 };
+      
+      if (isClient && sortBy === 'personalized') {
+        // Use personalized feed for clients
+        try {
+          response = await axios.get(`${API_URL}/artworks/personalized/feed`, {
+            params,
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 15000,
+          });
+        } catch (personalizedError) {
+          // Fallback to regular feed if personalized fails
+          console.warn('Personalized feed failed, falling back to regular feed:', personalizedError);
+          response = await axios.get(`${API_URL}/artworks`, {
+            params,
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            timeout: 15000,
+          });
+        }
+      } else {
+        // Use regular feed with sorting
+        if (sortBy === 'recent') {
+          params.sort = 'created_at';
+          params.order = 'desc';
+        } else if (sortBy === 'trending') {
+          params.sort = 'engagement_score';
+          params.order = 'desc';
+        } else if (sortBy === 'most_liked') {
+          params.sort = 'like_count';
+          params.order = 'desc';
+        }
+        // If sortBy is 'personalized' but user is not client, default to recent
+        else if (sortBy === 'personalized') {
+          params.sort = 'created_at';
+          params.order = 'desc';
+        }
+        
+        response = await axios.get(`${API_URL}/artworks`, {
+          params,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          timeout: 15000,
+        });
+      }
 
       const removedIds = get().removedIds || [];
-      const newArtworks = (response.data.artworks || []).filter(
+      let newArtworks = (response.data.artworks || []).filter(
         (a) => !removedIds.includes(String(a.id))
       );
-      const hasMore = response.data.pagination.page < response.data.pagination.totalPages;
+
+      // Client-side sorting if needed (for personalized feed)
+      if (isClient && sortBy !== 'personalized' && newArtworks.length > 0) {
+        if (sortBy === 'recent') {
+          newArtworks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        } else if (sortBy === 'trending') {
+          newArtworks.sort((a, b) => (b.engagement_score || 0) - (a.engagement_score || 0));
+        } else if (sortBy === 'most_liked') {
+          newArtworks.sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
+        }
+      }
+
+      const hasMore = response.data.pagination?.page < response.data.pagination?.totalPages;
 
       set({
         artworks: reset

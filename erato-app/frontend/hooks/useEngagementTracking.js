@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuthStore } from '../store';
 import Constants from 'expo-constants';
 
 /**
@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
  * Automatically tracks views and provides methods for other engagement types
  */
 export const useEngagementTracking = (artworkId, options = {}) => {
-  const { token, user } = useAuth();
+  const { token, user } = useAuthStore();
   const {
     trackView = true, // Automatically track views
     trackDuration = true, // Track time spent viewing
@@ -129,7 +129,7 @@ export const useEngagementTracking = (artworkId, options = {}) => {
  * Hook for batch tracking multiple engagements
  */
 export const useBatchEngagementTracking = () => {
-  const { token, user } = useAuth();
+  const { token, user } = useAuthStore();
   const pendingEngagements = useRef([]);
   const batchTimeout = useRef(null);
 
