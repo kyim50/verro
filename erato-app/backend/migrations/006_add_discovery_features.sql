@@ -174,3 +174,4 @@ CREATE TRIGGER update_bid_count_on_delete
   AFTER DELETE ON commission_request_bids
   FOR EACH ROW
   EXECUTE FUNCTION update_request_bid_count();
+

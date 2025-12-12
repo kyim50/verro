@@ -258,3 +258,4 @@ All features are implemented and ready to use! The only optional step is:
 - Installing `@stripe/stripe-react-native` for full payment processing (UI is complete, just needs the SDK)
 
 Enjoy your fully-featured commission platform! 🎨
+

@@ -34,16 +34,16 @@ router.get(
       const artistId = req.query.artistId;
       const searchQuery = req.query.search;
 
+      // Handle sorting (define before cache key)
+      const sortBy = req.query.sort || 'created_at';
+      const order = req.query.order || 'desc';
+
       // Try to get from cache (include sort params in cache key)
       const cacheKey = cacheKeys.artworksList({ page, limit, tags, artistId, search: searchQuery, sort: sortBy, order });
       const cached = await cache.get(cacheKey);
       if (cached) {
         return res.json(cached);
       }
-
-      // Handle sorting
-      const sortBy = req.query.sort || 'created_at';
-      const order = req.query.order || 'desc';
       
       let query;
       if (sortBy === 'engagement_score') {
