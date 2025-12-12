@@ -362,7 +362,7 @@ export default function ConversationScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: !forProgressUpdate, // Don't allow editing for progress updates (we'll add markup)
       quality: 0.8,
     });

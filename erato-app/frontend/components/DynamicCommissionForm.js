@@ -79,7 +79,7 @@ const DynamicCommissionForm = ({ packageId, commissionId, onSubmit }) => {
   const handleFileUpload = async (fieldId, field) => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsMultipleSelection: field.maxFiles > 1,
         quality: 0.8,
       });

@@ -101,7 +101,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsMultipleSelection: true,
         quality: 0.8,
       });
@@ -109,27 +109,36 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
       if (result.canceled || !result.assets) return;
 
       setUploading(true);
-      const uploadPromises = result.assets.map(asset => uploadImage(asset.uri));
-      const uploadedUrls = await Promise.all(uploadPromises);
 
       // Upload each image as a separate reference
-      for (const url of uploadedUrls) {
+      for (const asset of result.assets) {
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', {
+          uri: asset.uri,
+          type: 'image/jpeg',
+          name: `reference_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`,
+        });
+        formDataUpload.append('reference_type', selectedType);
+        formDataUpload.append('title', formData.title || 'Reference Image');
+        formDataUpload.append('description', formData.description || '');
+        formDataUpload.append('commission_id', commissionId);
+
         await axios.post(
           `${API_URL}/references/commission/${commissionId}`,
+          formDataUpload,
           {
-            reference_type: selectedType,
-            title: formData.title || 'Reference Image',
-            description: formData.description,
-            file_url: url,
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
         );
       }
 
       Toast.show({
         type: 'success',
         text1: 'Uploaded',
-        text2: `${uploadedUrls.length} image(s) added`,
+        text2: `${result.assets.length} image(s) added`,
       });
 
       setShowAddModal(false);
@@ -140,7 +149,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
       Toast.show({
         type: 'error',
         text1: 'Upload Failed',
-        text2: 'Failed to upload images',
+        text2: error.response?.data?.error || 'Failed to upload images',
       });
     } finally {
       setUploading(false);
