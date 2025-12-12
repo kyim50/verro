@@ -41,3 +41,4 @@ CREATE INDEX IF NOT EXISTS idx_progress_updates_created ON commission_progress_u
 ALTER TABLE commissions
   ADD COLUMN IF NOT EXISTS current_revision_count INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS max_revision_count INTEGER DEFAULT 2; -- From package or default
+

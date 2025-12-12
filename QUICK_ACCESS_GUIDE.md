@@ -107,3 +107,4 @@
 4. **Check console logs** for any errors
 
 All features are implemented and should be accessible through the navigation paths above!
+
