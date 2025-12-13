@@ -11,6 +11,9 @@ import {
   ScrollView,
   TextInput,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,8 +40,17 @@ export default function CommissionRequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [artStyles, setArtStyles] = useState([]);
+
+  // Filter state
+  const [filters, setFilters] = useState({
+    budget_min: '',
+    budget_max: '',
+    sort_by: 'recent',
+    styles: []
+  });
   
   // Create request form
   const [formData, setFormData] = useState({
@@ -66,17 +78,28 @@ export default function CommissionRequestsScreen() {
     useCallback(() => {
       if (token) {
         loadRequests();
-        if (!isArtist) {
-          loadArtStyles();
-        }
+        loadArtStyles();
       }
-    }, [token, isArtist])
+    }, [token, filters])
   );
 
   const loadRequests = async () => {
     try {
+      // Build query string with filters
+      const params = new URLSearchParams({
+        status: 'open',
+        limit: '50',
+        sort_by: filters.sort_by || 'recent'
+      });
+
+      if (filters.budget_min) params.append('budget_min', filters.budget_min);
+      if (filters.budget_max) params.append('budget_max', filters.budget_max);
+      if (filters.styles && filters.styles.length > 0) {
+        params.append('styles', filters.styles.join(','));
+      }
+
       const response = await axios.get(
-        `${API_URL}/commission-requests?status=open&limit=50`,
+        `${API_URL}/commission-requests?${params.toString()}`,
         token ? { headers: { Authorization: `Bearer ${token}` } } : {}
       );
       setRequests(response.data.requests || []);
@@ -266,7 +289,7 @@ export default function CommissionRequestsScreen() {
       style={styles.requestCard}
       onPress={() => {
         setSelectedRequest(item);
-        if (isArtist) {
+        if (isArtist && !item.has_applied) {
           setShowBidModal(true);
         }
       }}
@@ -286,9 +309,17 @@ export default function CommissionRequestsScreen() {
             </Text>
           </View>
         </View>
-        <View style={styles.bidBadge}>
-          <Ionicons name="people-outline" size={14} color={colors.primary} />
-          <Text style={styles.bidCount}>{item.bid_count || 0} bids</Text>
+        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+          {item.has_applied && (
+            <View style={[styles.bidBadge, { backgroundColor: colors.status.success + '20' }]}>
+              <Ionicons name="checkmark-circle" size={14} color={colors.status.success} />
+              <Text style={[styles.bidCount, { color: colors.status.success }]}>Applied</Text>
+            </View>
+          )}
+          <View style={styles.bidBadge}>
+            <Ionicons name="people-outline" size={14} color={colors.primary} />
+            <Text style={styles.bidCount}>{item.bid_count || 0} bids</Text>
+          </View>
         </View>
       </View>
 
@@ -347,15 +378,66 @@ export default function CommissionRequestsScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Commission Requests</Text>
-        {!isArtist && (
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Ionicons name="add" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerActions}>
+          {isArtist && (
+            <TouchableOpacity
+              style={styles.filterButton}
+              onPress={() => setShowFiltersModal(true)}
+            >
+              <Ionicons name="filter" size={22} color={colors.primary} />
+              {(filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
+                <View style={styles.filterBadge} />
+              )}
+            </TouchableOpacity>
+          )}
+          {!isArtist && (
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() => setShowCreateModal(true)}
+            >
+              <Ionicons name="add" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      {/* Active Filters Display */}
+      {isArtist && (filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
+        <View style={styles.activeFilters}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChips}>
+            {filters.budget_min && (
+              <View style={styles.filterChip}>
+                <Text style={styles.filterChipText}>Min: ${filters.budget_min}</Text>
+                <TouchableOpacity onPress={() => setFilters({ ...filters, budget_min: '' })}>
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            {filters.budget_max && (
+              <View style={styles.filterChip}>
+                <Text style={styles.filterChipText}>Max: ${filters.budget_max}</Text>
+                <TouchableOpacity onPress={() => setFilters({ ...filters, budget_max: '' })}>
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            {filters.styles.length > 0 && (
+              <View style={styles.filterChip}>
+                <Text style={styles.filterChipText}>{filters.styles.length} styles</Text>
+                <TouchableOpacity onPress={() => setFilters({ ...filters, styles: [] })}>
+                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.clearFiltersButton}
+              onPress={() => setFilters({ budget_min: '', budget_max: '', sort_by: 'recent', styles: [] })}
+            >
+              <Text style={styles.clearFiltersText}>Clear All</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
 
       {/* Requests List */}
       <FlatList
@@ -600,6 +682,149 @@ export default function CommissionRequestsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Filters Modal (Artists Only) */}
+      <Modal
+        visible={showFiltersModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFiltersModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowFiltersModal(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter Requests</Text>
+              <TouchableOpacity onPress={() => setShowFiltersModal(false)}>
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <Text style={styles.inputLabel}>Sort By</Text>
+              <View style={styles.sortOptions}>
+                {[
+                  { value: 'recent', label: 'Most Recent' },
+                  { value: 'budget_high', label: 'Highest Budget' },
+                  { value: 'budget_low', label: 'Lowest Budget' },
+                  { value: 'bids_low', label: 'Fewest Bids' },
+                  { value: 'deadline_soon', label: 'Deadline Soon' },
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.sortOption,
+                      filters.sort_by === option.value && styles.sortOptionSelected
+                    ]}
+                    onPress={() => setFilters({ ...filters, sort_by: option.value })}
+                  >
+                    <Text
+                      style={[
+                        styles.sortOptionText,
+                        filters.sort_by === option.value && styles.sortOptionTextSelected
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {filters.sort_by === option.value && (
+                      <Ionicons name="checkmark" size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Budget Range</Text>
+              <View style={styles.priceRow}>
+                <View style={styles.priceInputGroup}>
+                  <Text style={styles.inputSubLabel}>Min Budget ($)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={filters.budget_min}
+                    onChangeText={(text) => setFilters({ ...filters, budget_min: text })}
+                    placeholder="0"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={styles.priceInputGroup}>
+                  <Text style={styles.inputSubLabel}>Max Budget ($)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={filters.budget_max}
+                    onChangeText={(text) => setFilters({ ...filters, budget_max: text })}
+                    placeholder="1000"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Preferred Styles</Text>
+              <View style={styles.stylesContainer}>
+                {artStyles.map((style) => {
+                  const isSelected = filters.styles?.includes(style.id);
+                  return (
+                    <TouchableOpacity
+                      key={style.id}
+                      style={[
+                        styles.styleChip,
+                        isSelected && styles.styleChipSelected
+                      ]}
+                      onPress={() => {
+                        const current = filters.styles || [];
+                        if (isSelected) {
+                          setFilters({
+                            ...filters,
+                            styles: current.filter(id => id !== style.id)
+                          });
+                        } else {
+                          setFilters({
+                            ...filters,
+                            styles: [...current, style.id]
+                          });
+                        }
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.styleChipText,
+                          isSelected && styles.styleChipTextSelected
+                        ]}
+                      >
+                        {style.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.filterModalButtons}>
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => setFilters({ budget_min: '', budget_max: '', sort_by: 'recent', styles: [] })}
+                >
+                  <Text style={styles.clearButtonText}>Clear All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.applyButton}
+                  onPress={() => {
+                    setShowFiltersModal(false);
+                    loadRequests();
+                  }}
+                >
+                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -630,8 +855,127 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     flex: 1,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   createButton: {
     padding: spacing.xs,
+  },
+  filterButton: {
+    padding: spacing.xs,
+    position: 'relative',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  activeFilters: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterChips: {
+    flexDirection: 'row',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + '20',
+    borderRadius: borderRadius.full,
+    marginRight: spacing.sm,
+  },
+  filterChipText: {
+    ...typography.small,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  clearFiltersButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  clearFiltersText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontWeight: '600',
+  },
+  sortOptions: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  sortOptionText: {
+    ...typography.body,
+    color: colors.text.secondary,
+  },
+  sortOptionTextSelected: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  inputSubLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  filterModalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  clearButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  clearButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+  },
+  applyButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
   },
   listContent: {
     padding: spacing.md,
@@ -740,15 +1084,20 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
+    height: '75%',
+    width: '100%',
   },
   modalHeader: {
     flexDirection: 'row',

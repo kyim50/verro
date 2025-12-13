@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, borderRadius } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
@@ -27,6 +27,7 @@ export default function StylePreferenceQuiz({ visible, onClose, token, onComplet
   const [turnaroundDays, setTurnaroundDays] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('all'); // Category filter
 
   useEffect(() => {
     if (visible) {
@@ -172,60 +173,161 @@ export default function StylePreferenceQuiz({ visible, onClose, token, onComplet
     setSelectedStyles([]);
     setPriceRange({ min: '', max: '' });
     setTurnaroundDays('');
+    setActiveCategory('all'); // Reset category filter
     onClose();
   };
 
-  const renderStep1 = () => (
-    <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>What art styles do you like?</Text>
-      <Text style={styles.stepDescription}>
-        Select all styles you're interested in. You can prioritize them later.
-        {artStyles.length > 0 && ` (${artStyles.length} styles available)`}
-      </Text>
+  // Categorize styles into sections
+  const categorizeStyles = (styles) => {
+    const categories = {
+      all: { label: 'All Styles', styles: styles },
+      mediums: { 
+        label: 'Mediums & Techniques', 
+        styles: styles.filter(s => 
+          ['Watercolor', 'Oil Painting', 'Acrylic', 'Digital Painting', 'Digital Art', 
+           'Vector', 'Pixel Art', '3D Rendering', '3D Modeling', '3D Character', 
+           'Sculpture', 'ZBrush', 'Blender', 'Pen & Ink', 'Ink', 'Pencil', 'Charcoal', 
+           'Marker', 'Colored Pencil', 'Pastel', 'Gouache', 'Calligraphy', 'Typography',
+           'Hard Shading', 'Soft Shading', 'Cell Shading', 'Painterly', 'Rendered',
+           'Low Poly', 'Isometric', 'Technical Drawing', 'Concept Art'].includes(s.name)
+        )
+      },
+      artStyles: {
+        label: 'Art Styles',
+        styles: styles.filter(s =>
+          ['Anime', 'Manga', 'Manhwa', 'Manhua', 'Webtoon', 'Cartoon', 'Western Cartoon',
+           'Disney Style', 'Pixar Style', 'Chibi', 'Kawaii', 'Moe', 'Anime Realistic',
+           'Realism', 'Semi-Realistic', 'Abstract', 'Minimalist',
+           'Impressionism', 'Expressionism', 'Surrealism', 'Cubism', 'Pop Art',
+           'Art Deco', 'Art Nouveau', 'Contemporary', 'Modern Art', 'Gothic',
+           'Victorian', 'Medieval', 'Steampunk', 'Cyberpunk', 'Synthwave', 'Vaporwave',
+           'Glitch Art', 'Gradient Art', 'Flat Design', 'Monochrome', 'Full Color'].includes(s.name)
+        )
+      },
+      themes: {
+        label: 'Themes & Genres',
+        styles: styles.filter(s =>
+          ['Fantasy', 'Dark Fantasy', 'Sci-Fi', 'Horror', 'Space', 'Nature', 'Animal',
+           'Pet Portrait', 'Portrait', 'Landscape', 'Still Life', 'Botanical',
+           'Post-Apocalyptic', 'Steampunk', 'Cyberpunk', 'Western', 'Medieval',
+           'Victorian', 'Gothic', 'Japanese', 'Korean', 'Chinese', 'American',
+           'European'].includes(s.name)
+        )
+      },
+      character: {
+        label: 'Character & Design',
+        styles: styles.filter(s =>
+          ['Character Design', 'Concept Art', 'Illustration', 'Comic Book',
+           'Logo Design', 'Tattoo Design', 'Architectural', 'Medical Illustration',
+           'Furry', 'Kemono', 'SFW', 'NSFW'].includes(s.name)
+        )
+      },
+    };
+    return categories;
+  };
 
-      {loading ? (
-        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-      ) : (
-        <ScrollView 
-          style={styles.stylesScrollView}
-          contentContainerStyle={styles.stylesGrid}
-          showsVerticalScrollIndicator={false}
-        >
-          {artStyles.map((style) => {
-            const isSelected = selectedStyles.some(s => s.style_id === style.id);
-            return (
-              <TouchableOpacity
-                key={style.id}
-                style={[
-                  styles.styleCard,
-                  isSelected && styles.styleCardSelected
-                ]}
-                onPress={() => toggleStyle(style.id)}
-                activeOpacity={0.7}
-              >
+  const renderStep1 = () => {
+    const categories = categorizeStyles(artStyles);
+    const currentCategory = categories[activeCategory] || categories.all;
+    const displayedStyles = currentCategory.styles;
+
+    return (
+      <View style={styles.stepContent}>
+        <Text style={styles.stepTitle}>What art styles do you like?</Text>
+        <Text style={styles.stepDescription}>
+          Select all styles you're interested in. You can prioritize them later.
+          {artStyles.length > 0 && ` (${artStyles.length} styles available)`}
+        </Text>
+
+        {/* Category Tabs - Filter Style with Red Underline */}
+        {!loading && artStyles.length > 0 && (
+          <View style={styles.filterBar}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterContent}
+            >
+              {Object.entries(categories).map(([key, category]) => {
+                const isSelected = activeCategory === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={styles.filterItem}
+                    onPress={() => setActiveCategory(key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.filterText,
+                        isSelected && styles.filterTextActive
+                      ]}
+                    >
+                      {category.label}
+                      {category.styles.length > 0 && ` (${category.styles.length})`}
+                    </Text>
+                    {isSelected && <View style={styles.filterUnderline} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {loading ? (
+          <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+        ) : (
+          <ScrollView 
+            style={styles.stylesScrollView}
+            contentContainerStyle={styles.stylesGrid}
+            showsVerticalScrollIndicator={false}
+          >
+            {displayedStyles.length === 0 ? (
+              <View style={styles.emptyCategory}>
+                <Text style={styles.emptyCategoryText}>
+                  No styles in this category
+                </Text>
+              </View>
+            ) : (
+              displayedStyles.map((style) => {
+                const isSelected = selectedStyles.some(s => s.style_id === style.id);
+                return (
+                  <TouchableOpacity
+                    key={style.id}
+                    style={[
+                      styles.styleCard,
+                      isSelected && styles.styleCardSelected
+                    ]}
+                    onPress={() => toggleStyle(style.id)}
+                    activeOpacity={0.7}
+                  >
                 <Text
                   style={[
                     styles.styleCardText,
                     isSelected && styles.styleCardTextSelected
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.8}
                 >
                   {style.name}
                 </Text>
-                {isSelected && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={colors.background}
-                    style={styles.styleCheckIcon}
-                  />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-    </View>
-  );
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={colors.background}
+                        style={styles.styleCheckIcon}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
+      </View>
+    );
+  };
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
@@ -471,9 +573,44 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: spacing.xl,
   },
+  // Filter Bar Style (matching app's Pinterest filter tabs)
+  filterBar: {
+    backgroundColor: 'transparent',
+    paddingVertical: spacing.sm,
+    paddingTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  filterContent: {
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  filterItem: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
+  },
+  filterText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  filterTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  filterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+  },
   stylesScrollView: {
     flex: 1,
-    maxHeight: 500, // Limit height so it scrolls
+    maxHeight: 450, // Limit height so it scrolls
   },
   stylesGrid: {
     flexDirection: 'row',
@@ -481,20 +618,32 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xl, // Extra padding for scroll
   },
+  emptyCategory: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCategoryText: {
+    ...typography.body,
+    color: colors.text.disabled,
+    textAlign: 'center',
+  },
   styleCard: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    ...shadows.small,
   },
   styleCardSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    ...shadows.medium,
   },
   styleCardText: {
     ...typography.bodyBold,

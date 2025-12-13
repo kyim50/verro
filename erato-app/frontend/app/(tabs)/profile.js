@@ -807,6 +807,23 @@ export default function ProfileScreen() {
 
               <View style={styles.clientStatDivider} />
 
+              <TouchableOpacity
+                style={styles.clientStatItem}
+                onPress={() => router.push('/commission-requests')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.clientStatIconContainer}>
+                  <Ionicons name="list" size={22} color={colors.primary} />
+                </View>
+                <View style={styles.clientStatContent}>
+                  <Text style={styles.clientStatValue}>Post Request</Text>
+                  <Text style={styles.clientStatLabel}>Commission Board</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <View style={styles.clientStatDivider} />
+
               <View style={styles.clientStatItem}>
                 <View style={styles.clientStatIconContainer}>
                   <Ionicons name="calendar" size={22} color={colors.text.secondary} />
@@ -832,6 +849,20 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Artist Tools</Text>
             <View style={styles.quickActionsList}>
+              <TouchableOpacity
+                style={styles.quickActionItem}
+                onPress={() => router.push('/commission-requests')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="list-outline" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Commission Requests</Text>
+                  <Text style={styles.quickActionSubtitle}>Browse client requests & submit bids</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.quickActionItem}
                 onPress={() => router.push('/commission-packages')}

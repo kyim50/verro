@@ -9,13 +9,18 @@ export const useProfileStore = create((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchProfile: async (userId, token = null) => {
+  fetchProfile: async (userId, token = null, forceRefresh = false) => {
     set({ isLoading: true, error: null });
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      
-      const response = await axios.get(`${API_URL}/users/${userId}`, { headers });
-      
+
+      // Add timestamp to bypass cache when forceRefresh is true
+      const url = forceRefresh
+        ? `${API_URL}/users/${userId}?_t=${Date.now()}`
+        : `${API_URL}/users/${userId}`;
+
+      const response = await axios.get(url, { headers });
+
       set({ profile: response.data, isLoading: false });
       return response.data;
     } catch (error) {

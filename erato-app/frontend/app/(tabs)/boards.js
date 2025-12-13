@@ -50,6 +50,7 @@ export default function BoardsScreen() {
   const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null); // { userId, userName, userAvatar, commissionId, reviewType }
+  const [searchQuery, setSearchQuery] = useState('');
 
   const isArtistUser = user?.user_type === 'artist' || 
                        (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
@@ -401,25 +402,63 @@ export default function BoardsScreen() {
       : countFromArray;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
     const isCreatedBoard = item.board_type === 'created';
+    
+    // Format last updated time
+    const getTimeAgo = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffWeeks = Math.floor(diffDays / 7);
+      const diffMonths = Math.floor(diffDays / 30);
+      
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return '1d';
+      if (diffDays < 7) return `${diffDays}d`;
+      if (diffWeeks === 1) return '1w';
+      if (diffWeeks < 4) return `${diffWeeks}w`;
+      if (diffMonths === 1) return '1mo';
+      return `${diffMonths}mo`;
+    };
+    
+    const lastUpdated = getTimeAgo(item.updated_at || item.created_at);
 
     return (
       <TouchableOpacity
-        style={[styles.boardCard, isCreatedBoard && styles.createdBoardCard]}
+        style={styles.boardCard}
         onPress={() => router.push(`/board/${item.id}`)}
         activeOpacity={0.9}
       >
-        {/* Cover Grid - show first 4 artworks */}
+        {/* Pinterest-style Collage - larger image on left, smaller grid on right */}
         <View style={styles.coverGrid}>
           {firstArtworks.length > 0 ? (
-            firstArtworks.map((ba, index) => (
-              <View key={index} style={styles.gridItem}>
+            <>
+              {/* Large image on left */}
+              <View style={styles.gridItemLarge}>
                 <Image
-                  source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                  source={{ uri: firstArtworks[0]?.artworks?.thumbnail_url || firstArtworks[0]?.artworks?.image_url }}
                   style={styles.gridImage}
                   contentFit="cover"
                 />
               </View>
-            ))
+              
+              {/* Smaller images on right */}
+              <View style={styles.gridItemSmall}>
+                {firstArtworks.slice(1, 4).map((ba, index) => (
+                  <View key={index} style={styles.smallGridItem}>
+                    <Image
+                      source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                      style={styles.gridImage}
+                      contentFit="cover"
+                    />
+                  </View>
+                ))}
+                {firstArtworks.length < 4 && (
+                  <View style={[styles.smallGridItem, styles.emptySmallGrid]} />
+                )}
+              </View>
+            </>
           ) : (
             <View style={styles.emptyGrid}>
               <Ionicons name="images-outline" size={40} color={colors.text.disabled} />
@@ -427,46 +466,19 @@ export default function BoardsScreen() {
           )}
         </View>
 
-        {/* Board Info */}
+        {/* Board Info - Pinterest style */}
         <View style={styles.boardInfo}>
-          <View style={styles.boardHeader}>
-            <View style={styles.boardTitleRow}>
-              <Text style={styles.boardName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              {isCreatedBoard && (
-                <View style={styles.createdBadge}>
-                  <Ionicons name="cloud-upload-outline" size={12} color={colors.primary} />
-                </View>
-              )}
-            </View>
-            {!isCreatedBoard && (
-              <TouchableOpacity
-                style={styles.menuButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleDeleteBoard(item);
-                }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {item.description && (
-            <Text style={styles.boardDescription} numberOfLines={2}>
-              {item.description}
-            </Text>
-          )}
-
-          <View style={styles.boardFooter}>
-            <Text style={styles.artworkCount}>
-              {artworkCount} {artworkCount === 1 ? 'Pin' : 'Pins'}
+          <View style={styles.boardTitleRow}>
+            <Text style={styles.boardName} numberOfLines={1}>
+              {item.name}
             </Text>
             {!item.is_public && (
-              <Ionicons name="lock-closed" size={14} color={colors.text.secondary} />
+              <Ionicons name="lock-closed" size={14} color={colors.text.secondary} style={styles.lockIcon} />
             )}
           </View>
+          <Text style={styles.boardMeta}>
+            {artworkCount} {artworkCount === 1 ? 'Pin' : 'Pins'}{lastUpdated ? ` • ${lastUpdated}` : ''}
+          </Text>
         </View>
       </TouchableOpacity>
     );
@@ -664,47 +676,64 @@ export default function BoardsScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Library</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowCreateModal(true)}
-        >
-          <Ionicons name="add" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView edges={['top']} style={styles.headerContainer}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            {/* Profile Picture */}
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => router.push('/profile')}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={{ uri: user?.avatar_url || DEFAULT_AVATAR }}
+                style={styles.profileAvatar}
+                contentFit="cover"
+              />
+            </TouchableOpacity>
+          </View>
 
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'boards' && styles.tabActive]}
-          onPress={() => setActiveTab('boards')}
-        >
-          <Ionicons
-            name="albums"
-            size={20}
-            color={activeTab === 'boards' ? colors.primary : colors.text.secondary}
-          />
-          <Text style={[styles.tabText, activeTab === 'boards' && styles.tabTextActive]}>
-            Library
-          </Text>
-        </TouchableOpacity>
-        {!isArtistUser && (
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'liked' && styles.tabActive]}
-            onPress={() => setActiveTab('liked')}
-          >
-            <Ionicons
-              name="heart"
-              size={20}
-              color={activeTab === 'liked' ? colors.primary : colors.text.secondary}
-            />
-            <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
-              Liked
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          <View style={styles.headerCenter}>
+            {/* Tabs */}
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => setActiveTab('boards')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabText, activeTab === 'boards' && styles.tabTextActive]}>
+                  Library
+                </Text>
+                {activeTab === 'boards' && <View style={styles.tabUnderline} />}
+              </TouchableOpacity>
+              {!isArtistUser && (
+                <TouchableOpacity
+                  style={styles.tab}
+                  onPress={() => setActiveTab('liked')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tabText, activeTab === 'liked' && styles.tabTextActive]}>
+                    Liked
+                  </Text>
+                  {activeTab === 'liked' && <View style={styles.tabUnderline} />}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.headerRight}>
+            {/* Add Button */}
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowCreateModal(true)}
+            >
+              <View style={styles.addButtonBackground}>
+                <Ionicons name="add" size={24} color={colors.background} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
 
       {/* Content */}
       {renderTabContent()}
@@ -1044,26 +1073,93 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  headerContainer: {
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '20',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  headerTitle: {
-    ...typography.h1,
+  headerLeft: {
+    flexDirection: 'row',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRight: {
+    width: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  profileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  headerSpacer: {
+    flex: 1,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 40,
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
     color: colors.text.primary,
-    fontSize: 28,
+    fontSize: 15,
+    padding: 0,
+    margin: 0,
+    includeFontPadding: false,
+  },
+  searchClearButton: {
+    marginLeft: spacing.xs,
+    padding: 2,
   },
   addButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addButtonBackground: {
     width: 40,
     height: 40,
-    borderRadius: borderRadius.full,
+    borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: colors.shadow.color,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   sortButton: {
     flexDirection: 'row',
@@ -1084,62 +1180,84 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.lg,
   },
-  tab: {
+  tabsContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    gap: spacing.lg,
   },
-  tabActive: {
-    backgroundColor: colors.primary + '20',
+  tab: {
+    paddingVertical: spacing.sm,
+    position: 'relative',
   },
   tabText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    lineHeight: 20,
   },
   tabTextActive: {
-    ...typography.bodyBold,
-    color: colors.primary,
+    color: colors.text.primary,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: colors.status.error,
+    borderRadius: 1.5,
   },
   listContent: {
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: 100,
   },
   row: {
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
   },
   boardCard: {
     width: '48%',
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-    ...shadows.small,
-  },
-  createdBoardCard: {
-    borderWidth: 1,
-    borderColor: colors.primary + '40',
+    marginBottom: spacing.md + 4,
   },
   coverGrid: {
     width: '100%',
-    height: 160,
+    height: 180,
     flexDirection: 'row',
-    flexWrap: 'wrap',
     backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.xs + 2,
   },
-  gridItem: {
-    width: '50%',
-    height: '50%',
-    borderWidth: 0.5,
-    borderColor: colors.background,
+  gridItemLarge: {
+    width: '60%',
+    height: '100%',
+    position: 'relative',
+  },
+  gridItemSmall: {
+    width: '40%',
+    height: '100%',
+    flexDirection: 'column',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.background,
+  },
+  smallGridItem: {
+    flex: 1,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.background,
+  },
+  emptySmallGrid: {
+    backgroundColor: colors.surfaceLight,
   },
   gridImage: {
     width: '100%',
@@ -1150,54 +1268,31 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
   },
   boardInfo: {
-    padding: spacing.md,
-  },
-  boardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   boardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 2,
     gap: spacing.xs,
   },
   boardName: {
-    ...typography.h3,
+    ...typography.bodyBold,
     color: colors.text.primary,
-    marginRight: spacing.xs,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
   },
-  createdBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
+  lockIcon: {
+    marginLeft: 2,
   },
-  menuButton: {
-    padding: 4,
-  },
-  boardDescription: {
+  boardMeta: {
     ...typography.caption,
     color: colors.text.secondary,
-    marginBottom: spacing.sm,
-    fontSize: 13,
-  },
-  boardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  artworkCount: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: 12,
   },
   commissionCardWrapper: {
     marginBottom: spacing.md,

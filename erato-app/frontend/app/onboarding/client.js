@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import Toast from 'react-native-toast-message';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import { useAuthStore } from '../../store';
 
@@ -70,6 +71,14 @@ const INTERESTS = [
   { id: 'sci-fi', label: 'Sci-Fi', icon: 'rocket' },
   { id: 'horror', label: 'Horror', icon: 'skull' },
   { id: 'cute', label: 'Cute/Chibi', icon: 'heart' },
+  { id: 'nature', label: 'Nature', icon: 'leaf' },
+  { id: 'abstract', label: 'Abstract', icon: 'color-palette' },
+  { id: 'realistic', label: 'Realistic', icon: 'camera' },
+  { id: 'anime', label: 'Anime', icon: 'tv' },
+  { id: 'comics', label: 'Comics', icon: 'book' },
+  { id: 'gaming', label: 'Gaming', icon: 'game-controller' },
+  { id: 'fashion', label: 'Fashion', icon: 'shirt' },
+  { id: 'architecture', label: 'Architecture', icon: 'business' },
 ];
 
 export default function ClientOnboardingScreen() {
@@ -81,6 +90,7 @@ export default function ClientOnboardingScreen() {
   const [selectedFrequency, setSelectedFrequency] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('all'); // Category filter for styles
   const insets = useSafeAreaInsets();
   const { token } = useAuthStore();
 
@@ -181,11 +191,16 @@ export default function ClientOnboardingScreen() {
 
       if (!response.ok) throw new Error('Failed to save preferences');
 
-      Alert.alert(
-        'All Set!',
-        'Your preferences have been saved. We\'ll personalize your feed based on your tastes.',
-        [{ text: 'Start Exploring', onPress: () => router.replace('/(tabs)/home') }]
-      );
+      // Show success toast
+      Toast.show({
+        type: 'success',
+        text1: 'All Set!',
+        text2: 'Your preferences have been saved. We\'ll personalize your feed based on your tastes.',
+        visibilityTime: 2500,
+        onHide: () => {
+          router.replace('/(tabs)/home');
+        },
+      });
     } catch (error) {
       console.error('Error saving preferences:', error);
       Alert.alert(
@@ -199,6 +214,55 @@ export default function ClientOnboardingScreen() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Categorize styles into sections
+  const categorizeStyles = (styles) => {
+    const categories = {
+      all: { label: 'All', styles: styles },
+      mediums: { 
+        label: 'Mediums', 
+        styles: styles.filter(s => 
+          ['Watercolor', 'Oil Painting', 'Acrylic', 'Digital Painting', 'Digital Art', 
+           'Vector', 'Pixel Art', '3D Rendering', '3D Modeling', '3D Character', 
+           'Sculpture', 'ZBrush', 'Blender', 'Pen & Ink', 'Ink', 'Pencil', 'Charcoal', 
+           'Marker', 'Colored Pencil', 'Pastel', 'Gouache', 'Calligraphy', 'Typography',
+           'Hard Shading', 'Soft Shading', 'Cell Shading', 'Painterly', 'Rendered',
+           'Low Poly', 'Isometric', 'Technical Drawing', 'Concept Art'].includes(s.name)
+        )
+      },
+      artStyles: {
+        label: 'Art Styles',
+        styles: styles.filter(s =>
+          ['Anime', 'Manga', 'Manhwa', 'Manhua', 'Webtoon', 'Cartoon', 'Western Cartoon',
+           'Disney Style', 'Pixar Style', 'Chibi', 'Kawaii', 'Moe', 'Anime Realistic',
+           'Realism', 'Semi-Realistic', 'Abstract', 'Minimalist',
+           'Impressionism', 'Expressionism', 'Surrealism', 'Cubism', 'Pop Art',
+           'Art Deco', 'Art Nouveau', 'Contemporary', 'Modern Art', 'Gothic',
+           'Victorian', 'Medieval', 'Steampunk', 'Cyberpunk', 'Synthwave', 'Vaporwave',
+           'Glitch Art', 'Gradient Art', 'Flat Design', 'Monochrome', 'Full Color'].includes(s.name)
+        )
+      },
+      themes: {
+        label: 'Themes',
+        styles: styles.filter(s =>
+          ['Fantasy', 'Dark Fantasy', 'Sci-Fi', 'Horror', 'Space', 'Nature', 'Animal',
+           'Pet Portrait', 'Portrait', 'Landscape', 'Still Life', 'Botanical',
+           'Post-Apocalyptic', 'Steampunk', 'Cyberpunk', 'Western', 'Medieval',
+           'Victorian', 'Gothic', 'Japanese', 'Korean', 'Chinese', 'American',
+           'European'].includes(s.name)
+        )
+      },
+      character: {
+        label: 'Design',
+        styles: styles.filter(s =>
+          ['Character Design', 'Concept Art', 'Illustration', 'Comic Book',
+           'Logo Design', 'Tattoo Design', 'Architectural', 'Medical Illustration',
+           'Furry', 'Kemono', 'SFW', 'NSFW'].includes(s.name)
+        )
+      },
+    };
+    return categories;
   };
 
   const toggleStyle = (styleId) => {
@@ -235,7 +299,12 @@ export default function ClientOnboardingScreen() {
         <View style={[componentStyles.checkbox, isSelected && componentStyles.checkboxSelected]}>
           {isSelected && <Ionicons name="checkmark" size={16} color={colors.background} />}
         </View>
-        <Text style={[componentStyles.styleCardText, isSelected && componentStyles.styleCardTextSelected]}>
+        <Text 
+          style={[componentStyles.styleCardText, isSelected && componentStyles.styleCardTextSelected]}
+          numberOfLines={1}
+          adjustsFontSizeToFit={true}
+          minimumFontScale={0.8}
+        >
           {item.name || 'Unknown Style'}
         </Text>
       </TouchableOpacity>
@@ -254,7 +323,7 @@ export default function ClientOnboardingScreen() {
           <Ionicons
             name={item.icon}
             size={24}
-            color={isSelected ? colors.background : colors.text.secondary}
+            color={isSelected ? colors.text.primary : colors.text.secondary}
           />
         </View>
         <Text style={[componentStyles.interestLabel, isSelected && componentStyles.interestLabelSelected]}>
@@ -323,16 +392,64 @@ export default function ClientOnboardingScreen() {
             </View>
           );
         }
+        
+        const categories = categorizeStyles(artStyles);
+        const currentCategory = categories[activeCategory] || categories.all;
+        const displayedStyles = currentCategory.styles;
+        
         return (
-          <FlatList
-            data={artStyles}
-            renderItem={renderStyleItem}
-            keyExtractor={(item) => String(item.id)}
-            numColumns={2}
-            columnWrapperStyle={componentStyles.styleRow}
-            contentContainerStyle={componentStyles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
+          <View style={componentStyles.stylesContainer}>
+            {/* Category Tabs - Filter Style with Red Underline */}
+            <View style={componentStyles.filterBar}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={componentStyles.filterContent}
+              >
+                {Object.entries(categories).map(([key, category]) => {
+                  const isSelected = activeCategory === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={componentStyles.filterItem}
+                      onPress={() => setActiveCategory(key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          componentStyles.filterText,
+                          isSelected && componentStyles.filterTextActive
+                        ]}
+                      >
+                        {category.label}
+                        {category.styles.length > 0 && ` (${category.styles.length})`}
+                      </Text>
+                      {isSelected && <View style={componentStyles.filterUnderline} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+            
+            {/* Styles List */}
+            {displayedStyles.length === 0 ? (
+              <View style={componentStyles.emptyCategory}>
+                <Text style={componentStyles.emptyCategoryText}>
+                  No styles in this category
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={displayedStyles}
+                renderItem={renderStyleItem}
+                keyExtractor={(item) => String(item.id)}
+                numColumns={2}
+                columnWrapperStyle={componentStyles.styleRow}
+                contentContainerStyle={componentStyles.listContent}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+          </View>
         );
 
       case 'interests':
@@ -520,6 +637,55 @@ const componentStyles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
   },
+  stylesContainer: {
+    flex: 1,
+  },
+  // Filter Bar Style (matching app's Pinterest filter tabs)
+  filterBar: {
+    backgroundColor: 'transparent',
+    paddingVertical: spacing.sm,
+    paddingTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  filterContent: {
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  filterItem: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
+  },
+  filterText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  filterTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  filterUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+  },
+  emptyCategory: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  emptyCategoryText: {
+    ...typography.body,
+    color: colors.text.disabled,
+    textAlign: 'center',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -555,27 +721,29 @@ const componentStyles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
     padding: spacing.md,
-    borderWidth: 2,
-    borderColor: colors.borderLight,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     gap: spacing.sm,
     minHeight: 56,
+    ...shadows.small,
   },
   styleCardSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    ...shadows.medium,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: borderRadius.sm,
+    width: 20,
+    height: 20,
+    borderRadius: borderRadius.xs,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.text.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
   checkboxSelected: {
     backgroundColor: colors.background,
@@ -587,6 +755,7 @@ const componentStyles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '500',
+    flexShrink: 1,
   },
   styleCardTextSelected: {
     fontWeight: '700',
@@ -616,12 +785,15 @@ const componentStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   interestIconSelected: {
     backgroundColor: colors.background,
+    borderColor: colors.background,
   },
   interestLabel: {
     ...typography.body,

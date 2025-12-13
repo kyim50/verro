@@ -1,8 +1,11 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+
+const { width } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   return (
@@ -10,7 +13,8 @@ export default function WelcomeScreen() {
       colors={[colors.background, colors.surface, colors.surfaceLight]}
       style={styles.container}
     >
-      <View style={styles.content}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.content}>
         {/* Header Icon */}
         <View style={styles.iconContainer}>
           <Ionicons name="brush-outline" size={80} color={colors.primary} />
@@ -51,15 +55,8 @@ export default function WelcomeScreen() {
           <Text style={styles.buttonText}>Get Started</Text>
           <Ionicons name="arrow-forward" size={20} color={colors.text.primary} />
         </TouchableOpacity>
-
-        {/* Skip Link */}
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={() => router.replace('/(tabs)/home')}
-        >
-          <Text style={styles.skipText}>Skip for now</Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -82,10 +79,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  safeArea: {
+    flex: 1,
+  },
   content: {
     flex: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl * 2,
+    paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
     justifyContent: 'space-between',
   },
@@ -144,23 +144,25 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    marginBottom: spacing.md,
+    minWidth: width * 0.7, // 70% of screen width for smaller screens
+    maxWidth: 320, // Cap maximum width for larger screens
+    alignSelf: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   buttonText: {
     ...typography.button,
     color: colors.text.primary,
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  skipText: {
-    ...typography.body,
-    color: colors.text.secondary,
   },
 });

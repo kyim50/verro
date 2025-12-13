@@ -10,6 +10,7 @@ import {
   PanResponder,
   Modal,
   ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +19,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import { useAuthStore, useSwipeStore } from '../../store';
+import axios from 'axios';
+import Constants from 'expo-constants';
+
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.2; // Lower threshold for easier swiping
@@ -31,6 +36,8 @@ export default function CreateScreen() {
   const [currentPortfolioImage, setCurrentPortfolioImage] = useState(0);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [packages, setPackages] = useState([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
   
   // TINDER-LIKE APPROACH: Use queue system
   // Maintain a local queue of artists to display
@@ -39,6 +46,9 @@ export default function CreateScreen() {
   const [swipedArtists, setSwipedArtists] = useState([]); // Track swiped artists for undo
   
   const position = useRef(new Animated.ValueXY()).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const nextCardScale = useRef(new Animated.Value(0.95)).current;
+  const nextCardOpacity = useRef(new Animated.Value(0.5)).current;
 
   // Initialize queue from artists array
   useEffect(() => {
@@ -71,7 +81,38 @@ export default function CreateScreen() {
     }
   }, [queueIndex, currentArtist?.id]);
   
+  // Fetch commission packages for current artist
+  useEffect(() => {
+    const fetchPackages = async () => {
+      if (!currentArtist?.id) {
+        setPackages([]);
+        return;
+      }
+      
+      setLoadingPackages(true);
+      try {
+        const { token } = useAuthStore.getState();
+        const response = await axios.get(`${API_URL}/artists/${currentArtist.id}/packages`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        setPackages(response.data.packages || []);
+      } catch (error) {
+        console.error('Error fetching packages:', error);
+        setPackages([]);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+    
+    fetchPackages();
+  }, [currentArtist?.id]);
+  
   const currentImage = portfolioImages[currentPortfolioImage] || portfolioImages[0];
+  
+  // Get next artist for card stack preview
+  const nextArtist = artistQueue[queueIndex + 1];
+  const nextPortfolioImages = (nextArtist?.portfolio_images || []).filter(img => img && img.trim() !== '');
+  const nextImage = nextPortfolioImages[0];
 
   // SIMPLE APPROACH: No animations, just instant updates
   const swipeRight = useCallback(() => {
@@ -86,22 +127,35 @@ export default function CreateScreen() {
     // Track swiped artist for undo
     setSwipedArtists(prev => [...prev, { artist: artistData, direction: 'right' }]);
     
-    // Immediately update to next card (no animation)
-    setQueueIndex(prev => prev + 1);
-    
-    // Update store index
-    const nextStoreIndex = currentIndex + 1;
-    useSwipeStore.setState({ currentIndex: nextStoreIndex });
-    
-    // Reset position immediately
-    position.setValue({ x: 0, y: 0 });
-    position.setOffset({ x: 0, y: 0 });
+    // Animate card off screen to the right
+    Animated.timing(position, {
+      toValue: { x: width + 100, y: 0 },
+      duration: 300,
+      useNativeDriver: false,
+    }).start(() => {
+      // Reset position FIRST before updating queue to prevent flash
+      position.setValue({ x: 0, y: 0 });
+      position.setOffset({ x: 0, y: 0 });
+      cardOpacity.setValue(1); // Ensure opacity stays at 1
+      
+      // Use double requestAnimationFrame to ensure smooth transition
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // After animation completes, update to next card
+          setQueueIndex(prev => prev + 1);
+          
+          // Update store index
+          const nextStoreIndex = currentIndex + 1;
+          useSwipeStore.setState({ currentIndex: nextStoreIndex });
+        });
+      });
+    });
     
     // Record swipe in background
     swipe(artistId, 'right', false).catch(error => {
       console.error('Error recording swipe:', error);
     });
-  }, [queueIndex, currentArtist, currentIndex, swipe, position]);
+  }, [queueIndex, currentArtist, currentIndex, swipe, position, width, cardOpacity]);
 
   const swipeLeft = useCallback(() => {
     if (!currentArtist) {
@@ -115,43 +169,86 @@ export default function CreateScreen() {
     // Track swiped artist for undo
     setSwipedArtists(prev => [...prev, { artist: artistData, direction: 'left' }]);
     
-    // Immediately update to next card (no animation)
-    setQueueIndex(prev => prev + 1);
-    
-    // Update store index
-    const nextStoreIndex = currentIndex + 1;
-    useSwipeStore.setState({ currentIndex: nextStoreIndex });
-    
-    // Reset position immediately
-    position.setValue({ x: 0, y: 0 });
-    position.setOffset({ x: 0, y: 0 });
+    // Animate card off screen to the left
+    Animated.timing(position, {
+      toValue: { x: -(width + 100), y: 0 },
+      duration: 300,
+      useNativeDriver: false,
+    }).start(() => {
+      // Reset position FIRST before updating queue to prevent flash
+      position.setValue({ x: 0, y: 0 });
+      position.setOffset({ x: 0, y: 0 });
+      cardOpacity.setValue(1); // Ensure opacity stays at 1
+      
+      // Use double requestAnimationFrame to ensure smooth transition
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // After animation completes, update to next card
+          setQueueIndex(prev => prev + 1);
+          
+          // Update store index
+          const nextStoreIndex = currentIndex + 1;
+          useSwipeStore.setState({ currentIndex: nextStoreIndex });
+        });
+      });
+    });
     
     // Record swipe in background
     swipe(artistId, 'left', false).catch(error => {
       console.error('Error recording swipe:', error);
     });
-  }, [queueIndex, currentArtist, currentIndex, swipe, position]);
+  }, [queueIndex, currentArtist, currentIndex, swipe, position, width, cardOpacity]);
 
   const handleUndo = useCallback(async () => {
-    if (!canUndo() || swipedArtists.length === 0) return;
+    if (swipedArtists.length === 0) return;
     
+    const lastSwiped = swipedArtists[swipedArtists.length - 1];
+    if (!lastSwiped || !lastSwiped.artist) return;
+    
+    // Call undo on the store
     const result = await undoLastSwipe();
+    
     if (result.success) {
       // Restore previous artist in queue
-      const lastSwiped = swipedArtists[swipedArtists.length - 1];
-      if (lastSwiped && queueIndex > 0) {
-        // Insert the artist back at the previous position
+      if (lastSwiped.artist) {
         const newQueue = [...artistQueue];
-        newQueue.splice(lastSwiped.artist.queueIndex, 0, lastSwiped.artist);
-        setArtistQueue(newQueue);
-        setQueueIndex(lastSwiped.artist.queueIndex);
+        const artistId = lastSwiped.artist.id;
+        
+        // Remove the artist if it already exists in the queue (to avoid duplicates)
+        const filteredQueue = newQueue.filter(a => a.id !== artistId);
+        
+        // Insert the artist back at the previous position
+        const insertIndex = Math.max(0, Math.min(lastSwiped.artist.queueIndex, filteredQueue.length));
+        
+        // Update queue and index first, then animate
+        setArtistQueue(filteredQueue);
+        setQueueIndex(insertIndex);
         setSwipedArtists(prev => prev.slice(0, -1));
+        
+        // Also update store index to match
+        useSwipeStore.setState({ currentIndex: insertIndex });
+        
+        // Use double requestAnimationFrame to ensure state updates before animation
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Animate card back in smoothly
+            // Start from off-screen based on direction
+            const startX = lastSwiped.direction === 'right' ? width + 100 : -(width + 100);
+            position.setValue({ x: startX, y: 0 });
+            position.setOffset({ x: 0, y: 0 });
+            cardOpacity.setValue(1); // Keep opacity at 1 to prevent flash
+            
+            // Animate card sliding back in (no fade to prevent flash)
+            Animated.timing(position, {
+              toValue: { x: 0, y: 0 },
+              duration: 300,
+              useNativeDriver: false,
+            }).start();
+          });
+        });
       }
-      // Reset position
-      position.setValue({ x: 0, y: 0 });
-      position.setOffset({ x: 0, y: 0 });
     }
-  }, [canUndo, undoLastSwipe, queueIndex, position, swipedArtists, artistQueue]);
+  }, [undoLastSwipe, queueIndex, position, swipedArtists, artistQueue, cardOpacity, width]);
 
   // Removed rotation - keeping it simple
 
@@ -222,9 +319,15 @@ export default function CreateScreen() {
           } else if (gesture.dx < -5 || currentX < -5) {
             swipeLeftRef.current();
           } else {
-            // Not enough direction - just reset
-            position.setValue({ x: 0, y: 0 });
-            position.setOffset({ x: 0, y: 0 });
+            // Not enough direction - animate back to center smoothly
+            Animated.spring(position, {
+              toValue: { x: 0, y: 0 },
+              useNativeDriver: false,
+              tension: 50,
+              friction: 7,
+            }).start(() => {
+              position.setOffset({ x: 0, y: 0 });
+            });
           }
         } else {
           // Small movement - check if it's a tap
@@ -232,9 +335,15 @@ export default function CreateScreen() {
             setShowPortfolioModal(true);
           }
           
-          // Reset position for small movements (no animation)
-          position.setValue({ x: 0, y: 0 });
-          position.setOffset({ x: 0, y: 0 });
+          // Animate back to center smoothly for small movements
+          Animated.spring(position, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+            tension: 50,
+            friction: 7,
+          }).start(() => {
+            position.setOffset({ x: 0, y: 0 });
+          });
         }
       },
     }),
@@ -343,6 +452,40 @@ export default function CreateScreen() {
 
       {/* Card Container */}
       <View style={styles.cardContainer}>
+        {/* Next Card Preview (Behind Current Card) */}
+        {nextArtist && nextImage && (
+          <Animated.View
+            style={[
+              styles.card,
+              styles.nextCard,
+              {
+                transform: [
+                  { scale: nextCardScale },
+                ],
+                opacity: nextCardOpacity,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <Image
+              source={{ uri: nextImage }}
+              style={styles.cardImage}
+              contentFit="cover"
+              cachePolicy="none"
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.7)']}
+              style={styles.gradient}
+            >
+              <View style={styles.infoContainer}>
+                <Text style={styles.nextCardName}>
+                  {nextArtist.users?.username || 'Artist'}
+                </Text>
+              </View>
+            </LinearGradient>
+          </Animated.View>
+        )}
+        
         {/* Current Card - SIMPLIFIED: Only horizontal movement, no rotation */}
         {/* CRITICAL: No key prop - key causes remounting which resets animation */}
         <Animated.View
@@ -352,6 +495,7 @@ export default function CreateScreen() {
               transform: [
                 { translateX: position.x },
               ],
+              opacity: cardOpacity,
             },
           ]}
           {...panResponder.panHandlers}
@@ -367,13 +511,43 @@ export default function CreateScreen() {
           {/* Portfolio Image */}
           <View style={styles.cardImageContainer}>
             {currentImage ? (
-              <Image
-                key={`artist-${currentArtist?.id}-img-${currentPortfolioImage}`}
-                source={{ uri: currentImage }}
-                style={styles.cardImage}
-                contentFit="cover"
-                cachePolicy="none"
-              />
+              <>
+                <Image
+                  key={`artist-${currentArtist?.id}-img-${currentPortfolioImage}`}
+                  source={{ uri: currentImage }}
+                  style={styles.cardImage}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={200}
+                />
+                
+                {/* Portfolio Navigation Buttons */}
+                {portfolioImages.length > 1 && (
+                  <>
+                    {/* Left Arrow */}
+                    {currentPortfolioImage > 0 && (
+                      <TouchableOpacity
+                        style={[styles.portfolioNavButton, styles.portfolioNavButtonLeft]}
+                        onPress={() => setCurrentPortfolioImage(prev => Math.max(0, prev - 1))}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="chevron-back" size={28} color={colors.text.primary} />
+                      </TouchableOpacity>
+                    )}
+                    
+                    {/* Right Arrow */}
+                    {currentPortfolioImage < portfolioImages.length - 1 && (
+                      <TouchableOpacity
+                        style={[styles.portfolioNavButton, styles.portfolioNavButtonRight]}
+                        onPress={() => setCurrentPortfolioImage(prev => Math.min(portfolioImages.length - 1, prev + 1))}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="chevron-forward" size={28} color={colors.text.primary} />
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </>
             ) : (
               <View style={styles.cardImagePlaceholder}>
                 <Text style={styles.placeholderText}>No portfolio images</Text>
@@ -432,6 +606,58 @@ export default function CreateScreen() {
               </View>
             </View>
 
+            {/* Commission Packages Badge */}
+            {packages.length > 0 && (
+              <TouchableOpacity
+                style={styles.packagesBadge}
+                onPress={() => router.push(`/artist/${currentArtist.id}`)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.packagesBadgeContent}>
+                  <Ionicons name="cube-outline" size={16} color={colors.primary} />
+                  <Text style={styles.packagesBadgeText}>
+                    {packages.length} Package{packages.length !== 1 ? 's' : ''} Available
+                  </Text>
+                </View>
+                <View style={styles.packagesPreview}>
+                  {packages.slice(0, 3).map((pkg, idx) => (
+                    <Text key={pkg.id || idx} style={styles.packagePrice}>
+                      ${pkg.base_price}
+                    </Text>
+                  ))}
+                  {packages.length > 3 && (
+                    <Text style={styles.packagePriceMore}>+{packages.length - 3} more</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Commission Packages Badge */}
+            {packages.length > 0 && (
+              <TouchableOpacity
+                style={styles.packagesBadge}
+                onPress={() => router.push(`/artist/${currentArtist.id}`)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.packagesBadgeContent}>
+                  <Ionicons name="cube-outline" size={16} color={colors.primary} />
+                  <Text style={styles.packagesBadgeText}>
+                    {packages.length} Package{packages.length !== 1 ? 's' : ''} Available
+                  </Text>
+                </View>
+                <View style={styles.packagesPreview}>
+                  {packages.slice(0, 3).map((pkg, idx) => (
+                    <Text key={pkg.id || idx} style={styles.packagePrice}>
+                      ${pkg.base_price}
+                    </Text>
+                  ))}
+                  {packages.length > 3 && (
+                    <Text style={styles.packagePriceMore}>+{packages.length - 3} more</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Commission Range:</Text>
               <Text style={styles.price}>
@@ -465,10 +691,11 @@ export default function CreateScreen() {
       {/* Action Buttons */}
       <View style={styles.actionsContainer}>
         {/* Undo Button */}
-        {canUndo() && (
+        {swipedArtists.length > 0 && (
           <TouchableOpacity
             style={[styles.actionButton, styles.undoButton]}
             onPress={handleUndo}
+            activeOpacity={0.7}
           >
             <Ionicons name="arrow-undo" size={28} color={colors.text.primary} />
           </TouchableOpacity>
@@ -485,7 +712,7 @@ export default function CreateScreen() {
           style={[styles.actionButton, styles.likeButton]}
           onPress={swipeRight}
         >
-          <Ionicons name="heart" size={32} color={colors.status.success} />
+          <Ionicons name="heart" size={32} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -636,11 +863,16 @@ function InstructionsModal({ visible, onClose }) {
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       transparent={true}
       onRequestClose={onClose}
     >
       <View style={styles.instructionsOverlay}>
+        <TouchableOpacity 
+          style={styles.instructionsBackdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <View style={styles.instructionsContent}>
           <View style={styles.instructionsHeader}>
             <Text style={styles.instructionsTitle}>How to Use Explore</Text>
@@ -649,50 +881,97 @@ function InstructionsModal({ visible, onClose }) {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.instructionsList}>
-            <View style={styles.instructionItem}>
-              <View style={[styles.instructionIcon, { backgroundColor: `${colors.error}15` }]}>
-                <Ionicons name="arrow-back" size={24} color={colors.error} />
-              </View>
-              <View style={styles.instructionText}>
-                <Text style={styles.instructionTitle}>Swipe Left</Text>
-                <Text style={styles.instructionDescription}>Pass on this artist</Text>
-              </View>
-            </View>
+          <View style={styles.instructionsScrollWrapper}>
+            <ScrollView 
+              style={styles.instructionsScroll}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.instructionsScrollContent}
+            >
+              <View style={styles.instructionsList}>
+                <View style={styles.instructionItem}>
+                  <View style={[styles.instructionIcon, { backgroundColor: `${colors.primary}15` }]}>
+                    <Ionicons name="heart" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.instructionText}>
+                    <Text style={styles.instructionTitle}>Swipe Right or Tap Heart</Text>
+                    <Text style={styles.instructionDescription}>
+                      Like an artist and save them to your Liked list in Library
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.instructionItem}>
-              <View style={[styles.instructionIcon, { backgroundColor: `${colors.primary}15` }]}>
-                <Ionicons name="heart" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.instructionText}>
-                <Text style={styles.instructionTitle}>Swipe Right or Tap Heart</Text>
-                <Text style={styles.instructionDescription}>
-                  Save artist to your Liked list in Library
-                </Text>
-              </View>
-            </View>
+                <View style={styles.instructionItem}>
+                  <View style={[styles.instructionIcon, { backgroundColor: `${colors.error}15` }]}>
+                    <Ionicons name="close" size={24} color={colors.error} />
+                  </View>
+                  <View style={styles.instructionText}>
+                    <Text style={styles.instructionTitle}>Swipe Left or Tap X</Text>
+                    <Text style={styles.instructionDescription}>Pass on this artist</Text>
+                  </View>
+                </View>
 
-            <View style={styles.instructionItem}>
-              <View style={[styles.instructionIcon, { backgroundColor: `${colors.text.secondary}15` }]}>
-                <Ionicons name="person" size={24} color={colors.text.secondary} />
+                <View style={styles.instructionItem}>
+                  <View style={[styles.instructionIcon, { backgroundColor: `${colors.text.secondary}15` }]}>
+                    <Ionicons name="arrow-undo" size={24} color={colors.text.secondary} />
+                  </View>
+                  <View style={styles.instructionText}>
+                    <Text style={styles.instructionTitle}>Undo</Text>
+                    <Text style={styles.instructionDescription}>
+                      Tap the undo button to go back to the previous artist
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.instructionItem}>
+                  <View style={[styles.instructionIcon, { backgroundColor: `${colors.text.secondary}15` }]}>
+                    <Ionicons name="chevron-back" size={24} color={colors.text.secondary} />
+                  </View>
+                  <View style={styles.instructionText}>
+                    <Text style={styles.instructionTitle}>Browse Portfolio</Text>
+                    <Text style={styles.instructionDescription}>
+                      Use the arrow buttons on the card to browse through portfolio images
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.instructionItem}>
+                  <View style={[styles.instructionIcon, { backgroundColor: `${colors.primary}15` }]}>
+                    <Ionicons name="cube-outline" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.instructionText}>
+                    <Text style={styles.instructionTitle}>Commission Packages</Text>
+                    <Text style={styles.instructionDescription}>
+                      Tap the packages badge to view available commission packages and prices
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.instructionItem}>
+                  <View style={[styles.instructionIcon, { backgroundColor: `${colors.text.secondary}15` }]}>
+                    <Ionicons name="person" size={24} color={colors.text.secondary} />
+                  </View>
+                  <View style={styles.instructionText}>
+                    <Text style={styles.instructionTitle}>Tap Profile</Text>
+                    <Text style={styles.instructionDescription}>
+                      View full artist profile, portfolio, and request commissions
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.instructionText}>
-                <Text style={styles.instructionTitle}>Tap Profile</Text>
-                <Text style={styles.instructionDescription}>
-                  View full artist profile, portfolio, and request commissions
-                </Text>
-              </View>
-            </View>
+            </ScrollView>
           </View>
 
-          <TouchableOpacity style={styles.instructionsButton} onPress={onClose}>
-            <Text style={styles.instructionsButtonText}>Got it!</Text>
-          </TouchableOpacity>
+          <SafeAreaView style={styles.instructionsButtonContainer} edges={['bottom']}>
+            <TouchableOpacity style={styles.instructionsButton} onPress={onClose}>
+              <Text style={styles.instructionsButtonText}>Got it!</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
         </View>
       </View>
     </Modal>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -708,8 +987,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   headerSpacer: {
     width: 40,
@@ -728,8 +1007,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: spacing.xxl * 3 + spacing.xl, // Much more space from header (moved down a lot)
-    paddingBottom: 180, // More space for action buttons
+    paddingTop: spacing.md, // Moved card up even more
+    paddingBottom: 120, // Reduced space for action buttons (moves buttons up)
   },
   card: {
     width: width - spacing.xl * 2,
@@ -738,18 +1017,40 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
     position: 'absolute',
+    top: spacing.md, // Position card higher up
     zIndex: 1,
   },
   nextCard: {
     zIndex: 0,
+    transform: [{ scale: 0.95 }],
+    opacity: 0.5,
   },
   cardImageContainer: {
     width: '100%',
     height: '100%',
+    position: 'relative',
   },
   cardImage: {
     width: '100%',
     height: '100%',
+  },
+  portfolioNavButton: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -20, // Center vertically (half of button height)
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  portfolioNavButtonLeft: {
+    left: spacing.md,
+  },
+  portfolioNavButtonRight: {
+    right: spacing.md,
   },
   cardImagePlaceholder: {
     width: '100%',
@@ -917,10 +1218,11 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm + spacing.xs,
-    marginBottom: spacing.xs,
-    marginTop: spacing.md,
+    position: 'absolute',
+    bottom: 15, // Position from bottom
+    left: 0,
+    right: 0,
     zIndex: 10,
-    position: 'relative',
   },
   actionButton: {
     width: 64,
@@ -940,7 +1242,8 @@ const styles = StyleSheet.create({
     height: 56,
     backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.primary,
+    opacity: 1,
   },
   nopeButton: {
     width: 64,
@@ -1104,23 +1407,39 @@ const styles = StyleSheet.create({
   // Instructions Modal
   instructionsOverlay: {
     flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
+    justifyContent: 'flex-end',
+  },
+  instructionsBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   instructionsContent: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: height * 0.85,
     width: '100%',
-    maxWidth: 400,
+    flex: 1,
+  },
+  instructionsScrollWrapper: {
+    flex: 1,
+    minHeight: 0,
+  },
+  instructionsScroll: {
+    flex: 1,
+  },
+  instructionsScrollContent: {
+    paddingBottom: spacing.md,
   },
   instructionsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '20',
   },
   instructionsTitle: {
     ...typography.h2,
@@ -1134,7 +1453,8 @@ const styles = StyleSheet.create({
   },
   instructionsList: {
     gap: spacing.md,
-    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
   instructionItem: {
     flexDirection: 'row',
@@ -1160,15 +1480,79 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
   },
+  instructionsButtonContainer: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
   instructionsButton: {
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.xl * 2,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+    minWidth: 120,
+    maxWidth: 200,
   },
   instructionsButtonText: {
     ...typography.button,
     color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  packagesBadge: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  packagesBadgeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  packagesBadgeText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 13,
+  },
+  packagesPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  packagePrice: {
+    ...typography.caption,
+    color: colors.primary,
+    fontSize: 12,
     fontWeight: '600',
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  packagePriceMore: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+  },
+  nextCardName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 18,
   },
 });

@@ -15,6 +15,10 @@ router.get(
     query('status').optional().isIn(['open', 'closed', 'awarded', 'cancelled']),
     query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
     query('page').optional().isInt({ min: 1 }).toInt(),
+    query('budget_min').optional().isFloat({ min: 0 }),
+    query('budget_max').optional().isFloat({ min: 0 }),
+    query('sort_by').optional().isIn(['recent', 'budget_high', 'budget_low', 'bids_low', 'deadline_soon']),
+    query('styles').optional().isString(), // Comma-separated style IDs
   ],
   async (req, res, next) => {
     try {
@@ -27,29 +31,100 @@ router.get(
       const limit = parseInt(req.query.limit) || 20;
       const page = parseInt(req.query.page) || 1;
       const offset = (page - 1) * limit;
+      const budgetMin = req.query.budget_min ? parseFloat(req.query.budget_min) : null;
+      const budgetMax = req.query.budget_max ? parseFloat(req.query.budget_max) : null;
+      const sortBy = req.query.sort_by || 'recent';
+      const styles = req.query.styles ? req.query.styles.split(',').filter(s => s.trim()) : null;
 
       let requestQuery = supabaseAdmin
         .from('commission_requests')
         .select(`
           *,
           client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
-          awarded_artist:artists!commission_requests_awarded_to_fkey(id, users:users!artists_id_fkey(id, username, avatar_url))
+          awarded_artist:users!commission_requests_awarded_to_fkey(id, username, avatar_url)
         `, { count: 'exact' })
-        .eq('status', status)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+        .eq('status', status);
+
+      // Budget filters
+      if (budgetMin !== null) {
+        requestQuery = requestQuery.or(`budget_max.gte.${budgetMin},budget_max.is.null`);
+      }
+      if (budgetMax !== null) {
+        requestQuery = requestQuery.or(`budget_min.lte.${budgetMax},budget_min.is.null`);
+      }
+
+      // Style filters - check if preferred_styles array contains any of the requested styles
+      if (styles && styles.length > 0) {
+        requestQuery = requestQuery.overlaps('preferred_styles', styles);
+      }
+
+      // Sorting
+      switch (sortBy) {
+        case 'budget_high':
+          requestQuery = requestQuery.order('budget_max', { ascending: false, nullsFirst: false });
+          break;
+        case 'budget_low':
+          requestQuery = requestQuery.order('budget_min', { ascending: true, nullsFirst: false });
+          break;
+        case 'bids_low':
+          requestQuery = requestQuery.order('bid_count', { ascending: true });
+          break;
+        case 'deadline_soon':
+          requestQuery = requestQuery.order('deadline', { ascending: true, nullsFirst: false });
+          break;
+        case 'recent':
+        default:
+          requestQuery = requestQuery.order('created_at', { ascending: false });
+          break;
+      }
+
+      // Apply pagination
+      requestQuery = requestQuery.range(offset, offset + limit - 1);
 
       const { data: requests, error, count } = await requestQuery;
 
       if (error) throw error;
 
+      // If user is authenticated and is an artist, mark which requests they've already bid on
+      let enrichedRequests = requests || [];
+      if (req.user) {
+        const { data: artistCheck } = await supabaseAdmin
+          .from('artists')
+          .select('id')
+          .eq('id', req.user.id)
+          .maybeSingle();
+
+        if (artistCheck) {
+          const requestIds = enrichedRequests.map(r => r.id);
+          const { data: userBids } = await supabaseAdmin
+            .from('commission_request_bids')
+            .select('request_id, status')
+            .eq('artist_id', req.user.id)
+            .in('request_id', requestIds);
+
+          const bidMap = new Map(userBids?.map(b => [b.request_id, b.status]) || []);
+          enrichedRequests = enrichedRequests.map(req => ({
+            ...req,
+            user_bid_status: bidMap.get(req.id) || null,
+            has_applied: bidMap.has(req.id)
+          }));
+        }
+      }
+
       res.json({
-        requests: requests || [],
+        requests: enrichedRequests,
         pagination: {
           page,
           limit,
           total: count || 0,
           total_pages: Math.ceil((count || 0) / limit)
+        },
+        filters: {
+          status,
+          budget_min: budgetMin,
+          budget_max: budgetMax,
+          sort_by: sortBy,
+          styles: styles
         }
       });
     } catch (error) {
@@ -330,7 +405,7 @@ router.patch(
       // Reject all other bids
       await supabaseAdmin
         .from('commission_request_bids')
-        .update({ status: 'rejected' })
+        .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
         .eq('request_id', req.params.id)
         .neq('id', req.params.bidId)
         .eq('status', 'pending');
@@ -340,20 +415,82 @@ router.patch(
         .from('commission_requests')
         .update({
           status: 'awarded',
-          awarded_to: bid.artist_id
+          awarded_to: bid.artist_id,
+          awarded_at: new Date().toISOString()
         })
         .eq('id', req.params.id);
+
+      // Create a commission from the accepted bid
+      const { data: commission, error: commissionError } = await supabaseAdmin
+        .from('commissions')
+        .insert({
+          client_id: request.client_id,
+          artist_id: bid.artist_id,
+          details: `Commission request: ${request.title}`,
+          budget: bid.bid_amount,
+          deadline_text: bid.estimated_delivery_days ? `${bid.estimated_delivery_days} days` : null,
+          status: 'pending',
+          final_price: bid.bid_amount
+        })
+        .select()
+        .single();
+
+      if (commissionError) throw commissionError;
+
+      // Create or get conversation
+      const { data: existingConv } = await supabaseAdmin
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', request.client_id);
+
+      let conversation = null;
+      if (existingConv && existingConv.length > 0) {
+        for (const conv of existingConv) {
+          const { data: participants } = await supabaseAdmin
+            .from('conversation_participants')
+            .select('user_id')
+            .eq('conversation_id', conv.conversation_id);
+
+          if (participants?.some(p => p.user_id === bid.artist_id)) {
+            const { data: foundConv } = await supabaseAdmin
+              .from('conversations')
+              .select('*')
+              .eq('id', conv.conversation_id)
+              .single();
+            conversation = foundConv;
+            break;
+          }
+        }
+      }
+
+      if (!conversation) {
+        const { data: newConv } = await supabaseAdmin
+          .from('conversations')
+          .insert({ commission_id: commission.id })
+          .select()
+          .single();
+        conversation = newConv;
+
+        await supabaseAdmin.from('conversation_participants').insert([
+          { conversation_id: conversation.id, user_id: request.client_id },
+          { conversation_id: conversation.id, user_id: bid.artist_id }
+        ]);
+      }
 
       // Notify artist
       await NotificationService.publish(bid.artist_id, {
         type: 'bid_accepted',
         title: 'Bid Accepted! 🎉',
-        message: 'Your bid has been accepted',
-        action: { type: 'view_request', id: req.params.id },
+        message: 'Your bid has been accepted and a commission has been created',
+        action: { type: 'view_commission', id: commission.id },
         priority: 'high',
       });
 
-      res.json({ message: 'Bid accepted successfully' });
+      res.json({
+        message: 'Bid accepted successfully',
+        commission_id: commission.id,
+        conversation_id: conversation.id
+      });
     } catch (error) {
       next(error);
     }
@@ -421,7 +558,10 @@ router.get('/bids/my', authenticate, async (req, res, next) => {
           title,
           description,
           status,
-          client:users!commission_requests_client_id_fkey(id, username, avatar_url)
+          budget_min,
+          budget_max,
+          deadline,
+          client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name)
         )
       `)
       .eq('artist_id', req.user.id)
@@ -429,6 +569,101 @@ router.get('/bids/my', authenticate, async (req, res, next) => {
 
     if (error) throw error;
     res.json({ bids: bids || [] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get client's own commission requests with bids
+router.get('/my-requests', authenticate, async (req, res, next) => {
+  try {
+    const { data: requests, error } = await supabaseAdmin
+      .from('commission_requests')
+      .select(`
+        *,
+        client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
+        awarded_artist:users!commission_requests_awarded_to_fkey(id, username, avatar_url, full_name),
+        bids:commission_request_bids(
+          *,
+          artist:users!commission_request_bids_artist_id_fkey(id, username, avatar_url, full_name)
+        )
+      `)
+      .eq('client_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Enrich with bid statistics
+    const enrichedRequests = (requests || []).map(request => ({
+      ...request,
+      pending_bids_count: request.bids?.filter(b => b.status === 'pending').length || 0,
+      total_bids_count: request.bids?.length || 0
+    }));
+
+    res.json({ requests: enrichedRequests });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Cancel a commission request (clients only)
+router.patch('/:id/cancel', authenticate, async (req, res, next) => {
+  try {
+    const { data: request } = await supabaseAdmin
+      .from('commission_requests')
+      .select('client_id, status')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (request.client_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the request creator can cancel it' });
+    }
+
+    if (request.status !== 'open') {
+      return res.status(400).json({ error: 'Only open requests can be cancelled' });
+    }
+
+    // Update request status
+    await supabaseAdmin
+      .from('commission_requests')
+      .update({
+        status: 'cancelled',
+        closed_at: new Date().toISOString()
+      })
+      .eq('id', req.params.id);
+
+    // Get all pending bids and notify artists
+    const { data: pendingBids } = await supabaseAdmin
+      .from('commission_request_bids')
+      .select('artist_id')
+      .eq('request_id', req.params.id)
+      .eq('status', 'pending');
+
+    // Reject all pending bids
+    await supabaseAdmin
+      .from('commission_request_bids')
+      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+      .eq('request_id', req.params.id)
+      .eq('status', 'pending');
+
+    // Notify artists
+    if (pendingBids && pendingBids.length > 0) {
+      for (const bid of pendingBids) {
+        await NotificationService.publish(bid.artist_id, {
+          type: 'request_cancelled',
+          title: 'Request Cancelled',
+          message: 'A commission request you bid on has been cancelled',
+          action: { type: 'view_requests' },
+          priority: 'normal',
+        });
+      }
+    }
+
+    res.json({ message: 'Request cancelled successfully' });
   } catch (error) {
     next(error);
   }

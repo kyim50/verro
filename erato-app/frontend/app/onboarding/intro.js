@@ -164,7 +164,10 @@ const styles = StyleSheet.create({
     top: spacing.xxl + spacing.md,
     right: spacing.lg,
     zIndex: 10,
-    padding: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minWidth: 60,
+    alignItems: 'center',
   },
   skipText: {
     ...typography.body,
@@ -207,7 +210,8 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxl + spacing.lg, // Extra bottom padding for safe area
+    paddingTop: spacing.lg,
   },
   pagination: {
     flexDirection: 'row',
@@ -228,12 +232,21 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    minWidth: width * 0.8, // 80% of screen width for better visibility
+    maxWidth: 300, // Cap maximum width
+    alignSelf: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   nextButtonText: {
     ...typography.button,
@@ -242,8 +255,10 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     alignItems: 'center',
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignSelf: 'center',
   },
   loginLinkText: {
     ...typography.body,
