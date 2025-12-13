@@ -1,0 +1,30 @@
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
+# Dependencies
+node_modules/
+
+# Native folders
+# Note: If you're using Continuous Native Generation (CNG/Prebuild), 
+# uncomment the lines below to ignore native folders and let Expo generate them.
+# If you're managing native code manually, keep android/ and ios/ folders tracked.
+# android/
+# ios/
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+

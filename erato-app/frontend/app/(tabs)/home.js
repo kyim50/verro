@@ -15,11 +15,10 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Link, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -1348,30 +1347,31 @@ export default function HomeScreen() {
             style={[styles.tab, activeTab === 'explore' && styles.tabActive]}
             onPress={() => {
               if (activeTab !== 'explore') {
-                // Animate transition
-                Animated.parallel([
-                  Animated.timing(exploreOpacity, {
-                    toValue: 1,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(exploreTranslateY, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(forYouOpacity, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(forYouTranslateY, {
-                    toValue: 20,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                ]).start();
-                setActiveTab('explore');
+                // Immediately hide For You tab completely
+                forYouOpacity.setValue(0);
+                forYouTranslateY.setValue(20);
+                
+                // Use requestAnimationFrame to ensure state update happens after render
+                requestAnimationFrame(() => {
+                  setActiveTab('explore');
+                  
+                  // Small delay to ensure For You is fully hidden before showing Explore
+                  setTimeout(() => {
+                    // Animate Explore tab in
+                    Animated.parallel([
+                      Animated.timing(exploreOpacity, {
+                        toValue: 1,
+                        duration: 200,
+                        useNativeDriver: true,
+                      }),
+                      Animated.timing(exploreTranslateY, {
+                        toValue: 0,
+                        duration: 200,
+                        useNativeDriver: true,
+                      }),
+                    ]).start();
+                  }, 16); // One frame delay
+                });
               }
             }}
           >
@@ -1386,30 +1386,32 @@ export default function HomeScreen() {
                 setSelectedStyleFilter(null);
                 setShowDiscoverArtists(false);
                 setDiscoverArtists([]);
-                // Animate transition
-                Animated.parallel([
-                  Animated.timing(forYouOpacity, {
-                    toValue: 1,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(forYouTranslateY, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(exploreOpacity, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(exploreTranslateY, {
-                    toValue: -20,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }),
-                ]).start();
-                setActiveTab('foryou');
+                
+                // Immediately hide Explore tab completely
+                exploreOpacity.setValue(0);
+                exploreTranslateY.setValue(-20);
+                
+                // Use requestAnimationFrame to ensure state update happens after render
+                requestAnimationFrame(() => {
+                  setActiveTab('foryou');
+                  
+                  // Small delay to ensure Explore is fully hidden before showing For You
+                  setTimeout(() => {
+                    // Animate For You tab in
+                    Animated.parallel([
+                      Animated.timing(forYouOpacity, {
+                        toValue: 1,
+                        duration: 200,
+                        useNativeDriver: true,
+                      }),
+                      Animated.timing(forYouTranslateY, {
+                        toValue: 0,
+                        duration: 200,
+                        useNativeDriver: true,
+                      }),
+                    ]).start();
+                  }, 16); // One frame delay
+                });
               }
             }}
           >
@@ -1571,6 +1573,7 @@ export default function HomeScreen() {
               height: '100%',
               opacity: exploreOpacity,
               transform: [{ translateY: exploreTranslateY }],
+              zIndex: activeTab === 'explore' ? 1 : 0,
             },
             activeTab !== 'explore' && { pointerEvents: 'none' },
           ]}
@@ -1617,6 +1620,7 @@ export default function HomeScreen() {
               height: '100%',
               opacity: forYouOpacity,
               transform: [{ translateY: forYouTranslateY }],
+              zIndex: activeTab === 'foryou' ? 1 : 0,
             },
             activeTab !== 'foryou' && { pointerEvents: 'none' },
           ]}
