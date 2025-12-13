@@ -24,7 +24,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: ./erato-app/backend
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Run backend tests (if available)
         working-directory: ./erato-app/backend
