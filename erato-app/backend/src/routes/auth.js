@@ -39,7 +39,7 @@ router.post(
 
       console.log('Registration attempt:', { email, username, userType, hasPassword: !!password });
 
-      // Check if user exists using admin client
+      // Check if user exists in database
       const { data: existingUsers, error: checkError } = await supabaseAdmin
         .from('users')
         .select('id, email, username')
@@ -64,6 +64,24 @@ router.post(
         }
         console.log('Registration failed: Email or username already exists');
         throw new AppError('Email or username already exists', 409);
+      }
+
+      // Check if email exists in Supabase Auth (orphaned user)
+      // If it exists in Auth but not in database, clean it up
+      try {
+        const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+        const existingAuthUser = authUsers?.users?.find(u => u.email === email);
+        
+        if (existingAuthUser) {
+          console.log('Found orphaned Auth user, cleaning up:', existingAuthUser.id);
+          // Delete the orphaned Auth user
+          await supabaseAdmin.auth.admin.deleteUser(existingAuthUser.id);
+          console.log('Orphaned Auth user deleted successfully');
+        }
+      } catch (authCheckError) {
+        // If we can't check/delete Auth users, log but continue
+        // Supabase Auth will handle the duplicate email error
+        console.warn('Could not check/cleanup Auth users:', authCheckError.message);
       }
 
       console.log('No existing user found, proceeding with registration...');
