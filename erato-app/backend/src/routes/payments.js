@@ -67,6 +67,116 @@ function client() {
 }
 
 /**
+ * @route   GET /api/payments/success
+ * @desc    Handle PayPal redirect after successful payment approval
+ * @access  Public (PayPal redirect)
+ */
+router.get('/success', (req, res) => {
+  const { token, PayerID } = req.query;
+  
+  // This is just a redirect handler - the actual payment capture happens via the capture-order endpoint
+  // Return a simple success page or redirect to frontend
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:19006';
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Payment Successful</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+          }
+          .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+          }
+          h1 { margin: 0 0 1rem 0; }
+          p { margin: 0.5rem 0; opacity: 0.9; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✅ Payment Successful!</h1>
+          <p>Your payment has been processed.</p>
+          <p>You can close this window and return to the app.</p>
+        </div>
+        <script>
+          // Try to close the window after 3 seconds (if opened in popup)
+          setTimeout(() => {
+            if (window.opener) {
+              window.close();
+            }
+          }, 3000);
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+/**
+ * @route   GET /api/payments/cancel
+ * @desc    Handle PayPal redirect after cancelled payment
+ * @access  Public (PayPal redirect)
+ */
+router.get('/cancel', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Payment Cancelled</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+          }
+          .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+          }
+          h1 { margin: 0 0 1rem 0; }
+          p { margin: 0.5rem 0; opacity: 0.9; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>❌ Payment Cancelled</h1>
+          <p>You cancelled the payment process.</p>
+          <p>You can close this window and return to the app.</p>
+        </div>
+        <script>
+          setTimeout(() => {
+            if (window.opener) {
+              window.close();
+            }
+          }, 3000);
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+/**
  * @route   POST /api/payments/create-order
  * @desc    Create a PayPal order for a commission payment
  * @access  Private (Client)
@@ -164,8 +274,8 @@ router.post('/create-order', authenticate, async (req, res) => {
         brand_name: 'Verro',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
-        return_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/success`,
-        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/cancel`
+        return_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/success`,
+        cancel_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/cancel`
       }
     });
 
@@ -609,8 +719,8 @@ router.post('/tip', authenticate, async (req, res) => {
         brand_name: 'Verro',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
-        return_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/success`,
-        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/cancel`
+        return_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/success`,
+        cancel_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/cancel`
       }
     });
 
