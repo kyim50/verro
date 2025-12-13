@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useBoardStore } from '../../store';
 import axios from 'axios';
@@ -78,6 +78,16 @@ export default function ArtistProfileScreen() {
     fetchAvailableStyles();
     loadReviews();
   }, [id]);
+
+  // Refresh artist profile data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchArtistProfile();
+      if (token && user) {
+        checkFavoriteStatus();
+      }
+    }, [id, token, user])
+  );
 
   const fetchAvailableStyles = async () => {
     try {

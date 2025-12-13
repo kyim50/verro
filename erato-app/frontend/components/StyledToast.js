@@ -17,7 +17,7 @@ const toastConfig = {
       <View style={styles.toastContainer}>
         <View style={styles.toastContent}>
           <View style={styles.iconContainer}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.status.success} />
+            <Ionicons name="checkmark-circle" size={20} color={colors.status.success} />
           </View>
           <Text style={styles.toastText}>{fullText}</Text>
         </View>
@@ -34,7 +34,7 @@ const toastConfig = {
       <View style={styles.toastContainer}>
         <View style={styles.toastContent}>
           <View style={styles.iconContainer}>
-            <Ionicons name="close-circle" size={18} color={colors.status.error} />
+            <Ionicons name="close-circle" size={20} color={colors.status.error} />
           </View>
           <Text style={styles.toastText}>{fullText}</Text>
         </View>
@@ -51,7 +51,7 @@ const toastConfig = {
       <View style={styles.toastContainer}>
         <View style={styles.toastContent}>
           <View style={styles.iconContainer}>
-            <Ionicons name="information-circle" size={18} color={colors.status.info} />
+            <Ionicons name="information-circle" size={20} color={colors.status.info} />
           </View>
           <Text style={styles.toastText}>{fullText}</Text>
         </View>
@@ -79,8 +79,8 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   iconContainer: {
-    width: 18,
-    height: 18,
+    width: 24,
+    height: 24,
     marginRight: spacing.sm,
     justifyContent: 'center',
     alignItems: 'center',

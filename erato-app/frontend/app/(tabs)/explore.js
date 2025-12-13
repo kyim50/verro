@@ -1210,6 +1210,15 @@ export default function CommissionDashboard() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
+              onPress={() => router.push('/commission-requests')}
+            >
+              <Ionicons name="list-outline" size={20} color={colors.primary} />
+              <Text style={styles.actionButtonText}>
+                {isArtist ? 'Quest Board' : 'Requests'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
               onPress={() => {
                 setShowTransactionHistoryModal(true);
                 setTransactionHistoryCommissionId(null); // Show all transactions

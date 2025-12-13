@@ -78,10 +78,10 @@ export default function ArtistSettings() {
     }
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (showToast = true) => {
     // Prevent multiple simultaneous saves
     if (saving) return;
-    
+
     try {
       setSaving(true);
 
@@ -102,12 +102,14 @@ export default function ArtistSettings() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      showAlert({
-        title: 'Saved',
-        message: 'Commission settings updated',
-        type: 'success',
-        duration: 1500,
-      });
+      if (showToast) {
+        showAlert({
+          title: 'Saved',
+          message: 'Commission settings updated',
+          type: 'success',
+          duration: 1500,
+        });
+      }
     } catch (error) {
       console.error('Error saving settings:', error);
       showAlert({
@@ -187,7 +189,7 @@ export default function ArtistSettings() {
                   setCommissionsPaused(value);
                   // Auto-save toggle changes
                   setTimeout(() => {
-                    saveSettings();
+                    saveSettings(false);
                   }, 300);
                 }}
                 trackColor={{ false: colors.border, true: colors.primary }}
@@ -237,7 +239,7 @@ export default function ArtistSettings() {
                   setWaitlistEnabled(value);
                   // Auto-save toggle changes
                   setTimeout(() => {
-                    saveSettings();
+                    saveSettings(false);
                   }, 300);
                 }}
                 trackColor={{ false: colors.border, true: colors.primary }}
@@ -260,7 +262,7 @@ export default function ArtistSettings() {
                   setAutoDecline(value);
                   // Auto-save toggle changes
                   setTimeout(() => {
-                    saveSettings();
+                    saveSettings(false);
                   }, 300);
                 }}
                 trackColor={{ false: colors.border, true: colors.primary }}

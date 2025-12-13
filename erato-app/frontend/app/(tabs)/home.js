@@ -1350,11 +1350,11 @@ export default function HomeScreen() {
                 // Immediately hide For You tab completely
                 forYouOpacity.setValue(0);
                 forYouTranslateY.setValue(20);
-                
+
                 // Use requestAnimationFrame to ensure state update happens after render
                 requestAnimationFrame(() => {
                   setActiveTab('explore');
-                  
+
                   // Small delay to ensure For You is fully hidden before showing Explore
                   setTimeout(() => {
                     // Animate Explore tab in
@@ -1386,15 +1386,15 @@ export default function HomeScreen() {
                 setSelectedStyleFilter(null);
                 setShowDiscoverArtists(false);
                 setDiscoverArtists([]);
-                
+
                 // Immediately hide Explore tab completely
                 exploreOpacity.setValue(0);
                 exploreTranslateY.setValue(-20);
-                
+
                 // Use requestAnimationFrame to ensure state update happens after render
                 requestAnimationFrame(() => {
                   setActiveTab('foryou');
-                  
+
                   // Small delay to ensure Explore is fully hidden before showing For You
                   setTimeout(() => {
                     // Animate For You tab in
@@ -1418,7 +1418,7 @@ export default function HomeScreen() {
             <Text style={[styles.tabText, activeTab === 'foryou' && styles.tabTextActive]}>For you</Text>
           </TouchableOpacity>
         </View>
-        
+
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.iconButton}
@@ -1441,7 +1441,7 @@ export default function HomeScreen() {
           >
             {(userProfile?.avatar_url || currentUser?.avatar_url) ? (
               <Image
-                source={{ 
+                source={{
                   uri: (() => {
                     const url = userProfile?.avatar_url || currentUser?.avatar_url;
                     // Add cache-busting parameter that changes when avatar updates
@@ -1737,7 +1737,7 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
-                  
+
                   <TouchableOpacity
                     style={styles.createBoardButton}
                     onPress={() => setShowCreateBoard(true)}
@@ -1959,53 +1959,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    backgroundColor: colors.background,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    padding: spacing.xs - 1,
-    alignItems: 'center',
-  },
-  tab: {
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg - spacing.xs,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.xs + 2 : spacing.sm,
-    borderRadius: borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: colors.surfaceLight,
-  },
-  tabText: {
-    ...typography.body,
-    color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
-  },
-  tabTextActive: {
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    gap: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
-  },
-  iconButton: {
-    width: IS_SMALL_SCREEN ? 36 : 38,
-    height: IS_SMALL_SCREEN ? 36 : 38,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollContent: {
     paddingBottom: spacing.xxl * 2 + spacing.md, // Base padding, will be overridden by inline style with safe area
@@ -2393,44 +2346,14 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: Dimensions.get('window').height * 0.75,
-    width: '100%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + spacing.xs : spacing.lg,
-    paddingTop: IS_SMALL_SCREEN ? spacing.md + spacing.xs : spacing.lg,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + spacing.xs,
-    borderBottomWidth: 0,
-  },
-  modalTitle: {
-    ...typography.h2,
-    color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 22 : 24,
-    fontWeight: '700',
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   sortFilterModal: {
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '85%',
+    height: '85%',
     width: '100%',
   },
   sortFilterContent: {
@@ -2540,52 +2463,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.primary,
-  },
-  boardList: {
-    maxHeight: 400,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-  },
-  boardOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
-    gap: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.sm,
-    ...shadows.small,
-  },
-  boardOptionText: {
-    ...typography.body,
-    color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 16 : 17,
-    fontWeight: '600',
-    flex: 1,
-  },
-  createBoardButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
-    marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: colors.primary + '40',
-    borderStyle: 'dashed',
-  },
-  createBoardText: {
-    ...typography.bodyBold,
-    color: colors.primary,
-    fontSize: IS_SMALL_SCREEN ? 15 : 16,
-    fontWeight: '700',
-  },
-  createBoardForm: {
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + 4 : spacing.lg,
   },
   input: {
     backgroundColor: colors.surface,
@@ -2875,5 +2752,71 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 11,
     fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xxl + spacing.md, // Extra padding for notch
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    padding: spacing.xs - 1,
+    alignItems: 'center',
+  },
+  tab: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabActive: {
+    backgroundColor: colors.surfaceLight,
+  },
+  tabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+  },
+  tabTextActive: {
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  profileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
 });
