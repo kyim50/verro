@@ -29,7 +29,7 @@ import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { showAlert } from '../../components/StyledAlert';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 import ArtistFilters from '../../components/ArtistFilters';
@@ -722,61 +722,49 @@ export default function HomeScreen() {
     
     return (
       <View key={item.id} style={styles.suggestedArtistCard}>
+        {/* Header */}
         <View style={styles.suggestedArtistHeader}>
-          <View>
-            <Text style={styles.suggestedArtistTitle}>Artists you might like</Text>
-            <Text style={styles.suggestedArtistSubtitle}>Based on your preferences</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/explore')}>
-            <Text style={styles.suggestedArtistViewAll}>View All</Text>
-          </TouchableOpacity>
+          <Text style={styles.suggestedArtistTitle}>Artists you might like</Text>
+          <Text style={styles.suggestedArtistSubtitle}>Based on your preferences</Text>
         </View>
-        <View style={styles.suggestedArtistList}>
-          {item.artists.slice(0, 3).map((artist) => (
-            <TouchableOpacity
-              key={artist.id}
-              style={styles.suggestedArtistItem}
-              onPress={() => router.push(`/artist/${artist.id}`)}
-              activeOpacity={0.7}
-            >
-              <Image
-                source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/40' }}
-                style={styles.suggestedArtistAvatar}
-                contentFit="cover"
-              />
-              <View style={styles.suggestedArtistInfo}>
+
+        {/* Artist Cards - Simple horizontal scroll */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.suggestedArtistScrollContent}
+        >
+          {item.artists.slice(0, 4).map((artist) => {
+            const avatarUrl = artist.users?.avatar_url || DEFAULT_AVATAR;
+            const artistUsername = artist.users?.username || 'Artist';
+            
+            return (
+              <TouchableOpacity
+                key={artist.id}
+                style={styles.suggestedArtistCardItem}
+                onPress={() => router.push(`/artist/${artist.id}`)}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.suggestedArtistAvatar}
+                  contentFit="cover"
+                />
                 <Text style={styles.suggestedArtistName} numberOfLines={1}>
-                  {artist.users?.full_name || artist.users?.username}
+                  @{artistUsername}
                 </Text>
-                <View style={styles.suggestedArtistMeta}>
-                  <View style={styles.suggestedArtistStats}>
+                {artist.rating && artist.rating > 0 && (
+                  <View style={styles.suggestedArtistRating}>
                     <Ionicons name="star" size={12} color={colors.status.warning} />
-                    <Text style={styles.suggestedArtistRating}>
-                      {artist.rating?.toFixed(1) || '0.0'}
+                    <Text style={styles.suggestedArtistRatingText}>
+                      {artist.rating.toFixed(1)}
                     </Text>
                   </View>
-                  {artist.commission_status === 'open' ? (
-                    <View style={styles.commissionStatusOpen}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                      <Text style={styles.commissionStatusText}>Open</Text>
-                    </View>
-                  ) : artist.commission_status === 'limited' ? (
-                    <View style={styles.commissionStatusLimited}>
-                      <Ionicons name="time" size={12} color={colors.status.warning} />
-                      <Text style={styles.commissionStatusTextLimited}>Limited</Text>
-                    </View>
-                  ) : null}
-                </View>
-                {artist.min_price && artist.max_price && (
-                  <Text style={styles.suggestedArtistPrice}>
-                    ${artist.min_price}-${artist.max_price}
-                  </Text>
                 )}
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
-            </TouchableOpacity>
-          ))}
-        </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
     );
   };
@@ -2539,121 +2527,61 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: 1,
   },
-  // Artists you might like card
+  // Artists you might like card - Simple style
   suggestedArtistCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border + '80',
+    padding: spacing.md,
+    ...shadows.small,
   },
   suggestedArtistHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '60',
+    marginBottom: spacing.md,
   },
   suggestedArtistTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: IS_SMALL_SCREEN ? 16 : 17,
     fontWeight: '700',
     marginBottom: spacing.xs / 2,
   },
   suggestedArtistSubtitle: {
-    ...typography.small,
+    ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
   },
-  suggestedArtistViewAll: {
-    ...typography.body,
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+  suggestedArtistScrollContent: {
+    gap: spacing.md,
   },
-  suggestedArtistList: {
-    padding: spacing.sm,
-    gap: spacing.xs,
-  },
-  suggestedArtistItem: {
-    flexDirection: 'row',
+  suggestedArtistCardItem: {
     alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
+    width: IS_SMALL_SCREEN ? 80 : 90,
   },
   suggestedArtistAvatar: {
-    width: 48,
-    height: 48,
+    width: IS_SMALL_SCREEN ? 64 : 72,
+    height: IS_SMALL_SCREEN ? 64 : 72,
     borderRadius: borderRadius.full,
-    marginRight: spacing.md,
+    marginBottom: spacing.sm,
     borderWidth: 2,
     borderColor: colors.primary + '30',
-  },
-  suggestedArtistInfo: {
-    flex: 1,
-    gap: spacing.xs / 2,
   },
   suggestedArtistName: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
     fontWeight: '600',
-  },
-  suggestedArtistMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  suggestedArtistStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs / 2,
+    textAlign: 'center',
+    marginBottom: spacing.xs / 2,
   },
   suggestedArtistRating: {
-    ...typography.small,
-    color: colors.text.secondary,
-    fontSize: 12,
-  },
-  suggestedArtistPrice: {
-    ...typography.small,
-    color: colors.text.secondary,
-    fontSize: 12,
-  },
-  commissionStatusOpen: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs / 2,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.success + '15',
   },
-  commissionStatusLimited: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs / 2,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.status.warning + '15',
-  },
-  commissionStatusText: {
-    ...typography.small,
-    color: colors.success,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  commissionStatusTextLimited: {
-    ...typography.small,
-    color: colors.status.warning,
-    fontSize: 11,
-    fontWeight: '600',
+  suggestedArtistRatingText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
   },
   // Filter styles
   filterBadge: {

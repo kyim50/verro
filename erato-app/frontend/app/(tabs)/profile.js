@@ -87,8 +87,11 @@ export default function ProfileScreen() {
       if (!profile || profile.id !== user.id) {
         loadProfile();
       }
+    } else {
+      // No user - ensure we're not showing loading
+      setIsInitialLoad(false);
     }
-  }, [user?.id, loadProfile]); // Use user.id to ensure it triggers on user change
+  }, [user?.id]); // Remove loadProfile from deps to prevent re-triggering
 
   const loadProfile = useCallback(async (forceRefresh = false) => {
     try {
@@ -202,15 +205,8 @@ export default function ProfileScreen() {
     );
   }
 
-  // Prevent flash while initial profile load is in progress
-  // Only show loading if we truly have no profile data
-  if (isInitialLoad && isLoading && !profile) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  // Show loading only if we truly have no data
+  const showLoading = isInitialLoad && isLoading && !profile;
 
   const isArtist = profile?.artist !== null && profile?.artist !== undefined;
   const artworks = profile?.artist?.artworks || [];
@@ -370,19 +366,10 @@ export default function ProfileScreen() {
     setShowDeleteModal(true);
   };
 
-  // Show loading only on initial load with no cached data
-  if (isInitialLoad && isLoading && !profile) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  // If we have profile data, show it even if loading (optimistic display)
+  // Always render container to prevent black screen
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Always render */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
@@ -397,8 +384,14 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
       >
-        {/* Profile Info */}
-        <View style={styles.profileSection}>
+        {showLoading ? (
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <>
+            {/* Profile Info */}
+            <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {(profile?.avatar_url || user?.avatar_url) ? (
               <Image 
@@ -1004,6 +997,8 @@ export default function ProfileScreen() {
             <Text style={styles.emptyText}>No boards yet</Text>
           )}
         </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Portfolio Modal Viewer */}
@@ -1148,6 +1143,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContent: {
+    paddingVertical: spacing.xl * 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 200,
   },
   centered: {
     justifyContent: 'center',

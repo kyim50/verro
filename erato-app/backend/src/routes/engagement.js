@@ -325,17 +325,26 @@ router.get('/artist/:artistId/metrics', authenticate, async (req, res) => {
     const userId = req.user.id;
 
     // Verify the artist belongs to the user
+    // Note: artists.id IS the user_id (artists table primary key IS the user_id)
+    // So we just need to check if artistId === userId
+    if (artistId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: You can only view metrics for your own artworks'
+      });
+    }
+
+    // Verify the artist exists
     const { data: artist, error: artistError } = await supabaseAdmin
       .from('artists')
-      .select('id, user_id')
+      .select('id')
       .eq('id', artistId)
-      .eq('user_id', userId)
       .maybeSingle();
 
     if (artistError || !artist) {
       return res.status(403).json({
         success: false,
-        error: 'Unauthorized: You can only view metrics for your own artworks'
+        error: 'Unauthorized: Artist profile not found'
       });
     }
 

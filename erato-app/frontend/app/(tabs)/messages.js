@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Dimensions,
   ScrollView,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -31,10 +33,18 @@ export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const { user, token } = useAuthStore();
   const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start as false to allow immediate render
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'unread', 'commissions'
   const socketRef = useRef(null);
+  
+  // Artist search state
+  const [showArtistSearch, setShowArtistSearch] = useState(false);
+  const [artistSearchQuery, setArtistSearchQuery] = useState('');
+  const [artistSearchResults, setArtistSearchResults] = useState([]);
+  const [artistSearchLoading, setArtistSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef(null);
+  const isArtistUser = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -112,20 +122,28 @@ export default function MessagesScreen() {
     };
   }, [token, user, fetchConversations]);
 
-  // Refresh conversations when screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      if (user && token) {
-        fetchConversations();
-      }
-    }, [user, token, fetchConversations])
-  );
-
+  // Load conversations immediately on mount and when screen is focused
   useEffect(() => {
     if (user && token) {
+      // Don't set loading to true if we already have conversations (prevents black screen)
+      if (conversations.length === 0) {
+        setLoading(true);
+      }
       fetchConversations();
+    } else {
+      setLoading(false);
     }
-  }, [user, token, fetchConversations]);
+  }, [user, token]); // Remove fetchConversations from deps to prevent re-triggering
+
+  // Refresh conversations when screen is focused (but don't reset loading)
+  useFocusEffect(
+    useCallback(() => {
+      if (user && token && conversations.length > 0) {
+        // Only refresh if we already have conversations (silent refresh)
+        fetchConversations();
+      }
+    }, [user, token, fetchConversations, conversations.length])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -216,22 +234,165 @@ export default function MessagesScreen() {
     return diffMinutes < 5;
   };
 
-  // Filter conversations based on active tab
-  const filteredConversations = conversations.filter((conv) => {
-    if (activeTab === 'unread') {
-      return conv.unread_count > 0;
-    }
-    if (activeTab === 'commissions') {
-      return conv.commissions && conv.commissions.length > 0;
-    }
-    return true; // 'all'
-  });
+  // Filter conversations based on active tab - memoized for performance
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((conv) => {
+      if (activeTab === 'unread') {
+        return conv.unread_count > 0;
+      }
+      if (activeTab === 'commissions') {
+        return conv.commissions && conv.commissions.length > 0;
+      }
+      return true; // 'all'
+    });
+  }, [conversations, activeTab]);
 
   // Get counts for tabs
   const unreadCount = conversations.filter(c => c.unread_count > 0).length;
   const commissionCount = conversations.filter(c => c.commissions && c.commissions.length > 0).length;
 
-  const renderConversation = ({ item }) => {
+  // Get artists the client has chatted with before
+  // For clients, we need to check which conversations have artists as the other participant
+  // We'll fetch this from the backend by checking if the other participant has an artist profile
+  const [chattedArtistIds, setChattedArtistIds] = useState(new Set());
+  
+  useEffect(() => {
+    if (isArtistUser || !token || conversations.length === 0) {
+      setChattedArtistIds(new Set());
+      return;
+    }
+
+    // Extract unique participant IDs from conversations
+    const participantIds = conversations
+      .map(conv => conv.other_participant?.id)
+      .filter(Boolean);
+
+    if (participantIds.length === 0) {
+      setChattedArtistIds(new Set());
+      return;
+    }
+
+    // Check which participants are artists
+    const checkArtists = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/artists`, {
+          params: {
+            limit: 100,
+          },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const allArtists = response.data.artists || [];
+        const artistIds = new Set(allArtists.map(a => a.id));
+        
+        // Filter participant IDs to only include those who are artists
+        const chattedArtists = participantIds.filter(id => artistIds.has(id));
+        setChattedArtistIds(new Set(chattedArtists));
+      } catch (error) {
+        console.error('Error checking artists:', error);
+        // On error, allow all participants (backend will handle restriction)
+        setChattedArtistIds(new Set(participantIds));
+      }
+    };
+
+    checkArtists();
+  }, [conversations, isArtistUser, token]);
+
+  // Search artists
+  useEffect(() => {
+    if (!showArtistSearch) {
+      setArtistSearchQuery('');
+      setArtistSearchResults([]);
+      return;
+    }
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (artistSearchQuery.trim().length < 2) {
+      setArtistSearchResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setArtistSearchLoading(true);
+      try {
+        const params = {
+          search: artistSearchQuery.trim(),
+          limit: 20,
+        };
+        
+        const response = await axios.get(`${API_URL}/artists`, {
+          params,
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        
+        let artists = response.data.artists || [];
+        
+        // For clients, filter to only artists they've chatted with
+        if (!isArtistUser) {
+          const chattedIds = Array.from(chattedArtistIds);
+          if (chattedIds.length === 0) {
+            setArtistSearchResults([]);
+            setArtistSearchLoading(false);
+            return;
+          }
+          artists = artists.filter(artist => chattedIds.includes(artist.id));
+        }
+        
+        setArtistSearchResults(artists);
+      } catch (error) {
+        console.error('Error searching artists:', error);
+        setArtistSearchResults([]);
+      } finally {
+        setArtistSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [artistSearchQuery, showArtistSearch, token, isArtistUser, chattedArtistIds]);
+
+  // Create conversation with selected artist
+  const handleSelectArtist = async (artist) => {
+    try {
+      setArtistSearchLoading(true);
+      
+      // Create or get conversation
+      const response = await axios.post(
+        `${API_URL}/messages/conversations`,
+        { participant_id: artist.id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const conversation = response.data.conversation;
+      
+      // Close search modal
+      setShowArtistSearch(false);
+      setArtistSearchQuery('');
+      setArtistSearchResults([]);
+      
+      // Navigate to conversation
+      router.push(`/messages/${conversation.id}`);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      const errorMsg = error.response?.data?.error || 'Failed to start conversation';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMsg,
+        visibilityTime: 3000,
+      });
+    } finally {
+      setArtistSearchLoading(false);
+    }
+  };
+
+  const renderConversation = React.useCallback(({ item }) => {
     const hasUnread = item.unread_count > 0;
     const isOnline = isUserOnline(item.other_participant);
     const hasCommission = item.commissions && item.commissions.length > 0;
@@ -310,29 +471,24 @@ export default function MessagesScreen() {
         </View>
       </TouchableOpacity>
     );
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  }, []);
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Always render */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => router.push('/commission-requests')}
+            onPress={() => router.push('/(tabs)/explore')}
           >
             <Ionicons name="document-text" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => setShowArtistSearch(true)}
+          >
             <Ionicons name="create-outline" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -402,13 +558,27 @@ export default function MessagesScreen() {
         data={filteredConversations}
         renderItem={renderConversation}
         keyExtractor={(item) => item.id}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={15}
+        windowSize={10}
+        getItemLayout={(data, index) => ({
+          length: 80,
+          offset: 80 * index,
+          index,
+        })}
         contentContainerStyle={[
           styles.listContent,
           filteredConversations.length === 0 && styles.emptyStateContainer,
           { paddingBottom: Math.max(insets.bottom, 20) + 80 }
         ]}
         ListEmptyComponent={
-          filteredConversations.length === 0 && !loading ? (
+          loading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : filteredConversations.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons 
                 name={activeTab === 'unread' ? 'mail-outline' : activeTab === 'commissions' ? 'document-text-outline' : 'chatbubbles-outline'} 
@@ -439,6 +609,118 @@ export default function MessagesScreen() {
           />
         }
       />
+
+      {/* Artist Search Modal */}
+      <Modal
+        visible={showArtistSearch}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowArtistSearch(false)}
+      >
+        <View style={styles.modalContainer}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowArtistSearch(false);
+                setArtistSearchQuery('');
+                setArtistSearchResults([]);
+              }}
+            >
+              <Ionicons name="close" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {isArtistUser ? 'Search Artists' : 'Message Artist'}
+            </Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Search Input */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={colors.text.secondary} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={isArtistUser ? "Search artists..." : "Search artists you've chatted with..."}
+              placeholderTextColor={colors.text.disabled}
+              value={artistSearchQuery}
+              onChangeText={setArtistSearchQuery}
+              autoFocus
+            />
+            {artistSearchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setArtistSearchQuery('');
+                  setArtistSearchResults([]);
+                }}
+                style={styles.clearButton}
+              >
+                <Ionicons name="close-circle" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Search Results */}
+          {artistSearchLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : artistSearchResults.length > 0 ? (
+            <FlatList
+              data={artistSearchResults}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const artistUser = item.users || item;
+                return (
+                  <TouchableOpacity
+                    style={styles.artistResultCard}
+                    onPress={() => handleSelectArtist(artistUser)}
+                    activeOpacity={0.7}
+                  >
+                    <Image
+                      source={{ uri: artistUser.avatar_url || DEFAULT_AVATAR }}
+                      style={styles.artistResultAvatar}
+                      contentFit="cover"
+                    />
+                    <View style={styles.artistResultInfo}>
+                      <Text style={styles.artistResultName} numberOfLines={1}>
+                        {artistUser.full_name || artistUser.username}
+                      </Text>
+                      <Text style={styles.artistResultUsername} numberOfLines={1}>
+                        @{artistUser.username}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                  </TouchableOpacity>
+                );
+              }}
+              contentContainerStyle={styles.searchResultsContent}
+            />
+          ) : artistSearchQuery.trim().length >= 2 ? (
+            <View style={styles.emptySearchContainer}>
+              <Ionicons name="search-outline" size={64} color={colors.text.disabled} />
+              <Text style={styles.emptySearchTitle}>No artists found</Text>
+              <Text style={styles.emptySearchText}>
+                {isArtistUser 
+                  ? "Try searching with a different name or username"
+                  : "You can only message artists you've chatted with before"}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptySearchContainer}>
+              <Ionicons name="chatbubbles-outline" size={64} color={colors.text.disabled} />
+              <Text style={styles.emptySearchTitle}>
+                {isArtistUser ? 'Search for an artist' : 'Search for an artist you\'ve chatted with'}
+              </Text>
+              <Text style={styles.emptySearchText}>
+                {isArtistUser 
+                  ? "Type at least 2 characters to search"
+                  : "Type at least 2 characters to search for artists you've previously messaged"}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -684,6 +966,122 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptySubtitle: {
+    ...typography.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
+  },
+  // Artist Search Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: Constants.statusBarHeight,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+  },
+  modalCloseButton: {
+    padding: spacing.xs,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '700',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: spacing.xs,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xl * 2,
+  },
+  searchResultsContent: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  artistResultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '30',
+    ...shadows.small,
+  },
+  artistResultAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.background,
+    marginRight: spacing.md,
+  },
+  artistResultInfo: {
+    flex: 1,
+  },
+  artistResultName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  artistResultUsername: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 14,
+  },
+  emptySearchContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl * 2,
+  },
+  emptySearchTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '700',
+  },
+  emptySearchText: {
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',

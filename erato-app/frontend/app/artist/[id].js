@@ -140,11 +140,14 @@ export default function ArtistProfileScreen() {
   const checkFavoriteStatus = async () => {
     if (!token || !user) return;
     try {
+      // Check if artist is in liked list (swipes with direction='right')
       const response = await axios.get(
-        `${API_URL}/artists/${id}/favorite/status`,
+        `${API_URL}/swipes/liked`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setIsFavorited(response.data.is_favorited);
+      const likedArtists = response.data.likedArtists || [];
+      const isLiked = likedArtists.some(item => item.artist_id === id || item.artists?.id === id);
+      setIsFavorited(isLiked);
     } catch (error) {
       console.error('Error checking favorite status:', error);
     }
@@ -188,7 +191,7 @@ export default function ArtistProfileScreen() {
       Toast.show({
         type: 'info',
         text1: 'Login Required',
-        text2: 'Please log in to favorite artists',
+        text2: 'Please log in to like artists',
       });
       return;
     }
@@ -196,25 +199,27 @@ export default function ArtistProfileScreen() {
     setIsFavoriteLoading(true);
     try {
       if (isFavorited) {
+        // Remove from liked list
         await axios.delete(
-          `${API_URL}/artists/${id}/favorite`,
+          `${API_URL}/swipes/liked/${id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setIsFavorited(false);
         Toast.show({
           type: 'success',
-          text1: 'Removed from favorites',
+          text1: 'Removed from liked artists',
         });
       } else {
+        // Add to liked list using swipes endpoint
         await axios.post(
-          `${API_URL}/artists/${id}/favorite`,
-          {},
+          `${API_URL}/swipes`,
+          { artistId: id, direction: 'right' },
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setIsFavorited(true);
         Toast.show({
           type: 'success',
-          text1: 'Added to favorites',
+          text1: 'Added to liked artists',
         });
       }
     } catch (error) {
@@ -222,7 +227,7 @@ export default function ArtistProfileScreen() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: error.response?.data?.error || 'Failed to update favorites',
+        text2: error.response?.data?.error || 'Failed to update liked artists',
       });
     } finally {
       setIsFavoriteLoading(false);

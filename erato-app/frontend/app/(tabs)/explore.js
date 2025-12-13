@@ -330,7 +330,9 @@ export default function CommissionDashboard() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const artists = artistResponse.data?.artists || [];
+      console.log('Artist response:', artistResponse.data);
+
+      const artists = artistResponse.data?.artists || artistResponse.data || [];
       if (artists.length === 0) {
         // Don't throw error - just return early if no artist profile exists
         console.log('No artist profile found - skipping engagement metrics');
@@ -338,7 +340,12 @@ export default function CommissionDashboard() {
         return;
       }
 
-      const artistId = artists[0].id;
+      const artistId = artists[0].id || artists[0].user_id;
+      console.log('Using artistId:', artistId, 'from artists:', artists);
+
+      if (!artistId) {
+        throw new Error('Could not determine artist ID');
+      }
 
       // Fetch engagement metrics using the artistId
       const response = await axios.get(
@@ -346,16 +353,48 @@ export default function CommissionDashboard() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
+      console.log('Engagement metrics response:', response.data);
+
       if (response.data?.success && response.data?.data) {
-        setEngagementMetrics(response.data.data);
+        // Map backend response to frontend format
+        const metrics = response.data.data;
+        setEngagementMetrics({
+          total_artworks: metrics.total_artworks || 0,
+          total_views: metrics.total_views || 0,
+          total_clicks: metrics.total_clicks || 0,
+          total_likes: metrics.total_likes || 0, // Backend doesn't return likes separately, use 0
+          total_saves: metrics.total_saves || 0,
+          total_shares: metrics.total_shares || 0,
+          total_commission_inquiries: metrics.total_commission_inquiries || 0,
+          average_engagement_score: metrics.average_engagement_score || 0,
+          top_artworks: metrics.top_artworks || [],
+        });
       } else if (response.data?.data) {
         // Handle case where success flag might be missing but data exists
-        setEngagementMetrics(response.data.data);
+        const metrics = response.data.data;
+        setEngagementMetrics({
+          total_artworks: metrics.total_artworks || 0,
+          total_views: metrics.total_views || 0,
+          total_clicks: metrics.total_clicks || 0,
+          total_likes: metrics.total_likes || 0,
+          total_saves: metrics.total_saves || 0,
+          total_shares: metrics.total_shares || 0,
+          total_commission_inquiries: metrics.total_commission_inquiries || 0,
+          average_engagement_score: metrics.average_engagement_score || 0,
+          top_artworks: metrics.top_artworks || [],
+        });
       } else {
+        console.error('Invalid response format:', response.data);
         throw new Error('Invalid response format from engagement metrics endpoint');
       }
     } catch (error) {
       console.error('Error loading engagement metrics:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        stack: error.stack,
+      });
       const errorMessage = error.response?.data?.error || error.message || 'Failed to load engagement metrics';
       
       // If it's a 403 error or artist not found, show helpful message

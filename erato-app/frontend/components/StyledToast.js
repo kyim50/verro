@@ -16,7 +16,9 @@ const toastConfig = {
     return (
       <View style={styles.toastContainer}>
         <View style={styles.toastContent}>
-          <Ionicons name="checkmark-circle" size={20} color={colors.status.success} style={styles.icon} />
+          <View style={styles.iconContainer}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.status.success} />
+          </View>
           <Text style={styles.toastText}>{fullText}</Text>
         </View>
       </View>
@@ -31,7 +33,9 @@ const toastConfig = {
     return (
       <View style={styles.toastContainer}>
         <View style={styles.toastContent}>
-          <Ionicons name="close-circle" size={20} color={colors.status.error} style={styles.icon} />
+          <View style={styles.iconContainer}>
+            <Ionicons name="close-circle" size={20} color={colors.status.error} />
+          </View>
           <Text style={styles.toastText}>{fullText}</Text>
         </View>
       </View>
@@ -46,7 +50,9 @@ const toastConfig = {
     return (
       <View style={styles.toastContainer}>
         <View style={styles.toastContent}>
-          <Ionicons name="information-circle" size={20} color={colors.status.info} style={styles.icon} />
+          <View style={styles.iconContainer}>
+            <Ionicons name="information-circle" size={20} color={colors.status.info} />
+          </View>
           <Text style={styles.toastText}>{fullText}</Text>
         </View>
       </View>
@@ -62,6 +68,7 @@ const styles = StyleSheet.create({
   toastContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     paddingVertical: 12,
@@ -71,8 +78,12 @@ const styles = StyleSheet.create({
     ...shadows.medium,
     elevation: 6,
   },
-  icon: {
+  iconContainer: {
+    width: 20,
+    height: 20,
     marginRight: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   toastText: {
     flex: 1,

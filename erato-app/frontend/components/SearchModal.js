@@ -199,7 +199,7 @@ export default function SearchModal({ visible, onClose }) {
       return (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={64} color={colors.text.disabled} />
-          <Text style={styles.emptyTitle}>Search Artworks & Artists</Text>
+          <Text style={styles.emptyTitle}>Search</Text>
           <Text style={styles.emptyText}>
             Find amazing art or discover talented artists
           </Text>
