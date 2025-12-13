@@ -27,6 +27,9 @@ import ReviewModal from '../../components/ReviewModal';
 import ProgressTracker from '../../components/ProgressTracker';
 import MilestoneTracker from '../../components/MilestoneTracker';
 import EscrowStatus from '../../components/EscrowStatus';
+import PayPalCheckout from '../../components/PayPalCheckout';
+import PaymentOptions from '../../components/PaymentOptions';
+import TransactionHistory from '../../components/TransactionHistory';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -180,10 +183,15 @@ export default function CommissionDashboard() {
   const [totalSpent, setTotalSpent] = useState(0);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showEngagementModal, setShowEngagementModal] = useState(false);
+  const [showTransactionHistoryModal, setShowTransactionHistoryModal] = useState(false);
+  const [transactionHistoryCommissionId, setTransactionHistoryCommissionId] = useState(null);
   const [engagementMetrics, setEngagementMetrics] = useState(null);
   const [loadingEngagement, setLoadingEngagement] = useState(false);
   const [detailTab, setDetailTab] = useState('details'); // details, progress, files
   const [updatingStatus, setUpdatingStatus] = useState(new Set()); // Track which commissions are being updated
+  const [showPayPalCheckout, setShowPayPalCheckout] = useState(false);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -1581,6 +1589,146 @@ export default function CommissionDashboard() {
         </View>
       </Modal>
 
+      {/* Transaction History Modal */}
+      <Modal
+        visible={showTransactionHistoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTransactionHistoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.statsModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Transaction History</Text>
+              <TouchableOpacity
+                onPress={() => setShowTransactionHistoryModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
+              {commissions.filter(c => c.payment_status && c.payment_status !== 'unpaid').length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="receipt-outline" size={64} color={colors.text.disabled} />
+                  <Text style={styles.emptyTitle}>No Transactions</Text>
+                  <Text style={styles.emptyText}>
+                    You haven't made any payments yet. Transactions will appear here after you make a payment.
+                  </Text>
+                </View>
+              ) : (
+                commissions
+                  .filter(c => c.payment_status && c.payment_status !== 'unpaid')
+                  .map((commission) => (
+                    <View key={commission.id} style={styles.transactionCommissionCard}>
+                      <View style={styles.transactionCommissionHeader}>
+                        <View style={styles.transactionCommissionInfo}>
+                          <Text style={styles.transactionCommissionTitle}>
+                            {commission.details || commission.description || 'Commission'}
+                          </Text>
+                          <Text style={styles.transactionCommissionDate}>
+                            {new Date(commission.created_at).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </Text>
+                        </View>
+                        <View style={[styles.transactionStatusBadge, {
+                          backgroundColor: commission.payment_status === 'fully_paid' 
+                            ? colors.status.success + '20' 
+                            : colors.status.warning + '20'
+                        }]}>
+                          <Text style={[styles.transactionStatusText, {
+                            color: commission.payment_status === 'fully_paid' 
+                              ? colors.status.success 
+                              : colors.status.warning
+                          }]}>
+                            {commission.payment_status === 'fully_paid' ? 'Paid' : 'Deposit Paid'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.transactionCommissionAmount}>
+                        <Text style={styles.transactionAmountLabel}>Total</Text>
+                        <Text style={styles.transactionAmountValue}>
+                          ${(commission.final_price || commission.price || commission.budget || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.transactionHistoryContainer}>
+                        <TransactionHistory commissionId={commission.id} />
+                      </View>
+                    </View>
+                  ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payment Options Modal */}
+      {selectedCommission && (
+        <PaymentOptions
+          visible={showPaymentOptions}
+          onClose={() => {
+            setShowPaymentOptions(false);
+            // Reopen commission modal after payment options closes
+            setTimeout(() => {
+              setShowCommissionModal(true);
+            }, 100);
+          }}
+          commission={selectedCommission}
+          onProceed={(paymentData) => {
+            const amount = paymentData.paymentType === 'deposit' 
+              ? (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget) * (paymentData.depositPercentage / 100)
+              : (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget);
+            
+            setPaymentData({
+              ...paymentData,
+              commissionId: selectedCommission.id,
+              amount,
+            });
+            setShowPaymentOptions(false);
+            setTimeout(() => {
+              setShowPayPalCheckout(true);
+            }, 200);
+          }}
+        />
+      )}
+
+      {/* PayPal Checkout Modal */}
+      {paymentData && (
+        <PayPalCheckout
+          visible={showPayPalCheckout}
+          onClose={() => {
+            setShowPayPalCheckout(false);
+            setPaymentData(null);
+          }}
+          commissionId={paymentData.commissionId}
+          amount={paymentData.amount}
+          paymentType={paymentData.paymentType}
+          onSuccess={async (data) => {
+            setShowPayPalCheckout(false);
+            setPaymentData(null);
+            await loadCommissions();
+            // Refresh selected commission if modal is still open
+            if (selectedCommission) {
+              try {
+                const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                setSelectedCommission(response.data);
+              } catch (err) {
+                console.error('Error refreshing commission:', err);
+              }
+            }
+          }}
+          onError={(error) => {
+            console.error('Payment error:', error);
+          }}
+        />
+      )}
+
       {/* Notes Modal */}
       <Modal
         visible={showNotesModal}
@@ -1717,16 +1865,22 @@ export default function CommissionDashboard() {
                                 // Close modal first
                                 setShowCommissionModal(false);
                                 setSelectedCommission(null);
-                                // Navigate to client profile
+                                // Navigate to client profile after modal closes
                                 setTimeout(() => {
                                   router.push(`/client/${clientId}`);
-                                }, 100);
+                                }, 200);
                               }
                             } else {
                               // Client view: navigate to artist profile
                               const artistId = selectedCommission.artist_id;
                               if (artistId) {
-                                router.push(`/artist/${artistId}`);
+                                // Close modal first
+                                setShowCommissionModal(false);
+                                setSelectedCommission(null);
+                                // Navigate to artist profile after modal closes
+                                setTimeout(() => {
+                                  router.push(`/artist/${artistId}`);
+                                }, 200);
                               }
                             }
                           }}
@@ -1790,47 +1944,96 @@ export default function CommissionDashboard() {
                     </View>
                   ) : null}
 
-                  {/* Escrow Status */}
-                  {selectedCommission.escrow_status && (
+                  {/* Payment Status - Combined Escrow and Payment Status */}
+                  {(selectedCommission.escrow_status || selectedCommission.payment_status) && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Status</Text>
-                      <EscrowStatus
-                        commission={selectedCommission}
-                        isClient={!isArtist}
-                        onRelease={async () => {
-                          try {
-                            await axios.post(
-                              `${API_URL}/payments/release-escrow`,
-                              { commissionId: selectedCommission.id },
-                              { headers: { Authorization: `Bearer ${token}` } }
-                            );
-                            await loadCommissions();
-                            // Refresh selected commission
+                      {selectedCommission.escrow_status ? (
+                        <EscrowStatus
+                          commission={selectedCommission}
+                          isClient={!isArtist}
+                          onRelease={async () => {
                             try {
-                              const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
-                                headers: { Authorization: `Bearer ${token}` }
+                              await axios.post(
+                                `${API_URL}/payments/release-escrow`,
+                                { commissionId: selectedCommission.id },
+                                { headers: { Authorization: `Bearer ${token}` } }
+                              );
+                              await loadCommissions();
+                              // Refresh selected commission
+                              try {
+                                const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
+                                  headers: { Authorization: `Bearer ${token}` }
+                                });
+                                setSelectedCommission(response.data);
+                              } catch (err) {
+                                console.error('Error refreshing commission:', err);
+                              }
+                              Toast.show({
+                                type: 'success',
+                                text1: 'Success',
+                                text2: 'Funds released to artist',
+                                visibilityTime: 2000,
                               });
-                              setSelectedCommission(response.data);
-                            } catch (err) {
-                              console.error('Error refreshing commission:', err);
+                            } catch (error) {
+                              console.error('Error releasing escrow:', error);
+                              Toast.show({
+                                type: 'error',
+                                text1: 'Error',
+                                text2: error.response?.data?.error || 'Failed to release funds',
+                                visibilityTime: 3000,
+                              });
                             }
-                            Toast.show({
-                              type: 'success',
-                              text1: 'Success',
-                              text2: 'Funds released to artist',
-                              visibilityTime: 2000,
-                            });
-                          } catch (error) {
-                            console.error('Error releasing escrow:', error);
-                            Toast.show({
-                              type: 'error',
-                              text1: 'Error',
-                              text2: error.response?.data?.error || 'Failed to release funds',
-                              visibilityTime: 3000,
-                            });
-                          }
+                          }}
+                        />
+                      ) : selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid' ? (
+                        <View style={styles.paymentStatusCard}>
+                          <Ionicons 
+                            name={
+                              selectedCommission.payment_status === 'fully_paid' ? 'checkmark-circle' :
+                              selectedCommission.payment_status === 'deposit_paid' ? 'wallet' :
+                              'card-outline'
+                            } 
+                            size={20} 
+                            color={
+                              selectedCommission.payment_status === 'fully_paid' ? colors.status.success :
+                              selectedCommission.payment_status === 'deposit_paid' ? colors.status.warning :
+                              colors.text.secondary
+                            } 
+                          />
+                          <View style={styles.paymentStatusInfo}>
+                            <Text style={styles.paymentStatusLabel}>Payment Status</Text>
+                            <Text style={[
+                              styles.paymentStatusValue,
+                              { color: selectedCommission.payment_status === 'fully_paid' ? colors.status.success : colors.text.primary }
+                            ]}>
+                              {selectedCommission.payment_status === 'fully_paid' ? 'Fully Paid' :
+                               selectedCommission.payment_status === 'deposit_paid' ? 'Deposit Paid' :
+                               'Unpaid'}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+
+                  {/* Payment Options for Accepted/In Progress Commissions */}
+                  {(selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') && !isArtist && 
+                   (!selectedCommission.payment_status || selectedCommission.payment_status === 'unpaid' || selectedCommission.payment_status === 'deposit_paid') && (
+                    <View style={styles.detailSection}>
+                      <TouchableOpacity
+                        style={styles.paymentButton}
+                        onPress={() => {
+                          // Close commission modal first to avoid conflicts
+                          setShowCommissionModal(false);
+                          setTimeout(() => {
+                            setShowPaymentOptions(true);
+                          }, 300);
                         }}
-                      />
+                      >
+                        <Ionicons name="card-outline" size={20} color={colors.text.primary} />
+                        <Text style={styles.paymentButtonText}>Make Payment</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 
@@ -1842,15 +2045,23 @@ export default function CommissionDashboard() {
                         commissionId={selectedCommission.id}
                         isClient={!isArtist}
                         onPayMilestone={async (milestone) => {
-                          // TODO: Implement PayPal checkout
-                          Toast.show({
-                            type: 'info',
-                            text1: 'Payment',
-                            text2: 'PayPal checkout coming soon',
-                            visibilityTime: 2000,
+                          setPaymentData({
+                            commissionId: selectedCommission.id,
+                            amount: milestone.amount,
+                            paymentType: 'milestone',
+                            milestoneId: milestone.id,
                           });
+                          setShowCommissionModal(false);
+                          setShowPayPalCheckout(true);
                         }}
                       />
+                    </View>
+                  )}
+
+                  {/* Transaction History */}
+                  {selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid' && (
+                    <View style={styles.detailSection}>
+                      <TransactionHistory commissionId={selectedCommission.id} />
                     </View>
                   )}
                     </>
@@ -3515,6 +3726,102 @@ const styles = StyleSheet.create({
     color: colors.text.disabled,
     fontSize: 18,
     fontStyle: 'italic',
+  },
+  paymentStatusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  paymentStatusInfo: {
+    flex: 1,
+  },
+  paymentStatusLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs / 2,
+  },
+  paymentStatusValue: {
+    ...typography.bodyBold,
+    fontSize: 15,
+  },
+  paymentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  paymentButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  transactionCommissionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    ...shadows.small,
+  },
+  transactionCommissionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  transactionCommissionInfo: {
+    flex: 1,
+  },
+  transactionCommissionTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    marginBottom: spacing.xs,
+  },
+  transactionCommissionDate: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  transactionStatusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+  },
+  transactionStatusText: {
+    ...typography.caption,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  transactionCommissionAmount: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '40',
+    marginBottom: spacing.md,
+  },
+  transactionAmountLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+  },
+  transactionAmountValue: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 20,
+  },
+  transactionHistoryContainer: {
+    marginTop: spacing.sm,
   },
   detailTextPlaceholder: {
     ...typography.body,

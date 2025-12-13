@@ -52,8 +52,5 @@
     "babel-preset-expo": "^54.0.8",
     "react-refresh": "^0.18.0"
   },
-  "overrides": {
-    "react": "19.1.0"
-  },
   "private": true
 }
