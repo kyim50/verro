@@ -24,7 +24,7 @@ const SWIPE_THRESHOLD = width * 0.2; // Lower threshold for easier swiping
 
 export default function CreateScreen() {
   const { user } = useAuthStore();
-  const { artists, currentIndex, fetchArtists, swipe } = useSwipeStore();
+  const { artists, currentIndex, fetchArtists, swipe, undoLastSwipe, canUndo } = useSwipeStore();
   const isArtist = user?.user_type === 'artist' || 
                    (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
   
@@ -36,6 +36,7 @@ export default function CreateScreen() {
   // Maintain a local queue of artists to display
   const [artistQueue, setArtistQueue] = useState([]);
   const [queueIndex, setQueueIndex] = useState(0);
+  const [swipedArtists, setSwipedArtists] = useState([]); // Track swiped artists for undo
   
   const position = useRef(new Animated.ValueXY()).current;
 
@@ -78,8 +79,12 @@ export default function CreateScreen() {
       return;
     }
     
-    // Capture artist ID
+    // Capture artist ID and artist data for undo
     const artistId = currentArtist.id;
+    const artistData = { ...currentArtist, queueIndex };
+    
+    // Track swiped artist for undo
+    setSwipedArtists(prev => [...prev, { artist: artistData, direction: 'right' }]);
     
     // Immediately update to next card (no animation)
     setQueueIndex(prev => prev + 1);
@@ -103,8 +108,12 @@ export default function CreateScreen() {
       return;
     }
     
-    // Capture artist ID
+    // Capture artist ID and artist data for undo
     const artistId = currentArtist.id;
+    const artistData = { ...currentArtist, queueIndex };
+    
+    // Track swiped artist for undo
+    setSwipedArtists(prev => [...prev, { artist: artistData, direction: 'left' }]);
     
     // Immediately update to next card (no animation)
     setQueueIndex(prev => prev + 1);
@@ -122,6 +131,27 @@ export default function CreateScreen() {
       console.error('Error recording swipe:', error);
     });
   }, [queueIndex, currentArtist, currentIndex, swipe, position]);
+
+  const handleUndo = useCallback(async () => {
+    if (!canUndo() || swipedArtists.length === 0) return;
+    
+    const result = await undoLastSwipe();
+    if (result.success) {
+      // Restore previous artist in queue
+      const lastSwiped = swipedArtists[swipedArtists.length - 1];
+      if (lastSwiped && queueIndex > 0) {
+        // Insert the artist back at the previous position
+        const newQueue = [...artistQueue];
+        newQueue.splice(lastSwiped.artist.queueIndex, 0, lastSwiped.artist);
+        setArtistQueue(newQueue);
+        setQueueIndex(lastSwiped.artist.queueIndex);
+        setSwipedArtists(prev => prev.slice(0, -1));
+      }
+      // Reset position
+      position.setValue({ x: 0, y: 0 });
+      position.setOffset({ x: 0, y: 0 });
+    }
+  }, [canUndo, undoLastSwipe, queueIndex, position, swipedArtists, artistQueue]);
 
   // Removed rotation - keeping it simple
 
@@ -434,6 +464,16 @@ export default function CreateScreen() {
 
       {/* Action Buttons */}
       <View style={styles.actionsContainer}>
+        {/* Undo Button */}
+        {canUndo() && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.undoButton]}
+            onPress={handleUndo}
+          >
+            <Ionicons name="arrow-undo" size={28} color={colors.text.primary} />
+          </TouchableOpacity>
+        )}
+        
         <TouchableOpacity
           style={[styles.actionButton, styles.nopeButton]}
           onPress={swipeLeft}
@@ -874,12 +914,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xl, // More space between buttons
+    gap: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.sm + spacing.xs, // Even closer to nav bar (lowered more)
+    paddingBottom: spacing.sm + spacing.xs,
     marginBottom: spacing.xs,
     marginTop: spacing.md,
-    zIndex: 10, // Ensure buttons are above card
+    zIndex: 10,
     position: 'relative',
   },
   actionButton: {
@@ -894,6 +934,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  undoButton: {
+    width: 56,
+    height: 56,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   nopeButton: {
     width: 64,

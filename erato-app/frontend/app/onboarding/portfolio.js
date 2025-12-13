@@ -81,8 +81,16 @@ export default function PortfolioScreen() {
       // Upload portfolio images to Supabase Storage
       const uploadedUrls = await uploadMultipleImages(filledImages, 'portfolios', '', token);
 
+      // Ensure we have at least 1 image and pad to 6 if needed (backend accepts 1-6)
+      // But we'll send exactly what we have (1-6 images)
+      const portfolioToSend = uploadedUrls.filter(url => url && url.trim() !== '');
+      
+      if (portfolioToSend.length < 1) {
+        throw new Error('Failed to upload portfolio images');
+      }
+
       // Complete onboarding with uploaded image URLs
-      await completeOnboarding(uploadedUrls, token);
+      await completeOnboarding(portfolioToSend, token);
 
       Toast.show({
         type: 'success',

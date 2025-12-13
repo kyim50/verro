@@ -464,6 +464,7 @@ export const useSwipeStore = create((set, get) => ({
   artists: [],
   currentIndex: 0,
   isLoading: false,
+  swipeHistory: [], // Track swipes for undo: [{ artistId, direction, timestamp }]
 
   fetchArtists: async () => {
     set({ isLoading: true });
@@ -484,11 +485,25 @@ export const useSwipeStore = create((set, get) => ({
   },
 
   swipe: async (artistId, direction, updateIndex = true) => {
+    // Track swipe in history for undo
+    const swipeRecord = {
+      artistId,
+      direction,
+      timestamp: Date.now(),
+      previousIndex: get().currentIndex,
+    };
+    
     // Update index ONLY if requested (default true for backward compatibility)
     // When called from animation callback, updateIndex should be false to prevent re-render
     if (updateIndex) {
       const newIndex = get().currentIndex + 1;
-      set({ currentIndex: newIndex });
+      set({ 
+        currentIndex: newIndex,
+        swipeHistory: [...get().swipeHistory, swipeRecord]
+      });
+    } else {
+      // Still track in history even if not updating index
+      set({ swipeHistory: [...get().swipeHistory, swipeRecord] });
     }
     
     // Record swipe in background - ensure it completes
@@ -565,7 +580,45 @@ export const useSwipeStore = create((set, get) => ({
     }
   },
 
-  reset: () => set({ artists: [], currentIndex: 0 }),
+  reset: () => set({ artists: [], currentIndex: 0, swipeHistory: [] }),
+  
+  // Undo last swipe
+  undoLastSwipe: async () => {
+    const history = get().swipeHistory;
+    if (history.length === 0) {
+      return { success: false, error: 'No swipes to undo' };
+    }
+    
+    const lastSwipe = history[history.length - 1];
+    const token = useAuthStore.getState().token;
+    
+    if (!token) {
+      return { success: false, error: 'No token' };
+    }
+    
+    try {
+      // Delete the swipe from backend
+      await axios.delete(`${API_URL}/swipes/${lastSwipe.artistId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000,
+      });
+      
+      // Restore previous state
+      const newHistory = history.slice(0, -1);
+      set({
+        currentIndex: lastSwipe.previousIndex,
+        swipeHistory: newHistory,
+      });
+      
+      return { success: true, artistId: lastSwipe.artistId, direction: lastSwipe.direction };
+    } catch (error) {
+      console.error('[UNDO] Error undoing swipe:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  
+  // Check if undo is available
+  canUndo: () => get().swipeHistory.length > 0,
 }));
 
 // Board store

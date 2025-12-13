@@ -162,4 +162,33 @@ router.delete('/liked/:artistId', authenticate, async (req, res) => {
   }
 });
 
+// Delete a swipe (for undo functionality)
+router.delete('/:artistId', authenticate, async (req, res) => {
+  try {
+    const { artistId } = req.params;
+
+    // Handle both UUID and numeric artistId
+    let finalArtistId = artistId;
+    if (typeof artistId === 'string' && !artistId.includes('-')) {
+      const parsed = parseInt(artistId, 10);
+      if (!isNaN(parsed)) {
+        finalArtistId = parsed;
+      }
+    }
+
+    const { error } = await supabaseAdmin
+      .from('swipes')
+      .delete()
+      .eq('user_id', req.user.id)
+      .eq('artist_id', finalArtistId);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting swipe:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
