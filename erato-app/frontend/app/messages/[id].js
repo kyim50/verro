@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -146,22 +146,23 @@ export default function ConversationScreen() {
     }
   }, [id, token]);
 
-  // Screen entrance animation
+  // Screen entrance animation - faster and start visible
   useEffect(() => {
-    // Reset animations
-    fadeAnim.setValue(0);
-    slideAnim.setValue(30);
+    // Start visible immediately to prevent black screen
+    fadeAnim.setValue(1);
+    slideAnim.setValue(0);
     
+    // Optional: subtle animation if needed, but start visible
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 350,
+        duration: 150, // Much faster
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 350,
-        easing: (t) => t * (2 - t), // Ease out quadratic for smoother feel
+        duration: 150, // Much faster
+        easing: (t) => t * (2 - t),
         useNativeDriver: true,
       }),
     ]).start();
@@ -918,7 +919,7 @@ export default function ConversationScreen() {
     );
   };
 
-  const renderMessage = ({ item, index }) => {
+  const renderMessage = React.useCallback(({ item, index }) => {
     if (item.message_type === 'commission_request') {
       return renderCommissionRequest(item, index);
     }
@@ -1006,7 +1007,7 @@ export default function ConversationScreen() {
         )}
       </>
     );
-  };
+  }, [messages, user, progressUpdates, handleDeleteMessage, renderCommissionRequest, renderProgressUpdate, renderDayHeader, shouldShowDayHeader]);
 
   if (loading) {
     return (
@@ -1460,11 +1461,14 @@ export default function ConversationScreen() {
             style={styles.headerInfo}
             onPress={() => {
               if (otherUser?.id) {
-                if (otherUser.artists) {
-                  router.push(`/artist/${otherUser.artists.id}`);
-                } else {
-                  router.push(`/client/${otherUser.id}`);
-                }
+                // Navigate with a small delay to ensure smooth transition
+                setTimeout(() => {
+                  if (otherUser.artists) {
+                    router.push(`/artist/${otherUser.artists.id}`);
+                  } else {
+                    router.push(`/client/${otherUser.id}`);
+                  }
+                }, 50);
               }
             }}
             activeOpacity={0.7}
@@ -1504,6 +1508,14 @@ export default function ConversationScreen() {
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item, index) => item.id || `msg-${index}`}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={15}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={20}
+          windowSize={10}
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+          }}
           contentContainerStyle={styles.messagesList}
           style={styles.messagesFlatList}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
@@ -1659,6 +1671,7 @@ const styles = StyleSheet.create({
   },
   animatedContainer: {
     flex: 1,
+    backgroundColor: colors.background, // Ensure background during animation
   },
   messagesFlatList: {
     flex: 1,

@@ -163,7 +163,7 @@ export default function RootLayout() {
             animation: 'fade',
             gestureEnabled: true,
             gestureDirection: 'horizontal',
-            animationDuration: 300,
+            animationDuration: 150, // Faster transitions
             fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
           }}
         >

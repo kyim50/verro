@@ -180,33 +180,6 @@ router.post('/conversations', authenticate, async (req, res) => {
       .eq('id', req.user.id)
       .maybeSingle();
 
-    // If current user is NOT an artist (i.e., they are a client)
-    if (!currentUserIsArtist) {
-      // Check if any of the participants are artists
-      const { data: targetArtists } = await supabaseAdmin
-        .from('artists')
-        .select('id')
-        .in('id', participants);
-
-      // If messaging an artist as a client, check for in_progress commission
-      if (targetArtists && targetArtists.length > 0) {
-        // Check if there's an in_progress or completed commission with this artist
-        const { data: activeCommission } = await supabaseAdmin
-          .from('commissions')
-          .select('id')
-          .eq('client_id', req.user.id)
-          .in('artist_id', participants)
-          .in('status', ['in_progress', 'completed'])
-          .maybeSingle();
-
-        if (!activeCommission) {
-          return res.status(403).json({
-            error: 'You must have an accepted commission with this artist before you can message them. Please request a commission first.'
-          });
-        }
-      }
-    }
-
     const allParticipants = [req.user.id, ...participants].sort();
 
     // Find existing conversation with exactly these participants
@@ -216,6 +189,7 @@ router.post('/conversations', authenticate, async (req, res) => {
       .select('conversation_id')
       .eq('user_id', req.user.id);
 
+    let existingConversation = null;
     if (userConversations && userConversations.length > 0) {
       const conversationIds = userConversations.map(p => p.conversation_id);
 
@@ -239,9 +213,31 @@ router.post('/conversations', authenticate, async (req, res) => {
               .eq('id', convId)
               .single();
 
-            return res.json({ conversation, existed: true });
+            existingConversation = conversation;
+            break;
           }
         }
+      }
+    }
+
+    // If existing conversation found, return it
+    if (existingConversation) {
+      return res.json({ conversation: existingConversation, existed: true });
+    }
+
+    // If current user is NOT an artist (i.e., they are a client) and no existing conversation
+    if (!currentUserIsArtist) {
+      // Check if any of the participants are artists
+      const { data: targetArtists } = await supabaseAdmin
+        .from('artists')
+        .select('id')
+        .in('id', participants);
+
+      // If messaging an artist as a client, require existing conversation
+      if (targetArtists && targetArtists.length > 0) {
+        return res.status(403).json({
+          error: 'You can only message artists you\'ve chatted with before. Please start a conversation through an existing commission or previous conversation.'
+        });
       }
     }
 

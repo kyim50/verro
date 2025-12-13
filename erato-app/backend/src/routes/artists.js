@@ -95,6 +95,7 @@ router.get(
       }
 
       // Handle user_id filter (for getting artist by user_id)
+      // Note: artists.id IS the user_id (artists table primary key IS the user_id)
       if (user_id) {
         const { data: artist, error: artistError } = await supabaseAdmin
           .from('artists')
@@ -104,7 +105,7 @@ router.get(
             primary_style:art_styles!artists_primary_style_id_fkey(id, name, slug),
             art_styles:artist_art_styles(style:art_styles(id, name, slug))
           `)
-          .eq('user_id', user_id)
+          .eq('id', user_id)  // artists.id is the user_id
           .maybeSingle();
         
         if (artistError) throw artistError;
