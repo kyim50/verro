@@ -26,20 +26,12 @@ services:
     container_name: erato-backend
     ports:
       - "3000:3000"
+    env_file:
+      - ./backend/.env
     environment:
       - NODE_ENV=production
-      - PORT=3000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:19006}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
-      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
     depends_on:
       redis:
         condition: service_healthy

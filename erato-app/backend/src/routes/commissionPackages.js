@@ -130,16 +130,27 @@ router.get('/queue/:artistId', async (req, res) => {
 // Middleware to verify user is an artist
 const verifyArtist = async (req, res, next) => {
   try {
+    console.log('VerifyArtist - Looking up artist for user_id:', req.user.id);
+
     const { data: artist, error } = await supabaseAdmin
       .from('artists')
       .select('id, user_id')
       .eq('user_id', req.user.id)
       .maybeSingle();
 
-    if (error || !artist) {
-      return res.status(403).json({ error: 'Only artists can manage commission packages' });
+    console.log('VerifyArtist - Query result:', { artist, error: error?.message });
+
+    if (error) {
+      console.error('VerifyArtist - Database error:', error);
+      return res.status(500).json({ error: 'Database error: ' + error.message });
     }
 
+    if (!artist) {
+      console.log('VerifyArtist - No artist found for user_id:', req.user.id);
+      return res.status(403).json({ error: 'Only artists can manage commission packages. Please complete artist onboarding first.' });
+    }
+
+    console.log('VerifyArtist - Success! Artist ID:', artist.id);
     req.artistId = artist.id;
     next();
   } catch (error) {

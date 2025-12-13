@@ -850,12 +850,11 @@ router.post('/:id/progress', authenticate, async (req, res) => {
       progressData.image_url = image_url;
     }
 
-    // Handle additional images - combine with primary image_url into images array
+    // Handle additional images - store as additional_images array in metadata
     if (additional_images && Array.isArray(additional_images) && additional_images.length > 0) {
-      const allImages = [image_url, ...additional_images].filter(Boolean);
-      progressData.images = allImages; // Store as JSON array
-    } else if (image_url) {
-      progressData.images = [image_url]; // Single image as array
+      progressData.metadata = {
+        additional_images: additional_images
+      };
     }
 
     if (update_type === 'approval_checkpoint') {

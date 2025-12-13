@@ -49,6 +49,8 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
   const [uploading, setUploading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [masonryColumns, setMasonryColumns] = useState([[], []]);
+  const [selectedImageForViewer, setSelectedImageForViewer] = useState(null);
+  const [showImageViewer, setShowImageViewer] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -327,6 +329,11 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
     return references.filter(ref => ref.reference_type === activeFilter);
   };
 
+  const handleImagePress = (imageUrl) => {
+    setSelectedImageForViewer(imageUrl);
+    setShowImageViewer(true);
+  };
+
   const renderReference = ({ item }) => {
     if (item.reference_type === 'color_palette') {
       return <ColorPaletteCard reference={item} onDelete={handleDeleteReference} />;
@@ -334,7 +341,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
     if (item.reference_type === 'link') {
       return <LinkCard reference={item} onDelete={handleDeleteReference} />;
     }
-    return <ImageCard reference={item} onDelete={handleDeleteReference} />;
+    return <ImageCard reference={item} onDelete={handleDeleteReference} onImagePress={handleImagePress} />;
   };
 
   const filteredRefs = getFilteredReferences();
@@ -568,33 +575,65 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Image Viewer Modal */}
+      {selectedImageForViewer && (
+        <Modal
+          visible={showImageViewer}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {
+            setShowImageViewer(false);
+            setSelectedImageForViewer(null);
+          }}
+        >
+          <View style={styles.imageViewerOverlay}>
+            <TouchableOpacity
+              style={styles.imageViewerClose}
+              onPress={() => {
+                setShowImageViewer(false);
+                setSelectedImageForViewer(null);
+              }}
+            >
+              <Ionicons name="close" size={32} color={colors.text.primary} />
+            </TouchableOpacity>
+            <View style={styles.imageViewerPage}>
+              <ExpoImage
+                source={{ uri: selectedImageForViewer }}
+                style={styles.fullImage}
+                contentFit="contain"
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
 
 
-function ImageCard({ reference, onDelete }) {
+function ImageCard({ reference, onDelete, onImagePress }) {
   return (
-    <View style={styles.imageCard}>
+    <TouchableOpacity
+      style={styles.imageCard}
+      onPress={() => onImagePress?.(reference.file_url || reference.thumbnail_url)}
+      activeOpacity={0.9}
+    >
       <ExpoImage
         source={{ uri: reference.file_url || reference.thumbnail_url }}
         style={styles.image}
         contentFit="cover"
       />
-      {reference.title && (
-        <View style={styles.imageOverlay}>
-          <Text style={styles.imageTitle} numberOfLines={1}>
-            {reference.title}
-          </Text>
-        </View>
-      )}
       <TouchableOpacity
         style={styles.deleteButton}
-        onPress={() => onDelete(reference.id)}
+        onPress={(e) => {
+          e.stopPropagation();
+          onDelete(reference.id);
+        }}
       >
-        <Ionicons name="close-circle" size={24} color={colors.status.error} />
+        <Ionicons name="close-circle" size={24} color={colors.error} />
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -620,7 +659,7 @@ function ColorPaletteCard({ reference, onDelete }) {
         style={styles.deleteButton}
         onPress={() => onDelete(reference.id)}
       >
-        <Ionicons name="close-circle" size={24} color={colors.status.error} />
+        <Ionicons name="close-circle" size={24} color={colors.error} />
       </TouchableOpacity>
     </View>
   );
@@ -644,7 +683,7 @@ function LinkCard({ reference, onDelete }) {
         style={styles.deleteButton}
         onPress={() => onDelete(reference.id)}
       >
-        <Ionicons name="close-circle" size={24} color={colors.status.error} />
+        <Ionicons name="close-circle" size={24} color={colors.error} />
       </TouchableOpacity>
     </View>
   );
@@ -1063,6 +1102,32 @@ const styles = StyleSheet.create({
   },
   removeColorButton: {
     padding: spacing.xs,
+  },
+  // Image Viewer Styles
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.98)',
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface + 'CC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageViewerPage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: '100%',
+    height: '100%',
   },
 });
 
