@@ -1167,15 +1167,7 @@ export default function HomeScreen() {
               </Animated.View>
             )}
             
-            {/* Top badges */}
-            <View style={styles.tikTokTopBadges}>
-              {artistCommissionStatus === 'open' && (
-                <View style={styles.commissionBadgeOpen}>
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                  <Text style={styles.commissionBadgeText}>Open</Text>
-                </View>
-              )}
-            </View>
+            {/* Top badges - removed */}
           </TouchableOpacity>
         </View>
         
