@@ -122,10 +122,10 @@ export default function MessagesScreen() {
     };
   }, [token, user, fetchConversations]);
 
-  // Load conversations immediately on mount and when screen is focused
+  // Load conversations immediately on mount
   useEffect(() => {
     if (user && token) {
-      // Don't set loading to true if we already have conversations (prevents black screen)
+      // Always fetch on mount, but don't show loading if we already have data
       if (conversations.length === 0) {
         setLoading(true);
       }
@@ -133,16 +133,24 @@ export default function MessagesScreen() {
     } else {
       setLoading(false);
     }
-  }, [user, token]); // Remove fetchConversations from deps to prevent re-triggering
+  }, [user, token]); // Only run when user/token changes
 
-  // Refresh conversations when screen is focused (but don't reset loading)
+  // Refresh conversations when screen is focused
   useFocusEffect(
     useCallback(() => {
-      if (user && token && conversations.length > 0) {
-        // Only refresh if we already have conversations (silent refresh)
-        fetchConversations();
+      if (user && token) {
+        // Always refresh on focus, but don't show loading spinner if we have data
+        const hasData = conversations.length > 0;
+        if (!hasData) {
+          setLoading(true);
+        }
+        fetchConversations().finally(() => {
+          if (!hasData) {
+            setLoading(false);
+          }
+        });
       }
-    }, [user, token, fetchConversations, conversations.length])
+    }, [user, token, conversations.length])
   );
 
   const onRefresh = async () => {
@@ -729,6 +737,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    opacity: 1, // Ensure container is always visible
   },
   centered: {
     justifyContent: 'center',

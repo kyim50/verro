@@ -53,14 +53,16 @@ export default function ProfileScreen() {
   // Auto-refresh when screen comes into focus - but only if needed
   useFocusEffect(
     useCallback(() => {
-      // Don't refresh on every focus - only if we have profile data and it's been a while
-      // This prevents constant flashing
-      if (user?.id && profile?.id === user.id) {
-        // Only refresh if profile data seems stale (optional - can be removed if still flashing)
-        // For now, skip auto-refresh to prevent flashing
-        // loadProfile(true);
+      if (user?.id) {
+        // Always load profile on focus to ensure data is fresh
+        // But don't set loading if we already have profile data (prevents black screen)
+        const hasProfile = profile && profile.id === user.id;
+        if (!hasProfile) {
+          setIsInitialLoad(true);
+        }
+        loadProfile(true);
       }
-    }, [user?.id, profile?.id])
+    }, [user?.id, loadProfile])
   );
 
   useEffect(() => {
@@ -380,18 +382,17 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
-      >
-        {showLoading ? (
-          <View style={styles.loadingContent}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : (
-          <>
-            {/* Profile Info */}
-            <View style={styles.profileSection}>
+      {showLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+        >
+          {/* Profile Info */}
+          <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {(profile?.avatar_url || user?.avatar_url) ? (
               <Image 
@@ -997,9 +998,8 @@ export default function ProfileScreen() {
             <Text style={styles.emptyText}>No boards yet</Text>
           )}
         </View>
-          </>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Portfolio Modal Viewer */}
       {(() => {
@@ -1143,6 +1143,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    opacity: 1, // Ensure container is always visible
   },
   loadingContent: {
     paddingVertical: spacing.xl * 2,

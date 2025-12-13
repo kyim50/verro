@@ -163,7 +163,7 @@ export default function RootLayout() {
             animation: 'fade',
             gestureEnabled: true,
             gestureDirection: 'horizontal',
-            animationDuration: 150, // Faster transitions
+            animationDuration: 100, // Shorter transitions
             fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
           }}
         >
@@ -172,7 +172,7 @@ export default function RootLayout() {
             options={{ 
               gestureEnabled: false, // Disable swipe back on login
               animation: 'fade',
-              animationDuration: 150, // Faster transition for logout
+              animationDuration: 100, // Shorter transition for logout
             }} 
           />
           <Stack.Screen 

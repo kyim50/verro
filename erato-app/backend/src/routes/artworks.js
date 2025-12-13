@@ -770,6 +770,7 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
         *,
         artist:artists(
           id,
+          commission_status,
           user:users(id, username, avatar_url, full_name)
         )
       `);
@@ -794,10 +795,11 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
         .from('artworks_with_engagement')
         .select(`
           *,
-          artist:artists(
-            id,
-            user:users(id, username, avatar_url, full_name)
-          )
+        artist:artists(
+          id,
+          commission_status,
+          user:users(id, username, avatar_url, full_name)
+        )
         `)
         .order('created_at', { ascending: false })
         .range(offset, offset + parseInt(limit) - 1);
