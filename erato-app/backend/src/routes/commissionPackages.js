@@ -132,10 +132,11 @@ const verifyArtist = async (req, res, next) => {
   try {
     console.log('VerifyArtist - Looking up artist for user_id:', req.user.id);
 
+    // Note: artists.id IS the user_id (artists table primary key IS the user_id)
     const { data: artist, error } = await supabaseAdmin
       .from('artists')
-      .select('id, user_id')
-      .eq('user_id', req.user.id)
+      .select('id')
+      .eq('id', req.user.id)
       .maybeSingle();
 
     console.log('VerifyArtist - Query result:', { artist, error: error?.message });

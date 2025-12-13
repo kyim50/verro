@@ -62,6 +62,9 @@ export default function ArtistProfileScreen() {
   const [reviewsGiven, setReviewsGiven] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [activeReviewTab, setActiveReviewTab] = useState('received'); // 'received' or 'given'
+  const [commissionSettings, setCommissionSettings] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState('will_draw'); // 'will_draw' or 'wont_draw'
   const portfolioFlatListRef = useRef(null);
   const isClosingModal = useRef(false);
   const lastClosedIndex = useRef(null);
@@ -277,6 +280,19 @@ export default function ArtistProfileScreen() {
     }
   };
 
+  const fetchCommissionSettings = async (artistId) => {
+    setSettingsLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/commission-packages/settings/${artistId}`);
+      setCommissionSettings(response.data);
+    } catch (err) {
+      console.error('Error fetching commission settings:', err);
+      setCommissionSettings(null);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
   const fetchArtistProfile = async () => {
     setIsLoading(true);
     setError(null);
@@ -299,6 +315,7 @@ export default function ArtistProfileScreen() {
       
       setArtist(artistData);
       await fetchArtistPackages(id, headers);
+      await fetchCommissionSettings(id);
       try {
         const queueResponse = await axios.get(`${API_URL}/commission-packages/queue/${id}`, { headers });
         setQueueStatus(queueResponse.data);
@@ -973,6 +990,125 @@ export default function ArtistProfileScreen() {
             )
           )}
         </View>
+
+        {/* Commission Settings */}
+        {commissionSettings && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="brush-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Commission Preferences</Text>
+              </View>
+            </View>
+
+            {/* Tabs */}
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={[styles.tab, activeSettingsTab === 'will_draw' && styles.tabActive]}
+                onPress={() => setActiveSettingsTab('will_draw')}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="checkmark-circle" 
+                  size={18} 
+                  color={activeSettingsTab === 'will_draw' ? colors.primary : colors.text.secondary} 
+                />
+                <Text style={[styles.tabText, activeSettingsTab === 'will_draw' && styles.tabTextActive]}>
+                  Will Draw ({commissionSettings.will_draw?.length || 0})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeSettingsTab === 'wont_draw' && styles.tabActive]}
+                onPress={() => setActiveSettingsTab('wont_draw')}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="close-circle" 
+                  size={18} 
+                  color={activeSettingsTab === 'wont_draw' ? colors.primary : colors.text.secondary} 
+                />
+                <Text style={[styles.tabText, activeSettingsTab === 'wont_draw' && styles.tabTextActive]}>
+                  Won't Draw ({commissionSettings.wont_draw?.length || 0})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Tab Content */}
+            {settingsLoading ? (
+              <View style={styles.reviewsLoadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            ) : activeSettingsTab === 'will_draw' ? (
+              commissionSettings.will_draw?.length > 0 ? (
+                <View style={styles.settingsCard}>
+                  <View style={styles.drawList}>
+                    {commissionSettings.will_draw.map((item, index) => (
+                      <View key={index} style={styles.drawItem}>
+                        <Text style={styles.drawItemText}>{item}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.emptyReviewsContainer}>
+                  <Ionicons name="checkmark-circle-outline" size={48} color={colors.text.disabled} />
+                  <Text style={styles.emptyReviewsText}>No preferences set</Text>
+                  <Text style={styles.emptyReviewsSubtext}>
+                    This artist hasn't specified what they will draw
+                  </Text>
+                </View>
+              )
+            ) : (
+              commissionSettings.wont_draw?.length > 0 ? (
+                <View style={styles.settingsCard}>
+                  <View style={styles.drawList}>
+                    {commissionSettings.wont_draw.map((item, index) => (
+                      <View key={index} style={styles.drawItem}>
+                        <Text style={styles.drawItemText}>{item}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.emptyReviewsContainer}>
+                  <Ionicons name="close-circle-outline" size={48} color={colors.text.disabled} />
+                  <Text style={styles.emptyReviewsText}>No restrictions set</Text>
+                  <Text style={styles.emptyReviewsSubtext}>
+                    This artist hasn't specified what they won't draw
+                  </Text>
+                </View>
+              )
+            )}
+          </View>
+        )}
+
+        {/* Terms & Policies */}
+        {commissionSettings && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Terms & Policies</Text>
+              </View>
+            </View>
+
+            {commissionSettings.terms_of_service ? (
+              <View style={styles.settingsCard}>
+                <Text style={styles.termsText} selectable>
+                  {commissionSettings.terms_of_service}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.packageEmpty}>
+                <Ionicons name="document-text-outline" size={28} color={colors.text.secondary} />
+                <Text style={styles.packageEmptyTitle}>No terms available</Text>
+                <Text style={styles.packageEmptySubtitle}>
+                  This artist hasn't set their terms and policies
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Packages */}
         <View style={styles.section}>
@@ -2591,5 +2727,60 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.primary,
     fontWeight: '700',
+  },
+  settingsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  drawListContainer: {
+    marginBottom: spacing.lg,
+  },
+  drawListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  drawListTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  drawList: {
+    gap: spacing.md,
+  },
+  drawItem: {
+    paddingVertical: spacing.sm,
+  },
+  drawItemText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  termsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  termsTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  termsText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 15,
+    lineHeight: 24,
+    textAlign: 'left',
   },
 });

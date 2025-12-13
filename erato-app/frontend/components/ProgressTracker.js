@@ -34,6 +34,9 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
   const [selectedUpdate, setSelectedUpdate] = useState(null);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [approvalRequested, setApprovalRequested] = useState(false);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionNote, setRevisionNote] = useState('');
+  const [pendingRevisionUpdateId, setPendingRevisionUpdateId] = useState(null);
 
   useEffect(() => {
     loadProgressUpdates();
@@ -49,11 +52,28 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
       // Backend returns progress_updates, convert to updates format
       const updates = response.data.updates || response.data.progress_updates || [];
       // Convert image_url to images array format for display
-      const formattedUpdates = updates.map(update => ({
-        ...update,
-        images: update.images || (update.image_url ? [update.image_url] : []),
-        note: update.note || update.notes || null,
-      }));
+      const formattedUpdates = updates.map(update => {
+        // Handle images - check both images array and image_url
+        let images = [];
+        if (update.images && Array.isArray(update.images) && update.images.length > 0) {
+          images = update.images;
+        } else if (update.image_url) {
+          images = [update.image_url];
+        }
+        // Also check metadata for additional_images
+        if (update.metadata?.additional_images && Array.isArray(update.metadata.additional_images)) {
+          images = [...images, ...update.metadata.additional_images];
+        }
+        
+        // Handle note - check multiple possible field names
+        const note = update.note || update.notes || update.revision_notes || null;
+        
+        return {
+          ...update,
+          images: images,
+          note: note,
+        };
+      });
       setProgressUpdates(formattedUpdates);
     } catch (error) {
       console.error('Error loading progress updates:', error);
@@ -206,9 +226,19 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
 
   const requestRevision = async (updateId, revisionNote) => {
     try {
+      // Find the progress update to get its commission_id
+      const progressUpdate = progressUpdates.find(u => u.id === updateId);
+      if (!progressUpdate) {
+        throw new Error('Progress update not found');
+      }
+
+      // Use the main progress endpoint with update_type: 'revision_request'
       await axios.post(
-        `${API_URL}/commissions/progress/${updateId}/request-revision`,
-        { revision_note: revisionNote },
+        `${API_URL}/commissions/${commissionId}/progress`,
+        {
+          update_type: 'revision_request',
+          revision_notes: revisionNote,
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -219,6 +249,9 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
         visibilityTime: 2000,
       });
 
+      setShowRevisionModal(false);
+      setRevisionNote('');
+      setPendingRevisionUpdateId(null);
       loadProgressUpdates();
       onProgressUpdate?.();
     } catch (error) {
@@ -230,6 +263,20 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
         visibilityTime: 2000,
       });
     }
+  };
+
+  const handleSubmitRevision = () => {
+    if (!pendingRevisionUpdateId) return;
+    if (!revisionNote.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Note Required',
+        text2: 'Please describe the changes needed',
+        visibilityTime: 2000,
+      });
+      return;
+    }
+    requestRevision(pendingRevisionUpdateId, revisionNote.trim());
   };
 
   const renderProgressUpdate = ({ item }) => {
@@ -288,8 +335,8 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
           )}
         </View>
 
-        {item.note && (
-          <Text style={styles.updateNote}>{item.note}</Text>
+        {(item.note || item.notes) && (
+          <Text style={styles.updateNote}>{item.note || item.notes}</Text>
         )}
 
         {/* Progress Images */}
@@ -336,15 +383,13 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
             <TouchableOpacity
               style={styles.revisionButton}
               onPress={() => {
-                // Show revision input modal
-                const note = prompt('Please describe the changes needed:');
-                if (note) {
-                  requestRevision(item.id, note);
-                }
+                setPendingRevisionUpdateId(item.id);
+                setRevisionNote('');
+                setShowRevisionModal(true);
               }}
             >
               <Ionicons name="create-outline" size={18} color={colors.status.warning} />
-              <Text style={styles.revisionButtonText}>Request Revision</Text>
+              <Text style={styles.revisionButtonText}>Revision</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.approveButton}
@@ -380,7 +425,7 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
                 style={styles.uploadButton}
                 onPress={() => setShowUploadModal(true)}
               >
-                <Ionicons name="add-circle-outline" size={20} color={colors.text.primary} />
+                <Ionicons name="add-circle-outline" size={22} color={colors.text.primary} />
                 <Text style={styles.uploadButtonText}>Add Update</Text>
               </TouchableOpacity>
             </View>
@@ -506,7 +551,10 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
 
               {/* Approval Checkpoint Toggle */}
               <TouchableOpacity
-                style={styles.checkpointToggle}
+                style={[
+                  styles.checkpointToggle,
+                  approvalRequested && styles.checkpointToggleActive
+                ]}
                 onPress={() => setApprovalRequested(!approvalRequested)}
               >
                 <View style={styles.checkpointLeft}>
@@ -526,15 +574,18 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
 
               {/* Upload Button */}
               <TouchableOpacity
-                style={[styles.submitButton, uploading && styles.submitButtonDisabled]}
+                style={[styles.submitButton, (uploading || selectedImages.length === 0) && styles.submitButtonDisabled]}
                 onPress={uploadProgress}
-                disabled={uploading}
+                disabled={uploading || selectedImages.length === 0}
               >
                 {uploading ? (
-                  <ActivityIndicator size="small" color={colors.text.primary} />
+                  <>
+                    <ActivityIndicator size="small" color={colors.text.primary} />
+                    <Text style={styles.submitButtonText}>Uploading...</Text>
+                  </>
                 ) : (
                   <>
-                    <Ionicons name="cloud-upload-outline" size={20} color={colors.text.primary} />
+                    <Ionicons name="cloud-upload-outline" size={22} color={colors.text.primary} />
                     <Text style={styles.submitButtonText}>Upload Progress</Text>
                   </>
                 )}
@@ -579,6 +630,69 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
           </View>
         </Modal>
       )}
+
+      {/* Revision Note Modal */}
+      <Modal
+        visible={showRevisionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowRevisionModal(false);
+          setRevisionNote('');
+          setPendingRevisionUpdateId(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.revisionModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Request Revision</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => {
+                  setShowRevisionModal(false);
+                  setRevisionNote('');
+                  setPendingRevisionUpdateId(null);
+                }}
+              >
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.revisionModalContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Describe the changes needed</Text>
+                <Text style={styles.inputHint}>
+                  Be specific about what needs to be changed or improved
+                </Text>
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="e.g., Please adjust the colors to be more vibrant, or change the character's pose..."
+                  placeholderTextColor={colors.text.disabled}
+                  value={revisionNote}
+                  onChangeText={setRevisionNote}
+                  multiline
+                  numberOfLines={6}
+                  textAlignVertical="top"
+                  autoFocus
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.submitButton, !revisionNote.trim() && styles.submitButtonDisabled]}
+                onPress={handleSubmitRevision}
+                disabled={!revisionNote.trim()}
+              >
+                <Ionicons name="send-outline" size={20} color={colors.text.primary} />
+                <Text style={styles.submitButtonText}>Send Revision Request</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -601,24 +715,25 @@ const styles = StyleSheet.create({
   },
   headerButtonContainer: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    ...shadows.small,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    ...shadows.medium,
   },
   uploadButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
   timelineContent: {
     paddingTop: spacing.md,
@@ -626,39 +741,47 @@ const styles = StyleSheet.create({
   },
   updateCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
+    paddingLeft: spacing.xl,
+    paddingRight: spacing.lg,
     marginBottom: spacing.lg,
     marginHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
+    borderColor: colors.border + '40',
+    ...shadows.medium,
   },
   updateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   updateMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
+    flex: 1,
+    minWidth: 0,
   },
   updateDate: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
   },
   approvalBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    flexShrink: 0,
   },
   approvalBadgeText: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -666,68 +789,76 @@ const styles = StyleSheet.create({
   updateNote: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: spacing.sm,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: spacing.md,
+    fontWeight: '500',
   },
   imagesScroll: {
-    marginVertical: spacing.sm,
+    marginVertical: spacing.md,
   },
   imagesContainer: {
     gap: spacing.md,
     paddingHorizontal: spacing.xs,
   },
   progressImage: {
-    width: 180,
-    height: 180,
-    borderRadius: borderRadius.md,
+    width: 200,
+    height: 200,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.surfaceLight,
+    ...shadows.small,
   },
   revisionNoteBox: {
-    backgroundColor: colors.status.warning + '10',
-    borderLeftWidth: 3,
+    backgroundColor: colors.status.warning + '15',
+    borderLeftWidth: 4,
     borderLeftColor: colors.status.warning,
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.status.warning + '30',
   },
   revisionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   revisionHeaderText: {
     ...typography.bodyBold,
     color: colors.status.warning,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
   revisionNoteText: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
   },
   approvalActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     marginTop: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.border + '40',
+    justifyContent: 'flex-end',
   },
   revisionButton: {
-    flex: 1,
+    flex: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.status.warning,
+    borderWidth: 1.5,
+    borderColor: colors.status.warning + '80',
+    minWidth: 110,
   },
   revisionButtonText: {
     ...typography.bodyBold,
@@ -736,20 +867,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   approveButton: {
-    flex: 1,
+    flex: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.status.success,
     borderRadius: borderRadius.md,
-    ...shadows.small,
+    minWidth: 110,
   },
   approveButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   emptyStateContainer: {
@@ -804,7 +936,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
+    maxHeight: '95%',
     width: '100%',
   },
   modalHeader: {
@@ -820,7 +952,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
   },
   modalCloseButton: {
@@ -842,13 +974,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderStyle: 'dashed',
     borderRadius: borderRadius.lg,
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.xxl * 1.5,
     marginBottom: spacing.md,
   },
   imagePickerText: {
     ...typography.body,
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     marginTop: spacing.sm,
   },
@@ -912,10 +1044,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  checkpointToggleActive: {
+    borderColor: colors.primary + '60',
+    backgroundColor: colors.primary + '08',
+  },
   checkpointLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     flex: 1,
   },
   checkpointTextContainer: {
@@ -980,5 +1116,15 @@ const styles = StyleSheet.create({
   fullImage: {
     width: '100%',
     height: '100%',
+  },
+  revisionModal: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '80%',
+    width: '100%',
+  },
+  revisionModalContent: {
+    padding: spacing.lg,
   },
 });
