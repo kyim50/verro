@@ -2,6 +2,8 @@ import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import * as paypal from '@paypal/checkout-server-sdk';
+import { OrdersCreateRequest } from '@paypal/checkout-server-sdk/lib/orders/ordersCreateRequest.js';
+import { OrdersCaptureRequest } from '@paypal/checkout-server-sdk/lib/orders/ordersCaptureRequest.js';
 
 const router = express.Router();
 
@@ -90,7 +92,7 @@ router.post('/create-order', authenticate, async (req, res) => {
     }
 
     // Create PayPal Order
-    const request = new paypal.orders.OrdersCreateRequest();
+    const request = new OrdersCreateRequest();
     request.prefer("return=representation");
     request.requestBody({
       intent: 'CAPTURE',
@@ -197,7 +199,7 @@ router.post('/capture-order', authenticate, async (req, res) => {
     }
 
     // Capture the PayPal order
-    const request = new paypal.orders.OrdersCaptureRequest(orderId);
+    const request = new OrdersCaptureRequest(orderId);
     request.requestBody({});
 
     const capture = await client().execute(request);
@@ -521,7 +523,7 @@ router.post('/tip', authenticate, async (req, res) => {
     }
 
     // Create PayPal Order for tip
-    const request = new paypal.orders.OrdersCreateRequest();
+    const request = new OrdersCreateRequest();
     request.prefer("return=representation");
     request.requestBody({
       intent: 'CAPTURE',

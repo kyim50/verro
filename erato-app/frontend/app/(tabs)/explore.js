@@ -2125,10 +2125,12 @@ export default function CommissionDashboard() {
                   ) : null}
 
                   {/* Payment Status - Combined Escrow and Payment Status */}
-                  {(selectedCommission.escrow_status || selectedCommission.payment_status) && (
-                    <View style={styles.detailSection}>
+                  {/* Only show escrow/payment status if payment has been made, otherwise payment button will show */}
+                  {((selectedCommission.escrow_status && selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid') || 
+                    (selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid')) && (
+                    <View style={[styles.detailSection, styles.paymentStatusSection]}>
                       <Text style={styles.detailSectionTitle}>Payment Status</Text>
-                      {selectedCommission.escrow_status ? (
+                      {selectedCommission.escrow_status && selectedCommission.payment_status !== 'unpaid' ? (
                         <EscrowStatus
                           commission={selectedCommission}
                           isClient={!isArtist}
@@ -2201,30 +2203,38 @@ export default function CommissionDashboard() {
                   )}
 
                   {/* Payment Options - Show button when:
-                      1. Status is 'accepted' AND payment_status is 'unpaid' (for first deposit)
+                      1. Status is 'accepted' OR 'in_progress' AND (no payment_status OR payment_status is 'unpaid')
+                         Note: Backend changes 'accepted' to 'in_progress' when artist accepts
                       2. Status is 'completed' AND payment_status is 'deposit_paid' (for final payment)
                   */}
-                  {!isArtist && (
-                    ((selectedCommission.status === 'accepted' && (!selectedCommission.payment_status || selectedCommission.payment_status === 'unpaid')) ||
-                     (selectedCommission.status === 'completed' && selectedCommission.payment_status === 'deposit_paid')) && (
-                      <View style={styles.detailSection}>
-                        <TouchableOpacity
-                          style={styles.paymentButton}
-                          onPress={() => {
-                            // Close commission modal first to avoid conflicts
-                            setShowCommissionModal(false);
-                            setTimeout(() => {
-                              setShowPaymentOptions(true);
-                            }, 300);
-                          }}
-                        >
-                          <Ionicons name="card-outline" size={20} color={colors.text.primary} />
-                          <Text style={styles.paymentButtonText}>
-                            {selectedCommission.status === 'accepted' ? 'Make Deposit Payment' : 'Make Final Payment'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )
+                  {(() => {
+                    const statusCheck = selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress';
+                    // payment_status can be: null, undefined, 'unpaid', or 'pending' - all mean payment hasn't been made
+                    const paymentCheck = !selectedCommission.payment_status || 
+                                       selectedCommission.payment_status === 'unpaid' || 
+                                       selectedCommission.payment_status === 'pending';
+                    const finalPaymentCheck = selectedCommission.status === 'completed' && selectedCommission.payment_status === 'deposit_paid';
+                    const shouldShow = !isArtist && ((statusCheck && paymentCheck) || finalPaymentCheck);
+                    
+                    return shouldShow;
+                  })() && (
+                    <View style={[styles.detailSection, styles.paymentButtonSection]}>
+                      <TouchableOpacity
+                        style={styles.paymentButton}
+                        onPress={() => {
+                          // Close commission modal first to avoid conflicts
+                          setShowCommissionModal(false);
+                          setTimeout(() => {
+                            setShowPaymentOptions(true);
+                          }, 300);
+                        }}
+                      >
+                        <Ionicons name="card-outline" size={20} color={colors.text.primary} />
+                        <Text style={styles.paymentButtonText}>
+                          {(selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') ? 'Make Deposit Payment' : 'Make Final Payment'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
 
                   {/* Milestone Tracker */}
@@ -3933,6 +3943,13 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     fontSize: 15,
   },
+  paymentButtonSection: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  paymentStatusSection: {
+    marginBottom: spacing.xs,
+  },
   paymentButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3941,7 +3958,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    marginTop: spacing.sm,
+    marginTop: 0,
   },
   paymentButtonText: {
     ...typography.bodyBold,
