@@ -589,6 +589,85 @@ router.post('/tip', authenticate, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/payments/user/transactions
+ * @desc    Get all transactions for the current user (profits for artists, purchases for clients)
+ * @access  Private
+ */
+router.get('/user/transactions', authenticate, async (req, res) => {
+  console.log('GET /api/payments/user/transactions - Route hit');
+  try {
+    const userId = req.user.id;
+    console.log('User ID:', userId);
+
+    // Check if user is an artist
+    const { data: artist } = await supabaseAdmin
+      .from('artists')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    // Get commissions where user is involved
+    let commissionsQuery = supabaseAdmin
+      .from('commissions')
+      .select('id');
+    
+    if (artist) {
+      // Artist: Get commissions where they are the artist
+      commissionsQuery = commissionsQuery.eq('artist_id', userId);
+    } else {
+      // Client: Get commissions where they are the client
+      commissionsQuery = commissionsQuery.eq('client_id', userId);
+    }
+
+    const { data: userCommissions, error: commissionsError } = await commissionsQuery;
+    if (commissionsError) throw commissionsError;
+
+    if (!userCommissions || userCommissions.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    const commissionIds = userCommissions.map(c => c.id);
+
+    // Get all transactions for these commissions
+    const { data, error } = await supabaseAdmin
+      .from('payment_transactions')
+      .select(`
+        *,
+        commissions:commission_id(
+          id,
+          client_id,
+          artist_id,
+          details,
+          final_price,
+          created_at
+        )
+      `)
+      .in('commission_id', commissionIds)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Format transactions with commission info
+    const formattedTransactions = (data || []).map(tx => ({
+      ...tx,
+      commission: Array.isArray(tx.commissions) ? tx.commissions[0] : tx.commissions,
+      commission_id: tx.commission_id,
+    }));
+
+    res.json({
+      success: true,
+      data: formattedTransactions
+    });
+  } catch (error) {
+    console.error('Error fetching user transactions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route   GET /api/payments/commission/:commissionId/transactions
  * @desc    Get all transactions for a commission
  * @access  Private (Client or Artist)

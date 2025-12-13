@@ -119,7 +119,7 @@ const StyledAlert = forwardRef((props, ref) => {
           <TouchableWithoutFeedback>
             <View style={styles.alertContainer}>
               <View style={styles.alertContent}>
-                <Ionicons name={icon.name} size={28} color={icon.color} style={styles.icon} />
+                <Ionicons name={icon.name} size={22} color={icon.color} style={styles.icon} />
                 {title && <Text style={styles.title}>{title}</Text>}
                 {message && <Text style={styles.message}>{message}</Text>}
                 {buttons ? (
@@ -174,36 +174,37 @@ const styles = StyleSheet.create({
   },
   alertContainer: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 280,
     alignItems: 'center',
   },
   alertContent: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     width: '100%',
     alignItems: 'center',
-    ...shadows.large,
-    elevation: 8,
+    ...shadows.medium,
+    elevation: 6,
   },
   icon: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    alignSelf: 'center',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   message: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '400',
     color: colors.text.secondary,
     textAlign: 'center',
-    marginBottom: spacing.lg,
-    lineHeight: 22,
+    marginBottom: spacing.md,
+    lineHeight: 18,
   },
   buttonsContainer: {
     flexDirection: 'row',
@@ -213,22 +214,22 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.medium,
+    ...shadows.small,
   },
   singleButton: {
     width: '100%',
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.medium,
+    ...shadows.small,
   },
   cancelButton: {
     backgroundColor: colors.surface,
@@ -240,8 +241,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   buttonText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text.primary,
   },
   cancelButtonText: {

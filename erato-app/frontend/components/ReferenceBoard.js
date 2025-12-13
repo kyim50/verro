@@ -22,7 +22,7 @@ import { Image as ExpoImage } from 'expo-image';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
-import { colors, spacing, typography, borderRadius } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
 import { uploadImage } from '../utils/imageUpload';
 import { useAuthStore } from '../store';
 
@@ -638,29 +638,33 @@ function ImageCard({ reference, onDelete, onImagePress }) {
 }
 
 function ColorPaletteCard({ reference, onDelete }) {
-  const colors = reference.metadata?.colors || [];
+  const paletteColors = reference.metadata?.colors || [];
   
   return (
     <View style={styles.paletteCard}>
-      <View style={styles.paletteColors}>
-        {colors.map((color, index) => (
-          <View
-            key={index}
-            style={[styles.colorSwatch, { backgroundColor: color.hex || color }]}
-          />
-        ))}
-      </View>
-      {reference.title && (
-        <Text style={styles.paletteTitle} numberOfLines={1}>
-          {reference.title}
-        </Text>
-      )}
       <TouchableOpacity
-        style={styles.deleteButton}
+        style={styles.paletteDeleteButton}
         onPress={() => onDelete(reference.id)}
+        activeOpacity={0.7}
       >
-        <Ionicons name="close-circle" size={24} color={colors.error} />
+        <Ionicons name="close-circle" size={20} color={colors.text.secondary} />
       </TouchableOpacity>
+      <View style={styles.paletteColors}>
+        {paletteColors.map((color, index) => {
+          const hexColor = color.hex || color;
+          const hexCode = hexColor.startsWith('#') ? hexColor.toUpperCase() : `#${hexColor.toUpperCase()}`;
+          return (
+            <View key={index} style={styles.colorItem}>
+              <View
+                style={[styles.colorSwatch, { backgroundColor: hexColor }]}
+              />
+              <Text style={styles.colorHex} numberOfLines={1}>
+                {hexCode}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -873,26 +877,54 @@ const styles = StyleSheet.create({
   paletteCard: {
     width: ITEM_WIDTH,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    ...shadows.small,
+    position: 'relative',
   },
   paletteColors: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: spacing.md,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  colorItem: {
+    alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.xs,
   },
   colorSwatch: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.border + '80',
   },
-  paletteTitle: {
+  colorHex: {
     ...typography.caption,
-    color: colors.text.primary,
-    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  paletteDeleteButton: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    padding: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface + 'E6',
+    zIndex: 10,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    padding: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background + 'CC',
   },
   linkCard: {
     width: ITEM_WIDTH,

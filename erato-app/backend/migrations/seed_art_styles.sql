@@ -142,3 +142,4 @@ SELECT COUNT(*) as total_styles FROM art_styles;
 -- Display all inserted styles
 SELECT name, slug, description FROM art_styles ORDER BY name;
 
+

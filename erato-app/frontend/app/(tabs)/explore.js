@@ -185,6 +185,8 @@ export default function CommissionDashboard() {
   const [showEngagementModal, setShowEngagementModal] = useState(false);
   const [showTransactionHistoryModal, setShowTransactionHistoryModal] = useState(false);
   const [transactionHistoryCommissionId, setTransactionHistoryCommissionId] = useState(null);
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [engagementMetrics, setEngagementMetrics] = useState(null);
   const [loadingEngagement, setLoadingEngagement] = useState(false);
   const [detailTab, setDetailTab] = useState('details'); // details, progress, files
@@ -317,6 +319,29 @@ export default function CommissionDashboard() {
       .filter(c => c.final_price && (c.status === 'completed' || c.status === 'in_progress'))
       .reduce((sum, c) => sum + parseFloat(c.final_price || 0), 0);
     setTotalSpent(total);
+  };
+
+  const loadAllTransactions = async () => {
+    if (!token) return;
+    setLoadingTransactions(true);
+    try {
+      // API_URL already includes /api (e.g., https://api.verrocio.com/api)
+      // Use the same pattern as other API calls like /commissions
+      const response = await axios.get(`${API_URL}/payments/user/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAllTransactions(response.data.data || []);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load transaction history',
+      });
+      setAllTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
+    }
   };
 
   const loadEngagementMetrics = async () => {
@@ -1160,6 +1185,17 @@ export default function CommissionDashboard() {
               <Ionicons name="analytics-outline" size={20} color={colors.primary} />
               <Text style={styles.actionButtonText}>Engagement</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                setShowTransactionHistoryModal(true);
+                setTransactionHistoryCommissionId(null); // Show all transactions
+                loadAllTransactions();
+              }}
+            >
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+              <Text style={styles.actionButtonText}>Transactions</Text>
+            </TouchableOpacity>
             {isArtist && (
               <TouchableOpacity
                 style={styles.actionButton}
@@ -1648,57 +1684,162 @@ export default function CommissionDashboard() {
             </View>
 
             <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
-              {commissions.filter(c => c.payment_status && c.payment_status !== 'unpaid').length === 0 ? (
+              {loadingTransactions ? (
+                <View style={styles.emptyState}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.emptyText}>Loading transactions...</Text>
+                </View>
+              ) : allTransactions.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Ionicons name="receipt-outline" size={64} color={colors.text.disabled} />
                   <Text style={styles.emptyTitle}>No Transactions</Text>
                   <Text style={styles.emptyText}>
-                    You haven't made any payments yet. Transactions will appear here after you make a payment.
+                    {isArtist 
+                      ? "You haven't received any payments yet. Transactions will appear here after clients make payments."
+                      : "You haven't made any payments yet. Transactions will appear here after you make a payment."}
                   </Text>
                 </View>
               ) : (
-                commissions
-                  .filter(c => c.payment_status && c.payment_status !== 'unpaid')
-                  .map((commission) => (
-                    <View key={commission.id} style={styles.transactionCommissionCard}>
-                      <View style={styles.transactionCommissionHeader}>
-                        <View style={styles.transactionCommissionInfo}>
-                          <Text style={styles.transactionCommissionTitle}>
-                            {commission.details || commission.description || 'Commission'}
+                (() => {
+                  // Group transactions by commission
+                  const groupedByCommission = {};
+                  allTransactions.forEach(tx => {
+                    const commissionId = tx.commission_id || tx.commission?.id;
+                    if (!groupedByCommission[commissionId]) {
+                      groupedByCommission[commissionId] = {
+                        commission: tx.commission,
+                        transactions: []
+                      };
+                    }
+                    groupedByCommission[commissionId].transactions.push(tx);
+                  });
+
+                  // Calculate totals
+                  const totalAmount = allTransactions
+                    .filter(tx => tx.status === 'succeeded' && tx.transaction_type !== 'refund')
+                    .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+                  
+                  const totalProfit = isArtist 
+                    ? allTransactions
+                        .filter(tx => tx.status === 'succeeded' && tx.transaction_type !== 'refund')
+                        .reduce((sum, tx) => sum + (tx.artist_payout || 0), 0)
+                    : null;
+
+                  return (
+                    <>
+                      {/* Summary Card */}
+                      <View style={styles.transactionSummaryCard}>
+                        <View style={styles.transactionSummaryRow}>
+                          <Text style={styles.transactionSummaryLabel}>
+                            {isArtist ? 'Total Earnings' : 'Total Spent'}
                           </Text>
-                          <Text style={styles.transactionCommissionDate}>
-                            {new Date(commission.created_at).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric', 
-                              year: 'numeric' 
+                          <Text style={styles.transactionSummaryValue}>
+                            ${totalAmount.toFixed(2)}
+                          </Text>
+                        </View>
+                        {isArtist && totalProfit !== null && (
+                          <View style={styles.transactionSummaryRow}>
+                            <Text style={styles.transactionSummaryLabel}>After Platform Fee</Text>
+                            <Text style={[styles.transactionSummaryValue, { color: colors.status.success }]}>
+                              ${totalProfit.toFixed(2)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Transactions by Commission */}
+                      {Object.values(groupedByCommission).map((group, index) => {
+                        const commission = group.commission;
+                        const commissionTransactions = group.transactions.sort((a, b) => 
+                          new Date(b.created_at) - new Date(a.created_at)
+                        );
+                        const commissionTotal = commissionTransactions
+                          .filter(tx => tx.status === 'succeeded' && tx.transaction_type !== 'refund')
+                          .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+                        return (
+                          <View key={commission?.id || index} style={styles.transactionCommissionCard}>
+                            <View style={styles.transactionCommissionHeader}>
+                              <View style={styles.transactionCommissionInfo}>
+                                <Text style={styles.transactionCommissionTitle}>
+                                  {commission?.details || commission?.description || 'Commission'}
+                                </Text>
+                                <Text style={styles.transactionCommissionDate}>
+                                  {commission?.created_at 
+                                    ? new Date(commission.created_at).toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        year: 'numeric' 
+                                      })
+                                    : 'N/A'}
+                                </Text>
+                              </View>
+                              <View style={styles.transactionCommissionAmount}>
+                                <Text style={styles.transactionAmountValue}>
+                                  ${commissionTotal.toFixed(2)}
+                                </Text>
+                              </View>
+                            </View>
+                            
+                            {/* Individual Transactions */}
+                            {commissionTransactions.map((tx) => {
+                              const typeConfig = {
+                                deposit: { label: 'Deposit', icon: 'wallet', color: colors.primary },
+                                final: { label: 'Final Payment', icon: 'card', color: colors.primary },
+                                full: { label: 'Full Payment', icon: 'cash', color: colors.primary },
+                                milestone: { label: 'Milestone', icon: 'layers', color: colors.primary },
+                                tip: { label: 'Tip', icon: 'heart', color: colors.status.error },
+                                refund: { label: 'Refund', icon: 'arrow-undo', color: colors.status.error },
+                              }[tx.transaction_type] || { label: 'Payment', icon: 'card', color: colors.primary };
+                              
+                              const statusColor = {
+                                succeeded: colors.status.success,
+                                pending: colors.status.warning,
+                                failed: colors.status.error,
+                                refunded: colors.status.error,
+                              }[tx.status] || colors.text.secondary;
+
+                              return (
+                                <View key={tx.id} style={styles.transactionItem}>
+                                  <View style={styles.transactionItemLeft}>
+                                    <View style={[styles.transactionItemIcon, { backgroundColor: typeConfig.color + '20' }]}>
+                                      <Ionicons name={typeConfig.icon} size={18} color={typeConfig.color} />
+                                    </View>
+                                    <View style={styles.transactionItemInfo}>
+                                      <Text style={styles.transactionItemType}>{typeConfig.label}</Text>
+                                      <Text style={styles.transactionItemDate}>
+                                        {new Date(tx.created_at).toLocaleDateString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          year: 'numeric',
+                                          hour: 'numeric',
+                                          minute: '2-digit'
+                                        })}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  <View style={styles.transactionItemRight}>
+                                    <Text style={[
+                                      styles.transactionItemAmount,
+                                      tx.transaction_type === 'refund' && styles.transactionItemAmountRefund
+                                    ]}>
+                                      {tx.transaction_type === 'refund' ? '-' : ''}${tx.amount?.toFixed(2) || '0.00'}
+                                    </Text>
+                                    <View style={[styles.transactionItemStatus, { backgroundColor: statusColor + '20' }]}>
+                                      <Text style={[styles.transactionItemStatusText, { color: statusColor }]}>
+                                        {tx.status?.charAt(0).toUpperCase() + tx.status?.slice(1) || 'Pending'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                </View>
+                              );
                             })}
-                          </Text>
-                        </View>
-                        <View style={[styles.transactionStatusBadge, {
-                          backgroundColor: commission.payment_status === 'fully_paid' 
-                            ? colors.status.success + '20' 
-                            : colors.status.warning + '20'
-                        }]}>
-                          <Text style={[styles.transactionStatusText, {
-                            color: commission.payment_status === 'fully_paid' 
-                              ? colors.status.success 
-                              : colors.status.warning
-                          }]}>
-                            {commission.payment_status === 'fully_paid' ? 'Paid' : 'Deposit Paid'}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.transactionCommissionAmount}>
-                        <Text style={styles.transactionAmountLabel}>Total</Text>
-                        <Text style={styles.transactionAmountValue}>
-                          ${(commission.final_price || commission.price || commission.budget || 0).toFixed(2)}
-                        </Text>
-                      </View>
-                      <View style={styles.transactionHistoryContainer}>
-                        <TransactionHistory commissionId={commission.id} />
-                      </View>
-                    </View>
-                  ))
+                          </View>
+                        );
+                      })}
+                    </>
+                  );
+                })()
               )}
             </ScrollView>
           </View>
@@ -2047,8 +2188,11 @@ export default function CommissionDashboard() {
                               { color: selectedCommission.payment_status === 'fully_paid' ? colors.status.success : colors.text.primary }
                             ]}>
                               {selectedCommission.payment_status === 'fully_paid' ? 'Fully Paid' :
-                               selectedCommission.payment_status === 'deposit_paid' ? 'Deposit Paid' :
-                               'Unpaid'}
+                               selectedCommission.payment_status === 'deposit_paid' 
+                                 ? (selectedCommission.status === 'completed' 
+                                     ? 'Waiting for Final Payment' 
+                                     : 'Deposit Paid - Waiting for Commission to Complete')
+                                 : 'Unpaid'}
                             </Text>
                           </View>
                         </View>
@@ -2056,24 +2200,31 @@ export default function CommissionDashboard() {
                     </View>
                   )}
 
-                  {/* Payment Options for Accepted/In Progress Commissions */}
-                  {(selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') && !isArtist && 
-                   (!selectedCommission.payment_status || selectedCommission.payment_status === 'unpaid' || selectedCommission.payment_status === 'deposit_paid') && (
-                    <View style={styles.detailSection}>
-                      <TouchableOpacity
-                        style={styles.paymentButton}
-                        onPress={() => {
-                          // Close commission modal first to avoid conflicts
-                          setShowCommissionModal(false);
-                          setTimeout(() => {
-                            setShowPaymentOptions(true);
-                          }, 300);
-                        }}
-                      >
-                        <Ionicons name="card-outline" size={20} color={colors.text.primary} />
-                        <Text style={styles.paymentButtonText}>Make Payment</Text>
-                      </TouchableOpacity>
-                    </View>
+                  {/* Payment Options - Show button when:
+                      1. Status is 'accepted' AND payment_status is 'unpaid' (for first deposit)
+                      2. Status is 'completed' AND payment_status is 'deposit_paid' (for final payment)
+                  */}
+                  {!isArtist && (
+                    ((selectedCommission.status === 'accepted' && (!selectedCommission.payment_status || selectedCommission.payment_status === 'unpaid')) ||
+                     (selectedCommission.status === 'completed' && selectedCommission.payment_status === 'deposit_paid')) && (
+                      <View style={styles.detailSection}>
+                        <TouchableOpacity
+                          style={styles.paymentButton}
+                          onPress={() => {
+                            // Close commission modal first to avoid conflicts
+                            setShowCommissionModal(false);
+                            setTimeout(() => {
+                              setShowPaymentOptions(true);
+                            }, 300);
+                          }}
+                        >
+                          <Ionicons name="card-outline" size={20} color={colors.text.primary} />
+                          <Text style={styles.paymentButtonText}>
+                            {selectedCommission.status === 'accepted' ? 'Make Deposit Payment' : 'Make Final Payment'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )
                   )}
 
                   {/* Milestone Tracker */}
@@ -3855,6 +4006,92 @@ const styles = StyleSheet.create({
   },
   transactionHistoryContainer: {
     marginTop: spacing.sm,
+  },
+  transactionSummaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    ...shadows.small,
+  },
+  transactionSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  transactionSummaryLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+  },
+  transactionSummaryValue: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '20',
+  },
+  transactionItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.sm,
+  },
+  transactionItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transactionItemInfo: {
+    flex: 1,
+  },
+  transactionItemType: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  transactionItemDate: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  transactionItemRight: {
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  transactionItemAmount: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  transactionItemAmountRefund: {
+    color: colors.status.error,
+  },
+  transactionItemStatus: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+  },
+  transactionItemStatusText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
   },
   detailTextPlaceholder: {
     ...typography.body,

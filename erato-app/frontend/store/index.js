@@ -207,10 +207,14 @@ export const useAuthStore = create((set) => ({
         // Don't crash - continue
       }
       // Make API call after clearing state (fire and forget)
+      // Suppress 401 errors since token is already cleared
       axios.post(`${API_URL}/auth/logout`, {}, {
         timeout: 5000,
       }).catch((error) => {
-        console.error('Logout API error (non-critical):', error);
+        // Only log non-401 errors (401 is expected since token is cleared)
+        if (error.response?.status !== 401) {
+          console.error('Logout API error (non-critical):', error);
+        }
       });
     } catch (error) {
       console.error('Logout error (continuing anyway):', error);
