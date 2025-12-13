@@ -10,6 +10,8 @@ import {
   TextInput,
   FlatList,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -424,8 +426,13 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
         transparent={true}
         onRequestClose={() => setShowUploadModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.uploadModal}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.uploadModal}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Progress Update</Text>
               <TouchableOpacity
@@ -436,7 +443,11 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.uploadContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.uploadContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* Image Picker */}
               <TouchableOpacity style={styles.imagePickerButton} onPress={pickImages}>
                 <Ionicons name="images-outline" size={32} color={colors.primary} />
@@ -529,8 +540,9 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
                 )}
               </TouchableOpacity>
             </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Image Viewer Modal */}

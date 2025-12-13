@@ -789,11 +789,16 @@ router.post('/:id/progress', authenticate, async (req, res) => {
     }
 
     // Get commission to verify access
-    const { data: commission } = await supabaseAdmin
+    const { data: commission, error: commissionError } = await supabaseAdmin
       .from('commissions')
       .select('artist_id, client_id, status, max_revision_count, current_revision_count')
       .eq('id', req.params.id)
       .single();
+
+    if (commissionError) {
+      console.error('Error fetching commission for progress upload:', commissionError);
+      return res.status(500).json({ error: 'Failed to fetch commission', details: commissionError.message });
+    }
 
     if (!commission) {
       return res.status(404).json({ error: 'Commission not found' });
@@ -801,6 +806,15 @@ router.post('/:id/progress', authenticate, async (req, res) => {
 
     const isArtist = String(commission.artist_id) === String(req.user.id);
     const isClient = String(commission.client_id) === String(req.user.id);
+
+    console.log('Progress upload auth check:', {
+      commissionId: req.params.id,
+      userId: req.user.id,
+      artistId: commission.artist_id,
+      clientId: commission.client_id,
+      isArtist,
+      isClient
+    });
 
     if (!isArtist && !isClient) {
       return res.status(403).json({ error: 'Access denied' });

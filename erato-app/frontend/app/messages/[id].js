@@ -70,6 +70,8 @@ export default function ConversationScreen() {
   const [showPayPalCheckout, setShowPayPalCheckout] = useState(false);
   const [showTipJar, setShowTipJar] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
+  const [selectedImageForViewer, setSelectedImageForViewer] = useState(null);
+  const [showImageViewer, setShowImageViewer] = useState(false);
   const flatListRef = useRef(null);
   const socketRef = useRef(null);
   
@@ -958,6 +960,11 @@ export default function ConversationScreen() {
         {item.image_url ? (
           <View style={[styles.imageMessageWrapper, isOwn && styles.imageMessageWrapperOwn]}>
             <TouchableOpacity
+              onPress={() => {
+                // Open full screen image viewer
+                setSelectedImageForViewer(item.image_url);
+                setShowImageViewer(true);
+              }}
               onLongPress={() => {
                 if (isOwn && !isPending) handleDeleteMessage(item.id);
               }}
@@ -1660,6 +1667,38 @@ export default function ConversationScreen() {
           }}
         />
       )}
+
+      {/* Image Viewer Modal */}
+      {selectedImageForViewer && (
+        <Modal
+          visible={showImageViewer}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {
+            setShowImageViewer(false);
+            setSelectedImageForViewer(null);
+          }}
+        >
+          <View style={styles.imageViewerOverlay}>
+            <TouchableOpacity
+              style={styles.imageViewerClose}
+              onPress={() => {
+                setShowImageViewer(false);
+                setSelectedImageForViewer(null);
+              }}
+            >
+              <Ionicons name="close" size={32} color={colors.text.primary} />
+            </TouchableOpacity>
+            <View style={styles.imageViewerPage}>
+              <Image
+                source={{ uri: selectedImageForViewer }}
+                style={styles.fullImage}
+                contentFit="contain"
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </>
   );
 }
@@ -2309,5 +2348,31 @@ const styles = StyleSheet.create({
     minHeight: 100,
     maxHeight: 150,
     textAlignVertical: 'top',
+  },
+  // Image Viewer Styles
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.98)',
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface + 'CC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageViewerPage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: '100%',
+    height: '100%',
   },
 });

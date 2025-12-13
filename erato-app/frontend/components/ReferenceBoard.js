@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
   Dimensions,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -449,8 +451,13 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
         animationType="slide"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Reference</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
@@ -458,7 +465,11 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               {/* Type Selection */}
               <Text style={styles.inputLabel}>Reference Type</Text>
               <View style={styles.typeGrid}>
@@ -553,8 +564,9 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
                 )}
               </TouchableOpacity>
             </View>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

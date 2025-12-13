@@ -118,7 +118,7 @@ export default function PortfolioScreen() {
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>Build Your Portfolio</Text>
           <Text style={styles.headerSubtitle}>
-            Upload {PORTFOLIO_SIZE} of your best works
+            Upload up to {PORTFOLIO_SIZE} of your best works (min. 1)
           </Text>
         </View>
       </View>
@@ -152,8 +152,8 @@ export default function PortfolioScreen() {
         </View>
 
         <Text style={styles.helpText}>
-          Choose images that best represent your artistic style and skills. These will be the first
-          things potential clients see.
+          Upload at least 1 image to continue. Choose images that best represent your artistic
+          style and skills - these will be the first things potential clients see.
         </Text>
       </ScrollView>
 
@@ -254,21 +254,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    justifyContent: 'space-between',
     marginBottom: spacing.lg,
   },
   slot: {
-    width: (width - spacing.md * 3) / 2,
+    width: '48%',
     aspectRatio: 3 / 4,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surface,
+    marginBottom: spacing.md,
   },
   slotImage: {
     width: '100%',
@@ -290,21 +291,31 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    top: spacing.xs,
+    right: spacing.xs,
     backgroundColor: colors.background,
     borderRadius: borderRadius.full,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   imageNumber: {
     position: 'absolute',
-    bottom: spacing.sm,
-    left: spacing.sm,
+    bottom: spacing.xs,
+    left: spacing.xs,
     backgroundColor: colors.primary,
     width: 28,
     height: 28,
     borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    elevation: 3,
   },
   imageNumberText: {
     ...typography.small,
