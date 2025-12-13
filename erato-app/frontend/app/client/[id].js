@@ -39,6 +39,7 @@ export default function ClientProfileScreen() {
   const isOwnProfile = user?.id === id;
 
   useEffect(() => {
+    setLoading(true);
     loadClientProfile();
     loadClientCommissions();
     loadClientReviewsGiven();
@@ -495,8 +496,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
     backgroundColor: colors.background,
   },
   backButton: {
@@ -512,8 +511,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 18 : 20,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '800',
   },
   retryButton: {
     backgroundColor: colors.primary,
@@ -532,19 +531,19 @@ const styles = StyleSheet.create({
   },
   clientHeader: {
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingTop: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
   },
   avatarContainer: {
-    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
   },
   avatar: {
-    width: IS_SMALL_SCREEN ? 100 : 120,
-    height: IS_SMALL_SCREEN ? 100 : 120,
-    borderRadius: IS_SMALL_SCREEN ? 50 : 60,
+    width: IS_SMALL_SCREEN ? 110 : 120,
+    height: IS_SMALL_SCREEN ? 110 : 120,
+    borderRadius: IS_SMALL_SCREEN ? 55 : 60,
     borderWidth: 4,
-    borderColor: colors.surface,
-    ...shadows.medium,
+    borderColor: colors.primary + '40',
   },
   nameContainer: {
     alignItems: 'center',
@@ -558,8 +557,10 @@ const styles = StyleSheet.create({
   clientName: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 22 : 24,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 26 : 30,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.5,
   },
   clientUsernameRow: {
     flexDirection: 'row',
@@ -587,30 +588,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
     gap: spacing.md,
   },
   statItem: {
+    flex: 1,
     alignItems: 'center',
-    gap: spacing.xs / 2,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    minWidth: 0,
   },
   statValue: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 20 : 22,
-    fontWeight: '700',
+    fontWeight: '800',
+    textAlign: 'center',
   },
   statLabel: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statDivider: {
     width: 1,
-    height: 30,
-    backgroundColor: colors.border,
-    opacity: 0.5,
+    height: 48,
+    backgroundColor: colors.border + '60',
   },
   memberSinceContainer: {
     flexDirection: 'row',
@@ -625,8 +636,8 @@ const styles = StyleSheet.create({
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   section: {
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   sectionHeader: {
     flexDirection: 'row',

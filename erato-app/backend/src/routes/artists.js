@@ -403,7 +403,6 @@ router.get('/:id/packages', optionalAuth, async (req, res, next) => {
         estimated_delivery_days,
         revision_count,
         example_image_urls,
-        thumbnail_url,
         is_active,
         display_order,
         addons:commission_package_addons(id, name, description, price)

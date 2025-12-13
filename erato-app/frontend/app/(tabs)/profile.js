@@ -207,8 +207,10 @@ export default function ProfileScreen() {
     );
   }
 
-  // Show loading only if we truly have no data
-  const showLoading = isInitialLoad && isLoading && !profile;
+  // Show loading if we don't have profile data yet, or if we're still loading and don't know the user type
+  const showLoading = (isInitialLoad && isLoading && !profile) || 
+                      (isLoading && !profile) ||
+                      (profile && user?.id && profile.id === user.id && profile.artist === undefined && profile.client === undefined && isLoading);
 
   const isArtist = profile?.artist !== null && profile?.artist !== undefined;
   const artworks = profile?.artist?.artworks || [];

@@ -177,3 +177,4 @@ CREATE TRIGGER update_bid_count_on_delete
 
 
 
+
