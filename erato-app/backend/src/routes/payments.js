@@ -16,15 +16,32 @@ function environment() {
   const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
   const isProduction = process.env.NODE_ENV === 'production';
 
+  // Debug logging (don't log full secrets in production)
+  console.log('PayPal Environment Setup:');
+  console.log('- NODE_ENV:', process.env.NODE_ENV);
+  console.log('- Is Production:', isProduction);
+  console.log('- Client ID exists:', !!clientId);
+  console.log('- Client ID length:', clientId ? clientId.length : 0);
+  console.log('- Client ID starts with:', clientId ? clientId.substring(0, 5) + '...' : 'N/A');
+  console.log('- Client Secret exists:', !!clientSecret);
+  console.log('- Client Secret length:', clientSecret ? clientSecret.length : 0);
+
   // Validate credentials are present
   if (!clientId || !clientSecret) {
     throw new Error('PayPal credentials are missing. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.');
   }
 
-  if (isProduction) {
-    return new paypal.core.LiveEnvironment(clientId, clientSecret);
+  // Check for common issues
+  if (clientId.trim() !== clientId || clientSecret.trim() !== clientSecret) {
+    console.warn('⚠️  Warning: PayPal credentials may have leading/trailing whitespace');
   }
-  return new paypal.core.SandboxEnvironment(clientId, clientSecret);
+
+  if (isProduction) {
+    console.log('Using PayPal LIVE environment');
+    return new paypal.core.LiveEnvironment(clientId.trim(), clientSecret.trim());
+  }
+  console.log('Using PayPal SANDBOX environment');
+  return new paypal.core.SandboxEnvironment(clientId.trim(), clientSecret.trim());
 }
 
 function client() {
@@ -38,6 +55,16 @@ function client() {
  */
 router.post('/create-order', authenticate, async (req, res) => {
   try {
+    // Debug: Log environment info when creating order
+    const isProduction = process.env.NODE_ENV === 'production';
+    const hasClientId = !!process.env.PAYPAL_CLIENT_ID;
+    const hasSecret = !!process.env.PAYPAL_CLIENT_SECRET;
+    console.log('Creating PayPal order - Environment check:');
+    console.log('- NODE_ENV:', process.env.NODE_ENV);
+    console.log('- Is Production:', isProduction);
+    console.log('- Has Client ID:', hasClientId);
+    console.log('- Has Secret:', hasSecret);
+    
     const { commissionId, paymentType, amount } = req.body;
     const userId = req.user.id;
 
