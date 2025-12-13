@@ -276,7 +276,7 @@ export default function BoardsScreen() {
         name: newBoardName.trim(),
         description: newBoardDescription.trim() || null,
         is_public: isPublic,
-        board_type: 'created',
+        board_type: 'general',
       });
 
       // Verify board was created successfully
