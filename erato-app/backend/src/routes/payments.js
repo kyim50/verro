@@ -25,6 +25,24 @@ function environment() {
   console.log('- Client ID starts with:', clientId ? clientId.substring(0, 5) + '...' : 'N/A');
   console.log('- Client Secret exists:', !!clientSecret);
   console.log('- Client Secret length:', clientSecret ? clientSecret.length : 0);
+  
+  // Check if credentials might be for wrong environment
+  // Sandbox Client IDs typically start with "Ae..." but so do Live ones
+  // The best way to check is to try the API call, but we can warn about common issues
+  if (clientId && clientSecret) {
+    const trimmedClientId = clientId.trim();
+    const trimmedSecret = clientSecret.trim();
+    
+    // PayPal Client IDs are typically 80 characters
+    if (trimmedClientId.length !== 80 || trimmedSecret.length !== 80) {
+      console.warn('⚠️  Warning: PayPal credentials length is unusual. Expected 80 characters each.');
+    }
+    
+    // Check for common formatting issues
+    if (clientId !== trimmedClientId || clientSecret !== trimmedSecret) {
+      console.warn('⚠️  Warning: PayPal credentials have leading/trailing whitespace - trimming...');
+    }
+  }
 
   // Validate credentials are present
   if (!clientId || !clientSecret) {

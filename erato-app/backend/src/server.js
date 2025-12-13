@@ -81,8 +81,9 @@ try {
 }
 
 // Middleware
-// Trust proxy - needed for rate limiting behind reverse proxy/load balancer
-app.set('trust proxy', true);
+// Trust proxy - configure to trust only the first proxy (more secure)
+// Set to 1 to trust only the first proxy, or specific IPs if behind a known proxy
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(compression({
   level: 6, // Compression level (1-9, 6 is good balance)
