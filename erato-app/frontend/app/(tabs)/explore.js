@@ -2058,12 +2058,6 @@ export default function CommissionDashboard() {
                     </View>
                   )}
 
-                  {/* Transaction History */}
-                  {selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid' && (
-                    <View style={styles.detailSection}>
-                      <TransactionHistory commissionId={selectedCommission.id} />
-                    </View>
-                  )}
                     </>
                   ) : (
                     <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
