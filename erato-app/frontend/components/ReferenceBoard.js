@@ -31,10 +31,8 @@ const ITEM_SPACING = spacing.sm;
 const ITEM_WIDTH = (width - spacing.md * 2 - ITEM_SPACING) / NUM_COLUMNS;
 
 const REFERENCE_TYPES = [
-  { id: 'image', label: 'Image', icon: 'image-outline' },
-  { id: 'mood_board', label: 'Mood Board', icon: 'grid-outline' },
   { id: 'color_palette', label: 'Color Palette', icon: 'color-palette-outline' },
-  { id: 'character_sheet', label: 'Character Sheet', icon: 'person-outline' },
+  { id: 'image', label: 'Image', icon: 'image-outline' },
   { id: 'link', label: 'Link', icon: 'link-outline' },
 ];
 
@@ -48,6 +46,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
   const [selectedType, setSelectedType] = useState('image');
   const [uploading, setUploading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [masonryColumns, setMasonryColumns] = useState([[], []]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -60,6 +59,32 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
   useEffect(() => {
     fetchReferences();
   }, [commissionId]);
+
+  // Organize references into masonry columns (for images only)
+  useEffect(() => {
+    const filteredRefs = getFilteredReferences();
+    const imageRefs = filteredRefs.filter(ref => ref.reference_type === 'image');
+    const nonImageRefs = filteredRefs.filter(ref => ref.reference_type !== 'image');
+
+    if (imageRefs.length > 0) {
+      const columns = [[], []];
+      const columnHeights = [0, 0];
+
+      imageRefs.forEach((item) => {
+        // Calculate image height - use a default aspect ratio if not available
+        const imageHeight = ITEM_WIDTH * 1.3; // Default aspect ratio
+
+        // Add to the shorter column
+        const shortestColumnIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+        columns[shortestColumnIndex].push(item);
+        columnHeights[shortestColumnIndex] += imageHeight;
+      });
+
+      setMasonryColumns(columns);
+    } else {
+      setMasonryColumns([[], []]);
+    }
+  }, [references, activeFilter]);
 
   const fetchReferences = async () => {
     try {
@@ -101,9 +126,10 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
         quality: 0.8,
+        allowsEditing: false,
       });
 
       if (result.canceled || !result.assets) return;
@@ -114,7 +140,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
       for (const asset of result.assets) {
         try {
           // Upload image using the utility function first
-          const imageUrl = await uploadImage(asset.uri, 'artworks', '', token);
+          const imageUrl = await uploadImage(asset.uri, 'references', '', token);
           
           if (imageUrl) {
             // Create reference with the uploaded image URL
@@ -122,8 +148,8 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
               `${API_URL}/references/commission/${commissionId}`,
               {
                 file_url: imageUrl,
-                reference_type: selectedType,
-                title: formData.title || 'Reference Image',
+                reference_type: 'image',
+                title: formData.title || `Reference Image`,
                 description: formData.description || '',
               },
               {
@@ -309,18 +335,15 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
     return <ImageCard reference={item} onDelete={handleDeleteReference} />;
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   const filteredRefs = getFilteredReferences();
 
   return (
     <View style={styles.container}>
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
         {onClose && (
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
@@ -384,15 +407,39 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
           <Text style={styles.emptySubtext}>Add images, links, or color palettes</Text>
         </View>
       ) : (
-        <FlatList
-          data={filteredRefs}
-          renderItem={renderReference}
-          keyExtractor={(item) => item.id}
-          numColumns={NUM_COLUMNS}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.row}
+        <ScrollView 
+          style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-        />
+          contentContainerStyle={styles.masonryContainer}
+        >
+          {/* Masonry columns for images */}
+          {(activeFilter === 'all' || activeFilter === 'image') && masonryColumns.some(col => col.length > 0) && (
+            <View style={styles.masonryRow}>
+              {masonryColumns.map((column, colIndex) => (
+                <View key={colIndex} style={styles.masonryColumn}>
+                  {column.map((item) => (
+                    <View key={item.id} style={styles.masonryItem}>
+                      {renderReference({ item })}
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          )}
+          
+          {/* Regular grid for non-image references */}
+          {(activeFilter === 'all' || activeFilter !== 'image') && (
+            <View style={styles.regularGrid}>
+              {filteredRefs
+                .filter(ref => ref.reference_type !== 'image')
+                .map((item) => (
+                  <View key={item.id} style={styles.gridItem}>
+                    {renderReference({ item })}
+                  </View>
+                ))}
+            </View>
+          )}
+        </ScrollView>
       )}
 
       {/* Add Reference Modal */}
@@ -501,7 +548,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
                   <ActivityIndicator color={colors.text.primary} />
                 ) : (
                   <Text style={styles.submitButtonText}>
-                    {selectedType === 'link' ? 'Add Link' : selectedType === 'color_palette' ? 'Add Palette' : 'Upload'}
+                    {selectedType === 'link' ? 'Add Link' : selectedType === 'color_palette' ? 'Add Palette' : 'Select Images'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -749,7 +796,9 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: ITEM_WIDTH * 1.2,
+    aspectRatio: 0.75, // Portrait orientation for masonry
+    minHeight: ITEM_WIDTH * 1.1,
+    maxHeight: ITEM_WIDTH * 2,
   },
   imageOverlay: {
     position: 'absolute',

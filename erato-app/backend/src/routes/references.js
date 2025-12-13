@@ -76,7 +76,18 @@ router.get('/commission/:commissionId', authenticate, async (req, res) => {
  * @desc    Add a reference to a commission
  * @access  Private (Client or Artist)
  */
-router.post('/commission/:commissionId', authenticate, upload.single('file'), async (req, res) => {
+// Middleware to handle both file uploads and JSON-only requests
+const handleFileUpload = (req, res, next) => {
+  // If Content-Type is application/json, skip multer (express.json() will handle it)
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('application/json')) {
+    return next();
+  }
+  // Otherwise, use multer for multipart/form-data file uploads
+  upload.single('file')(req, res, next);
+};
+
+router.post('/commission/:commissionId', authenticate, handleFileUpload, async (req, res) => {
   try {
     const { commissionId } = req.params;
     const userId = req.user.id;
@@ -147,17 +158,28 @@ router.post('/commission/:commissionId', authenticate, upload.single('file'), as
 
     const nextOrder = (maxOrderData?.display_order || 0) + 1;
 
+    // Parse metadata if it's a string, otherwise use as-is
+    let parsedMetadata = {};
+    if (metadata) {
+      try {
+        parsedMetadata = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+      } catch (e) {
+        console.warn('Failed to parse metadata, using empty object:', e);
+        parsedMetadata = {};
+      }
+    }
+
     // Insert reference
     const { data, error } = await supabaseAdmin
       .from('commission_references')
       .insert({
         commission_id: commissionId,
         reference_type,
-        title,
-        description,
+        title: title || null,
+        description: description || null,
         file_url: uploadedFileUrl,
         thumbnail_url: thumbnailUrl,
-        metadata: metadata ? JSON.parse(metadata) : {},
+        metadata: parsedMetadata,
         display_order: nextOrder,
         uploaded_by: userId
       })
@@ -180,7 +202,18 @@ router.post('/commission/:commissionId', authenticate, upload.single('file'), as
     });
   } catch (error) {
     console.error('Error adding reference:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      stack: error.stack
+    });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to add reference',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
