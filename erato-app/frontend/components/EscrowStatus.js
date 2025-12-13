@@ -31,7 +31,17 @@ const ESCROW_STATUSES = {
 };
 
 export default function EscrowStatus({ commission, onRelease, isClient = false }) {
+  // Only show escrow status if escrow is actually being used
+  // Escrow is used when escrow_status exists AND payment_status indicates payment was made
+  // Don't show if payment_status is 'unpaid', 'pending', or null
   if (!commission || !commission.escrow_status) return null;
+  
+  // Only show if payment has actually been made (not unpaid/pending)
+  const hasPayment = commission.payment_status && 
+                     commission.payment_status !== 'unpaid' && 
+                     commission.payment_status !== 'pending';
+  
+  if (!hasPayment) return null;
 
   const status = ESCROW_STATUSES[commission.escrow_status] || ESCROW_STATUSES.pending;
   const canRelease = isClient && 
@@ -139,6 +149,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 });
+
 
 
 

@@ -205,7 +205,7 @@ export default function CommissionDashboard() {
         if (isArtist) {
           loadTemplates();
         } else {
-          calculateTotalSpent();
+          calculateTotalSpent(); // Now async, calculates from actual transactions
         }
       }
     }, [token, user?.user_type, user?.artists])
@@ -314,11 +314,34 @@ export default function CommissionDashboard() {
     ]);
   };
 
-  const calculateTotalSpent = () => {
-    const total = commissions
-      .filter(c => c.final_price && (c.status === 'completed' || c.status === 'in_progress'))
-      .reduce((sum, c) => sum + parseFloat(c.final_price || 0), 0);
-    setTotalSpent(total);
+  const calculateTotalSpent = async () => {
+    if (!token || isArtist) {
+      setTotalSpent(0);
+      return;
+    }
+    
+    try {
+      // Calculate from actual payment transactions, not commission prices
+      const response = await axios.get(`${API_URL}/payments/user/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Backend returns { success: true, data: [...] }
+      const transactions = response.data.data || [];
+      // Sum all successful transactions (status = 'completed' or 'succeeded')
+      const total = transactions
+        .filter(t => t.status === 'completed' || t.status === 'succeeded')
+        .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+      
+      setTotalSpent(total);
+    } catch (error) {
+      console.error('Error calculating total spent:', error);
+      // Fallback to commission prices if transactions fail
+      const total = commissions
+        .filter(c => c.final_price && (c.status === 'completed' || c.status === 'in_progress'))
+        .reduce((sum, c) => sum + parseFloat(c.final_price || 0), 0);
+      setTotalSpent(total);
+    }
   };
 
   const loadAllTransactions = async () => {
@@ -2124,62 +2147,78 @@ export default function CommissionDashboard() {
                     </View>
                   ) : null}
 
-                  {/* Payment Status - Combined Escrow and Payment Status */}
-                  {/* Only show escrow/payment status if payment has been made, otherwise payment button will show */}
-                  {((selectedCommission.escrow_status && selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid') || 
-                    (selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid')) && (
-                    <View style={[styles.detailSection, styles.paymentStatusSection]}>
-                      <Text style={styles.detailSectionTitle}>Payment Status</Text>
-                      {selectedCommission.escrow_status && selectedCommission.payment_status !== 'unpaid' ? (
-                        <EscrowStatus
-                          commission={selectedCommission}
-                          isClient={!isArtist}
-                          onRelease={async () => {
-                            try {
-                              await axios.post(
-                                `${API_URL}/payments/release-escrow`,
-                                { commissionId: selectedCommission.id },
-                                { headers: { Authorization: `Bearer ${token}` } }
-                              );
-                              await loadCommissions();
-                              // Refresh selected commission
+                  {/* Payment Status - Always show payment status */}
+                  <View style={[styles.detailSection, styles.paymentStatusSection]}>
+                    <Text style={styles.detailSectionTitle}>Payment Status</Text>
+                    
+                    {/* Determine payment status */}
+                    {(() => {
+                      const paymentStatus = selectedCommission.payment_status;
+                      const hasPayment = paymentStatus && 
+                                        paymentStatus !== 'unpaid' && 
+                                        paymentStatus !== 'pending';
+                      const isUnpaid = !paymentStatus || 
+                                       paymentStatus === 'unpaid' || 
+                                       paymentStatus === 'pending';
+                      
+                      // Show EscrowStatus if escrow is being used AND payment has been made
+                      if (selectedCommission.escrow_status && hasPayment) {
+                        return (
+                          <EscrowStatus
+                            commission={selectedCommission}
+                            isClient={!isArtist}
+                            onRelease={async () => {
                               try {
-                                const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
-                                  headers: { Authorization: `Bearer ${token}` }
+                                await axios.post(
+                                  `${API_URL}/payments/release-escrow`,
+                                  { commissionId: selectedCommission.id },
+                                  { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                                await loadCommissions();
+                                // Refresh selected commission
+                                try {
+                                  const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
+                                    headers: { Authorization: `Bearer ${token}` }
+                                  });
+                                  setSelectedCommission(response.data);
+                                } catch (err) {
+                                  console.error('Error refreshing commission:', err);
+                                }
+                                Toast.show({
+                                  type: 'success',
+                                  text1: 'Success',
+                                  text2: 'Funds released to artist',
+                                  visibilityTime: 2000,
                                 });
-                                setSelectedCommission(response.data);
-                              } catch (err) {
-                                console.error('Error refreshing commission:', err);
+                              } catch (error) {
+                                console.error('Error releasing escrow:', error);
+                                Toast.show({
+                                  type: 'error',
+                                  text1: 'Error',
+                                  text2: error.response?.data?.error || 'Failed to release funds',
+                                  visibilityTime: 3000,
+                                });
                               }
-                              Toast.show({
-                                type: 'success',
-                                text1: 'Success',
-                                text2: 'Funds released to artist',
-                                visibilityTime: 2000,
-                              });
-                            } catch (error) {
-                              console.error('Error releasing escrow:', error);
-                              Toast.show({
-                                type: 'error',
-                                text1: 'Error',
-                                text2: error.response?.data?.error || 'Failed to release funds',
-                                visibilityTime: 3000,
-                              });
-                            }
-                          }}
-                        />
-                      ) : selectedCommission.payment_status && selectedCommission.payment_status !== 'unpaid' ? (
+                            }}
+                          />
+                        );
+                      }
+                      
+                      // Show payment status card
+                      return (
                         <View style={styles.paymentStatusCard}>
                           <Ionicons 
                             name={
-                              selectedCommission.payment_status === 'fully_paid' ? 'checkmark-circle' :
-                              selectedCommission.payment_status === 'deposit_paid' ? 'wallet' :
+                              isUnpaid ? 'close-circle-outline' :
+                              paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? 'checkmark-circle' :
+                              paymentStatus === 'deposit_paid' ? 'wallet' :
                               'card-outline'
                             } 
                             size={20} 
                             color={
-                              selectedCommission.payment_status === 'fully_paid' ? colors.status.success :
-                              selectedCommission.payment_status === 'deposit_paid' ? colors.status.warning :
+                              isUnpaid ? colors.status.error :
+                              paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? colors.status.success :
+                              paymentStatus === 'deposit_paid' ? colors.status.warning :
                               colors.text.secondary
                             } 
                           />
@@ -2187,20 +2226,25 @@ export default function CommissionDashboard() {
                             <Text style={styles.paymentStatusLabel}>Payment Status</Text>
                             <Text style={[
                               styles.paymentStatusValue,
-                              { color: selectedCommission.payment_status === 'fully_paid' ? colors.status.success : colors.text.primary }
+                              { 
+                                color: isUnpaid ? colors.status.error :
+                                       (paymentStatus === 'fully_paid' || paymentStatus === 'paid') ? colors.status.success : 
+                                       colors.text.primary 
+                              }
                             ]}>
-                              {selectedCommission.payment_status === 'fully_paid' ? 'Fully Paid' :
-                               selectedCommission.payment_status === 'deposit_paid' 
+                              {isUnpaid ? 'Not Paid' :
+                               paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? 'Paid' :
+                               paymentStatus === 'deposit_paid' 
                                  ? (selectedCommission.status === 'completed' 
-                                     ? 'Waiting for Final Payment' 
-                                     : 'Deposit Paid - Waiting for Commission to Complete')
-                                 : 'Unpaid'}
+                                     ? 'Deposit Paid - Final Payment Due' 
+                                     : 'Deposit Paid')
+                                 : 'Unknown Status'}
                             </Text>
                           </View>
                         </View>
-                      ) : null}
-                    </View>
-                  )}
+                      );
+                    })()}
+                  </View>
 
                   {/* Payment Options - Show button when:
                       1. Status is 'accepted' OR 'in_progress' AND (no payment_status OR payment_status is 'unpaid')

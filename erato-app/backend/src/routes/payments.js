@@ -286,6 +286,13 @@ router.post('/create-order', authenticate, async (req, res) => {
     const artistPayout = calculatedAmount - platformFee;
 
     // Create transaction record
+    const customIdData = {
+      commissionId,
+      clientId: userId,
+      artistId: commission.artist_id,
+      paymentType
+    };
+    
     const { data: transaction, error: transactionError } = await supabaseAdmin
       .from('payment_transactions')
       .insert({
@@ -298,6 +305,7 @@ router.post('/create-order', authenticate, async (req, res) => {
         recipient_id: commission.artist_id,
         platform_fee: platformFee,
         artist_payout: artistPayout,
+        custom_id: JSON.stringify(customIdData), // Store payment metadata
         description: `${paymentType.charAt(0).toUpperCase() + paymentType.slice(1)} payment for commission`
       })
       .select()
@@ -399,12 +407,29 @@ router.post('/capture-order', authenticate, async (req, res) => {
     if (updateError) throw updateError;
 
     // Update commission payment status
-    const { paymentType } = JSON.parse(transaction.custom_id || '{}');
-    let newPaymentStatus = 'pending';
+    // Try to get paymentType from custom_id, fallback to transaction_type
+    let paymentType = null;
+    try {
+      if (transaction.custom_id) {
+        const customData = JSON.parse(transaction.custom_id);
+        paymentType = customData.paymentType || customData.payment_type;
+      }
+    } catch (e) {
+      console.warn('Error parsing custom_id:', e);
+    }
+    
+    // Fallback to transaction_type if custom_id doesn't have paymentType
+    if (!paymentType && transaction.transaction_type) {
+      paymentType = transaction.transaction_type;
+    }
+    
+    let newPaymentStatus = 'paid'; // Default to 'paid' if we can't determine type
     if (paymentType === 'deposit') {
       newPaymentStatus = 'deposit_paid';
     } else if (paymentType === 'full' || paymentType === 'final') {
       newPaymentStatus = 'fully_paid';
+    } else if (paymentType === 'milestone') {
+      newPaymentStatus = 'deposit_paid'; // Milestones are like deposits
     }
 
     const { error: commissionError } = await supabaseAdmin
