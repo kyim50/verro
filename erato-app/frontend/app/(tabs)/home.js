@@ -78,6 +78,7 @@ export default function HomeScreen() {
   const [curatedStyles, setCuratedStyles] = useState([]); // Styles from quiz preferences
   const [selectedStyleFilter, setSelectedStyleFilter] = useState(null);
   const [loadingStyles, setLoadingStyles] = useState(false);
+  const [styleSections, setStyleSections] = useState([]); // Organized sections
   const [suggestedArtists, setSuggestedArtists] = useState([]);
   const [loadingSuggestedArtists, setLoadingSuggestedArtists] = useState(false);
   const [forYouArtworks, setForYouArtworks] = useState([]);
@@ -123,6 +124,62 @@ export default function HomeScreen() {
     }
   }, [token, boards.length]);
 
+  // Style categories mapping
+  const styleCategories = {
+    'Character Art': ['Anime', 'Manga', 'Chibi', 'Kemono', 'Furry', 'Realism', 'Semi-Realistic', 'Cartoon', 'Disney Style', 'Pixar Style', 'Western Cartoon', 'Anime Realistic', 'Kawaii', 'Moe'],
+    'Traditional Art': ['Watercolor', 'Oil Painting', 'Acrylic', 'Gouache', 'Pastel', 'Charcoal', 'Pencil', 'Ink', 'Pen & Ink', 'Marker', 'Colored Pencil'],
+    'Digital Art': ['Digital Painting', 'Digital Art', 'Vector', 'Pixel Art', 'Low Poly', 'Isometric', 'Flat Design', 'Gradient Art', 'Glitch Art', 'Vaporwave', 'Synthwave'],
+    '3D Art': ['3D Modeling', '3D Rendering', '3D Character', 'Sculpture', 'Blender', 'ZBrush'],
+    'Illustration': ['Illustration', 'Concept Art', 'Character Design', 'Portrait', 'Landscape', 'Still Life', 'Architectural', 'Technical Drawing', 'Medical Illustration', 'Botanical'],
+    'Genres': ['Fantasy', 'Sci-Fi', 'Horror', 'Cyberpunk', 'Steampunk', 'Medieval', 'Victorian', 'Gothic', 'Dark Fantasy', 'Post-Apocalyptic', 'Space', 'Nature', 'Animal', 'Pet Portrait'],
+    'Abstract & Modern': ['Abstract', 'Minimalist', 'Surrealism', 'Impressionism', 'Expressionism', 'Pop Art', 'Art Deco', 'Art Nouveau', 'Cubism', 'Modern Art', 'Contemporary'],
+    'Specialized': ['Logo Design', 'Typography', 'Calligraphy', 'Graffiti', 'Tattoo Design', 'Comic Book', 'Webtoon', 'Manhwa', 'Manhua', 'NSFW', 'SFW'],
+    'Techniques': ['Cell Shading', 'Soft Shading', 'Hard Shading', 'Painterly', 'Sketch', 'Rendered', 'Monochrome', 'Full Color'],
+    'Cultural': ['Japanese', 'Chinese', 'Korean', 'Western', 'European', 'American']
+  };
+
+  // Organize styles into sections
+  const organizeStylesIntoSections = (allStyles, preferredStyleIds = [], preferredWeights = {}) => {
+    const sections = [];
+    
+    Object.entries(styleCategories).forEach(([categoryName, styleNames]) => {
+      const categoryStyles = allStyles.filter(style => 
+        styleNames.some(name => style.name === name || style.name.toLowerCase().includes(name.toLowerCase()))
+      );
+      
+      if (categoryStyles.length > 0) {
+        // Separate preferred and non-preferred styles
+        const preferred = categoryStyles.filter(s => preferredStyleIds.includes(s.id));
+        const others = categoryStyles.filter(s => !preferredStyleIds.includes(s.id));
+        
+        // Sort preferred by weight
+        preferred.sort((a, b) => {
+          const aWeight = preferredWeights[a.id] || 0;
+          const bWeight = preferredWeights[b.id] || 0;
+          return bWeight - aWeight;
+        });
+        
+        // Sort others alphabetically
+        others.sort((a, b) => a.name.localeCompare(b.name));
+        
+        sections.push({
+          name: categoryName,
+          styles: [...preferred, ...others],
+          hasPreferred: preferred.length > 0
+        });
+      }
+    });
+    
+    // Put sections with preferred styles first
+    sections.sort((a, b) => {
+      if (a.hasPreferred && !b.hasPreferred) return -1;
+      if (!a.hasPreferred && b.hasPreferred) return 1;
+      return 0;
+    });
+    
+    return sections;
+  };
+
   // Load art styles and curate based on quiz preferences (for both clients and artists)
   useEffect(() => {
     const loadArtStyles = async () => {
@@ -133,6 +190,9 @@ export default function HomeScreen() {
         const allStyles = stylesResponse.data.styles || stylesResponse.data || [];
         
         // Load user's style preferences if logged in (works for both clients and artists)
+        let preferredStyleIds = [];
+        let preferredWeights = {};
+        
         if (token) {
           try {
             const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
@@ -140,38 +200,49 @@ export default function HomeScreen() {
             });
             
             if (prefsResponse.data && prefsResponse.data.preferred_styles?.length > 0) {
-              // Sort styles: preferred first, then others
-              const preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
-              const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
-              const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
-              
-              // Sort preferred by weight if available
-              preferredStyles.sort((a, b) => {
-                const aWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === a.id)?.weight || 0;
-                const bWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === b.id)?.weight || 0;
-                return bWeight - aWeight;
+              preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
+              prefsResponse.data.preferred_styles.forEach(pref => {
+                const styleId = pref.style_id || pref;
+                preferredWeights[styleId] = pref.weight || 0;
               });
               
+              const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
+              // Sort preferred styles by weight (highest first)
+              preferredStyles.sort((a, b) => {
+                const aWeight = preferredWeights[a.id] || 0;
+                const bWeight = preferredWeights[b.id] || 0;
+                return bWeight - aWeight;
+              });
               setCuratedStyles(preferredStyles);
-              setArtStyles([...preferredStyles, ...otherStyles]);
             } else {
-              setArtStyles(allStyles);
               setCuratedStyles([]);
             }
           } catch (prefError) {
-            // No preferences set, use all styles
-            setArtStyles(allStyles);
+            // No preferences set
             setCuratedStyles([]);
           }
         } else {
-          // No token, just use all styles
-          setArtStyles(allStyles);
           setCuratedStyles([]);
         }
+        
+        // Organize styles into sections
+        const sections = organizeStylesIntoSections(allStyles, preferredStyleIds, preferredWeights);
+        setStyleSections(sections);
+        
+        // Keep flat list for backward compatibility
+        const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
+        const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
+        preferredStyles.sort((a, b) => {
+          const aWeight = preferredWeights[a.id] || 0;
+          const bWeight = preferredWeights[b.id] || 0;
+          return bWeight - aWeight;
+        });
+        setArtStyles([...preferredStyles, ...otherStyles]);
       } catch (error) {
         console.error('Error loading art styles:', error);
         setArtStyles([]);
         setCuratedStyles([]);
+        setStyleSections([]);
       } finally {
         setLoadingStyles(false);
       }
@@ -735,8 +806,11 @@ export default function HomeScreen() {
           contentContainerStyle={styles.suggestedArtistScrollContent}
         >
           {item.artists.slice(0, 4).map((artist) => {
+            if (!artist || !artist.id) return null;
+            
             const avatarUrl = artist.users?.avatar_url || DEFAULT_AVATAR;
             const artistUsername = artist.users?.username || 'Artist';
+            const rating = typeof artist.rating === 'number' ? artist.rating : 0;
             
             return (
               <TouchableOpacity
@@ -753,11 +827,11 @@ export default function HomeScreen() {
                 <Text style={styles.suggestedArtistName} numberOfLines={1}>
                   @{artistUsername}
                 </Text>
-                {artist.rating && artist.rating > 0 && (
+                {rating > 0 && (
                   <View style={styles.suggestedArtistRating}>
                     <Ionicons name="star" size={12} color={colors.status.warning} />
                     <Text style={styles.suggestedArtistRatingText}>
-                      {artist.rating.toFixed(1)}
+                      {rating.toFixed(1)}
                     </Text>
                   </View>
                 )}
@@ -913,10 +987,13 @@ export default function HomeScreen() {
       }
     };
     
+    // Get primary artist - check both item.artist (personalized feed) and item.artists (regular feed)
     const primaryArtist =
-      (Array.isArray(item.artists) ? item.artists[0] : item.artists) ||
-      (Array.isArray(item.artist) ? item.artist[0] : item.artist) ||
-      (Array.isArray(item.artist_user) ? item.artist_user[0] : item.artist_user);
+      (Array.isArray(item.artist) && item.artist.length > 0 ? item.artist[0] : 
+       typeof item.artist === 'object' && item.artist !== null ? item.artist : null) ||
+      (Array.isArray(item.artists) && item.artists.length > 0 ? item.artists[0] : 
+       typeof item.artists === 'object' && item.artists !== null ? item.artists : null) ||
+      (Array.isArray(item.artist_user) && item.artist_user.length > 0 ? item.artist_user[0] : item.artist_user);
 
     const artistUser =
       primaryArtist?.users ||
@@ -957,12 +1034,67 @@ export default function HomeScreen() {
       item.created_by_avatar ||
       item.avatar_url;
     
-    // Get artist commission status
-    const artistCommissionStatus =
-      primaryArtist?.commission_status ||
-      item.artist_commission_status ||
-      item.commission_status ||
-      'closed'; // Default to closed if not available
+    // Get artist commission status - check multiple possible locations
+    // Regular feed uses item.artists.commission_status
+    // Personalized feed uses item.artist.commission_status (nested artist object)
+    let artistCommissionStatus = null;
+    
+    // Check item.artist first (personalized feed structure - Supabase returns as array)
+    if (item.artist) {
+      if (Array.isArray(item.artist) && item.artist.length > 0) {
+        // Supabase join returns as array
+        artistCommissionStatus = item.artist[0]?.commission_status;
+      } else if (typeof item.artist === 'object' && item.artist !== null) {
+        // Sometimes it's an object
+        artistCommissionStatus = item.artist.commission_status;
+      }
+    }
+    
+    // Check item.artists (regular feed structure)
+    if (!artistCommissionStatus && item.artists) {
+      if (Array.isArray(item.artists) && item.artists.length > 0) {
+        artistCommissionStatus = item.artists[0]?.commission_status;
+      } else if (typeof item.artists === 'object' && item.artists !== null) {
+        artistCommissionStatus = item.artists.commission_status;
+      }
+    }
+    
+    // Check primaryArtist (derived from item.artists or item.artist)
+    if (!artistCommissionStatus && primaryArtist) {
+      artistCommissionStatus = primaryArtist.commission_status;
+    }
+    
+    // Fallback to other locations if not found
+    if (!artistCommissionStatus) {
+      artistCommissionStatus =
+        item.artist_commission_status ||
+        item.commission_status ||
+        'closed'; // Default to closed if not found
+    }
+    
+    // Ensure we have a valid status (handle string "null" or "undefined")
+    if (!artistCommissionStatus || 
+        artistCommissionStatus === 'null' || 
+        artistCommissionStatus === 'undefined' ||
+        artistCommissionStatus === null ||
+        artistCommissionStatus === undefined) {
+      artistCommissionStatus = 'closed';
+    }
+    
+    // Debug logging for For You page
+    if (activeTab === 'forYou' && __DEV__) {
+      console.log('Commission Status Debug:', {
+        artworkId: item.id,
+        artist_id: item.artist_id,
+        'item.artist': item.artist,
+        'item.artist[0]': Array.isArray(item.artist) ? item.artist[0] : null,
+        'item.artist.commission_status': typeof item.artist === 'object' && !Array.isArray(item.artist) ? item.artist.commission_status : null,
+        'item.artists': item.artists,
+        'primaryArtist': primaryArtist,
+        'primaryArtist.commission_status': primaryArtist?.commission_status,
+        'finalStatus': artistCommissionStatus
+      });
+    }
     
     // Get artist stats
     const artistFollowerCount = 
@@ -1037,12 +1169,6 @@ export default function HomeScreen() {
             
             {/* Top badges */}
             <View style={styles.tikTokTopBadges}>
-              {item.view_count > 0 && (
-                <View style={styles.viewCountBadge}>
-                  <Ionicons name="eye" size={12} color={colors.text.primary} />
-                  <Text style={styles.viewCountText}>{item.view_count}</Text>
-                </View>
-              )}
               {artistCommissionStatus === 'open' && (
                 <View style={styles.commissionBadgeOpen}>
                   <Ionicons name="checkmark-circle" size={12} color={colors.success} />
@@ -1160,7 +1286,8 @@ export default function HomeScreen() {
             <Ionicons
               name={isLiked ? "heart" : "heart-outline"}
               size={32}
-              color={isLiked ? colors.primary : colors.text.secondary}
+              color={isLiked ? colors.primary : '#FFFFFF'}
+              style={{ opacity: isLiked ? 1 : 0.95 }}
             />
             <Text style={styles.tikTokActionLabel}>
               {isLiked ? 'Liked' : 'Like'}
@@ -1171,7 +1298,7 @@ export default function HomeScreen() {
             style={styles.tikTokActionButton}
             onPress={() => router.push(`/artwork/${item.id}`)}
           >
-            <Ionicons name="information-circle-outline" size={32} color={colors.text.primary} />
+            <Ionicons name="eye-outline" size={32} color={colors.text.primary} />
             <Text style={styles.tikTokActionLabel}>Details</Text>
           </TouchableOpacity>
 
@@ -1340,7 +1467,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Pinterest-style Filter Bar - Show curated styles first for all users */}
+      {/* Pinterest-style Filter Bar */}
       {artStyles.length > 0 && activeTab === 'explore' && (
         <View style={styles.pinterestFilterBar}>
           <ScrollView 
@@ -1724,10 +1851,12 @@ export default function HomeScreen() {
                 ))}
               </View>
 
-              {/* Style Filters (for all users) */}
-              {token && artStyles.length > 0 && (
+              {/* Style Filters (for all users) - Organized by Sections */}
+              {token && styleSections.length > 0 && (
                 <View style={styles.filterSection}>
                   <Text style={styles.sortSectionTitle}>Filter by Style</Text>
+                  
+                  {/* All Styles button */}
                   <View style={styles.styleFilterGrid}>
                     <TouchableOpacity
                       style={[
@@ -1747,35 +1876,53 @@ export default function HomeScreen() {
                         All Styles
                       </Text>
                     </TouchableOpacity>
-                    {/* Show curated styles first, then others */}
-                    {[...curatedStyles, ...artStyles.filter(s => !curatedStyles.some(cs => cs.id === s.id))].map((style) => {
-                      const isSelected = selectedStyleFilter === style.id;
-                      const isCurated = curatedStyles.some(cs => cs.id === style.id);
-                      return (
-                        <TouchableOpacity
-                          key={style.id}
-                          style={[
-                            styles.styleFilterChip,
-                            isSelected && styles.styleFilterChipActive,
-                            isCurated && !isSelected && styles.styleFilterChipCurated
-                          ]}
-                          onPress={() => {
-                            setSelectedStyleFilter(isSelected ? null : style.id);
-                            setShowSortFilterModal(false);
-                            fetchArtworks(true, sortOption);
-                          }}
-                        >
-                          <Text style={[
-                            styles.styleFilterChipText,
-                            isSelected && styles.styleFilterChipTextActive,
-                            isCurated && !isSelected && styles.styleFilterChipTextCurated
-                          ]}>
-                            {style.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
                   </View>
+                  
+                  {/* Sections with headers */}
+                  {styleSections.map((section) => (
+                    <View key={section.name} style={styles.modalStyleSection}>
+                      {/* Section Header */}
+                      <View style={styles.modalSectionHeader}>
+                        <Text style={styles.modalSectionTitle}>{section.name}</Text>
+                        {section.hasPreferred && (
+                          <View style={styles.preferredBadge}>
+                            <Ionicons name="star" size={10} color={colors.primary} />
+                          </View>
+                        )}
+                      </View>
+                      
+                      {/* Section Styles */}
+                      <View style={styles.styleFilterGrid}>
+                        {section.styles.map((style) => {
+                          const isSelected = selectedStyleFilter === style.id;
+                          const isCurated = curatedStyles.some(cs => cs.id === style.id);
+                          return (
+                            <TouchableOpacity
+                              key={style.id}
+                              style={[
+                                styles.styleFilterChip,
+                                isSelected && styles.styleFilterChipActive,
+                                isCurated && !isSelected && styles.styleFilterChipCurated
+                              ]}
+                              onPress={() => {
+                                setSelectedStyleFilter(isSelected ? null : style.id);
+                                setShowSortFilterModal(false);
+                                fetchArtworks(true, sortOption);
+                              }}
+                            >
+                              <Text style={[
+                                styles.styleFilterChipText,
+                                isSelected && styles.styleFilterChipTextActive,
+                                isCurated && !isSelected && styles.styleFilterChipTextCurated
+                              ]}>
+                                {style.name}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
                 </View>
               )}
             </ScrollView>
@@ -2116,7 +2263,7 @@ const styles = StyleSheet.create({
     right: spacing.md,
     bottom: 130,
     alignItems: 'center',
-    gap: spacing.xl,
+    gap: spacing.sm,
     zIndex: 10,
     elevation: 10,
     pointerEvents: 'box-none',
@@ -2124,14 +2271,11 @@ const styles = StyleSheet.create({
   tikTokActionButton: {
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.surface + '80',
     padding: spacing.sm,
     borderRadius: borderRadius.full,
     minWidth: 64,
     minHeight: 64,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border + '40',
   },
   tikTokActionLabel: {
     ...typography.caption,
@@ -2490,6 +2634,35 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '700',
+  },
+  // Filter Sections
+  // Modal Style Sections
+  modalStyleSection: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginRight: spacing.xs,
+  },
+  preferredBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // Pinterest-style Filter Bar
   pinterestFilterBar: {

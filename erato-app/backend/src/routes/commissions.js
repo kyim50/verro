@@ -659,24 +659,7 @@ router.patch('/:id/status', authenticate, async (req, res) => {
       });
     }
 
-    // Only send status update message if skip_message is not true
-    if (!req.body.skip_message) {
-      const { data: conversation } = await supabaseAdmin
-        .from('conversations')
-        .select('id')
-        .eq('commission_id', req.params.id)
-        .single();
-
-      if (conversation) {
-        await supabaseAdmin.from('messages').insert({
-          conversation_id: conversation.id,
-          sender_id: req.user.id,
-          message_type: 'commission_update',
-          content: `Commission status updated to: ${finalStatus}`,
-          metadata: { status: finalStatus, commission_id: req.params.id }
-        });
-      }
-    }
+    // Removed automatic status update messages - users can communicate manually
 
     res.json(updated);
   } catch (error) {

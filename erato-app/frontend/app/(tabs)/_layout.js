@@ -134,7 +134,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         animation: 'fade',
-        animationDuration: 200,
+        animationDuration: 100, // Shorter transition
         tabBarStyle: [
           styles.tabBar,
           {
@@ -204,6 +204,8 @@ export default function TabsLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size }) => <MessagesTabIcon color={color} />,
+          animation: 'fade',
+          animationDuration: 100, // Short fade transition
         }}
       />
       <Tabs.Screen
@@ -217,6 +219,8 @@ export default function TabsLayout() {
         name="profile"
         options={{
           href: null,
+          animation: 'fade',
+          animationDuration: 100, // Short fade transition
         }}
       />
     </Tabs>

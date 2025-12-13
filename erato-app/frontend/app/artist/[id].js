@@ -219,7 +219,7 @@ export default function ArtistProfileScreen() {
         setIsFavorited(true);
         Toast.show({
           type: 'success',
-          text1: 'Added to liked artists',
+          text1: 'Added to Liked artists',
         });
       }
     } catch (error) {
