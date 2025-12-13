@@ -16,6 +16,11 @@ function environment() {
   const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
   const isProduction = process.env.NODE_ENV === 'production';
 
+  // Validate credentials are present
+  if (!clientId || !clientSecret) {
+    throw new Error('PayPal credentials are missing. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.');
+  }
+
   if (isProduction) {
     return new paypal.core.LiveEnvironment(clientId, clientSecret);
   }
@@ -159,9 +164,23 @@ router.post('/create-order', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating PayPal order:', error);
-    res.status(500).json({ 
+    
+    // Provide more helpful error messages
+    let errorMessage = 'Failed to create payment order';
+    let statusCode = 500;
+    
+    if (error.statusCode === 401 || error.message?.includes('invalid_client') || error.message?.includes('Client Authentication failed')) {
+      errorMessage = 'PayPal authentication failed. Please check that PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are correctly set in your environment variables.';
+      statusCode = 500; // Keep as 500 since it's a server configuration issue
+    } else if (error.message?.includes('missing')) {
+      errorMessage = error.message;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    res.status(statusCode).json({ 
       success: false, 
-      error: error.message || 'Failed to create payment order' 
+      error: errorMessage
     });
   }
 });
