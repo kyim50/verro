@@ -123,15 +123,23 @@ export default function StylePreferenceQuiz({ visible, onClose, token, onComplet
 
     setSaving(true);
     try {
+      // Collect additional data for better matching
+      const preferencesData = {
+        preferred_styles: selectedStyles,
+        price_range_min: priceRange.min ? parseFloat(priceRange.min) : undefined,
+        price_range_max: priceRange.max ? parseFloat(priceRange.max) : undefined,
+        preferred_turnaround_days: turnaroundDays ? parseInt(turnaroundDays) : undefined,
+        match_algorithm: 'weighted',
+        // Additional metadata for better data collection
+        quiz_completed_at: new Date().toISOString(),
+        styles_count: selectedStyles.length,
+        has_price_preference: !!(priceRange.min || priceRange.max),
+        has_turnaround_preference: !!turnaroundDays,
+      };
+      
       await axios.post(
         `${API_URL}/artists/preferences/quiz`,
-        {
-          preferred_styles: selectedStyles,
-          price_range_min: priceRange.min ? parseFloat(priceRange.min) : undefined,
-          price_range_max: priceRange.max ? parseFloat(priceRange.max) : undefined,
-          preferred_turnaround_days: turnaroundDays ? parseInt(turnaroundDays) : undefined,
-          match_algorithm: 'weighted',
-        },
+        preferencesData,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -172,12 +180,17 @@ export default function StylePreferenceQuiz({ visible, onClose, token, onComplet
       <Text style={styles.stepTitle}>What art styles do you like?</Text>
       <Text style={styles.stepDescription}>
         Select all styles you're interested in. You can prioritize them later.
+        {artStyles.length > 0 && ` (${artStyles.length} styles available)`}
       </Text>
 
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
       ) : (
-        <View style={styles.stylesGrid}>
+        <ScrollView 
+          style={styles.stylesScrollView}
+          contentContainerStyle={styles.stylesGrid}
+          showsVerticalScrollIndicator={false}
+        >
           {artStyles.map((style) => {
             const isSelected = selectedStyles.some(s => s.style_id === style.id);
             return (
@@ -202,14 +215,14 @@ export default function StylePreferenceQuiz({ visible, onClose, token, onComplet
                   <Ionicons
                     name="checkmark-circle"
                     size={20}
-                    color={colors.text.primary}
+                    color={colors.background}
                     style={styles.styleCheckIcon}
                   />
                 )}
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -458,10 +471,15 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: spacing.xl,
   },
+  stylesScrollView: {
+    flex: 1,
+    maxHeight: 500, // Limit height so it scrolls
+  },
   stylesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+    paddingBottom: spacing.xl, // Extra padding for scroll
   },
   styleCard: {
     paddingHorizontal: spacing.lg,
@@ -482,9 +500,10 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.secondary,
     fontSize: 16,
+    flex: 1,
   },
   styleCardTextSelected: {
-    color: colors.text.primary,
+    color: colors.background, // Use background color for better contrast on primary background
   },
   styleCheckIcon: {
     marginLeft: spacing.xs,
@@ -582,6 +601,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
 
 
 

@@ -249,10 +249,24 @@ router.post('/me/artist/onboarding', authenticate, async (req, res) => {
   try {
     const { portfolio_images } = req.body;
 
-    // Validate portfolio_images
-    if (!Array.isArray(portfolio_images) || portfolio_images.length !== 6) {
+    // Validate portfolio_images - require at least 1, allow up to 6
+    if (!Array.isArray(portfolio_images) || portfolio_images.length < 1) {
       return res.status(400).json({
-        error: 'Exactly 6 portfolio images are required for onboarding'
+        error: 'At least 1 portfolio image is required for onboarding'
+      });
+    }
+    
+    if (portfolio_images.length > 6) {
+      return res.status(400).json({
+        error: 'Maximum 6 portfolio images allowed'
+      });
+    }
+    
+    // Filter out any empty/null values
+    const filteredImages = portfolio_images.filter(img => img && img.trim && img.trim() !== '');
+    if (filteredImages.length < 1) {
+      return res.status(400).json({
+        error: 'At least 1 valid portfolio image is required for onboarding'
       });
     }
 
@@ -270,6 +284,7 @@ router.post('/me/artist/onboarding', authenticate, async (req, res) => {
         .insert({
           id: req.user.id,
           commission_status: 'open',
+          portfolio_images: filteredImages, // Set portfolio images on creation
         })
         .select()
         .single();
@@ -285,7 +300,7 @@ router.post('/me/artist/onboarding', authenticate, async (req, res) => {
     const { data, error } = await supabaseAdmin
       .from('artists')
       .update({
-        portfolio_images,
+        portfolio_images: filteredImages, // Use filtered images
         onboarding_completed: true
       })
       .eq('id', req.user.id)
