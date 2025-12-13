@@ -22,7 +22,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { colors, spacing, typography, borderRadius, DEFAULT_AVATAR } from '../../constants/theme';
 import { VerificationBadges } from '../../components/VerificationBadge';
-import ReviewsSection from '../../components/ReviewsSection';
+import ReviewCard from '../../components/ReviewCard';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
@@ -58,6 +58,10 @@ export default function ArtistProfileScreen() {
   const [curatedStyles, setCuratedStyles] = useState([]);
   const [selectedStyleFilter, setSelectedStyleFilter] = useState(null);
   const [filteredArtworks, setFilteredArtworks] = useState([]);
+  const [reviewsReceived, setReviewsReceived] = useState([]);
+  const [reviewsGiven, setReviewsGiven] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [activeReviewTab, setActiveReviewTab] = useState('received'); // 'received' or 'given'
   const portfolioFlatListRef = useRef(null);
   const isClosingModal = useRef(false);
   const lastClosedIndex = useRef(null);
@@ -69,6 +73,7 @@ export default function ArtistProfileScreen() {
       checkFavoriteStatus();
     }
     fetchAvailableStyles();
+    loadReviews();
   }, [id]);
 
   const fetchAvailableStyles = async () => {
@@ -142,6 +147,39 @@ export default function ArtistProfileScreen() {
       setIsFavorited(response.data.is_favorited);
     } catch (error) {
       console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const loadReviews = async () => {
+    setReviewsLoading(true);
+    try {
+      // Load reviews received (from clients)
+      const receivedResponse = await axios.get(
+        `${API_URL}/review-enhancements/artist/${id}/with-responses`,
+        {
+          params: { limit: 50 },
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }
+      );
+      setReviewsReceived(receivedResponse.data.data?.reviews || []);
+
+      // Load reviews given (to clients)
+      try {
+        const givenResponse = await axios.get(
+          `${API_URL}/reviews/user/${id}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        setReviewsGiven(givenResponse.data.reviews || []);
+      } catch (givenError) {
+        console.log('Error loading reviews given:', givenError);
+        setReviewsGiven([]);
+      }
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+      setReviewsReceived([]);
+      setReviewsGiven([]);
+    } finally {
+      setReviewsLoading(false);
     }
   };
 
@@ -841,12 +879,94 @@ export default function ArtistProfileScreen() {
             <View style={styles.sectionTitleContainer}>
               <Ionicons name="star-outline" size={20} color={colors.primary} />
               <Text style={styles.sectionTitle}>Reviews</Text>
+              {activeReviewTab === 'received' && reviewsReceived.length > 0 && (
+                <View style={styles.ratingBadge}>
+                  <Text style={styles.ratingBadgeText}>
+                    {artist.average_rating?.toFixed(1) || '0.0'}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
-          <ReviewsSection
-            artistId={id}
-            isArtistView={isOwnProfile}
-          />
+
+          {/* Tabs */}
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeReviewTab === 'received' && styles.tabActive]}
+              onPress={() => setActiveReviewTab('received')}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="star" 
+                size={18} 
+                color={activeReviewTab === 'received' ? colors.primary : colors.text.secondary} 
+              />
+              <Text style={[styles.tabText, activeReviewTab === 'received' && styles.tabTextActive]}>
+                Received ({reviewsReceived.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeReviewTab === 'given' && styles.tabActive]}
+              onPress={() => setActiveReviewTab('given')}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="star-outline" 
+                size={18} 
+                color={activeReviewTab === 'given' ? colors.primary : colors.text.secondary} 
+              />
+              <Text style={[styles.tabText, activeReviewTab === 'given' && styles.tabTextActive]}>
+                Given ({reviewsGiven.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tab Content */}
+          {reviewsLoading ? (
+            <View style={styles.reviewsLoadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : activeReviewTab === 'received' ? (
+            reviewsReceived.length > 0 ? (
+              <View style={styles.reviewsList}>
+                {reviewsReceived.map((review) => (
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    isArtist={isOwnProfile}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyReviewsContainer}>
+                <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
+                <Text style={styles.emptyReviewsText}>No reviews received yet</Text>
+                <Text style={styles.emptyReviewsSubtext}>
+                  Clients will leave reviews after completing commissions
+                </Text>
+              </View>
+            )
+          ) : (
+            reviewsGiven.length > 0 ? (
+              <View style={styles.reviewsList}>
+                {reviewsGiven.map((review) => (
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    isArtist={isOwnProfile}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyReviewsContainer}>
+                <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
+                <Text style={styles.emptyReviewsText}>No reviews given yet</Text>
+                <Text style={styles.emptyReviewsSubtext}>
+                  Leave reviews for clients after completing commissions
+                </Text>
+              </View>
+            )
+          )}
         </View>
 
         {/* Packages */}
@@ -894,9 +1014,9 @@ export default function ArtistProfileScreen() {
                     activeOpacity={0.9}
                     onPress={() => setSelectedPackage(pkg)}
                   >
-                    {pkg.example_image_urls?.length > 0 && (
+                    {(pkg.thumbnail_url || pkg.preview_image_url || pkg.example_image_urls?.[0]) && (
                       <Image
-                        source={{ uri: pkg.example_image_urls[0] }}
+                        source={{ uri: pkg.thumbnail_url || pkg.preview_image_url || pkg.example_image_urls[0] }}
                         style={styles.packageImage}
                         contentFit="cover"
                         transition={150}
@@ -918,12 +1038,12 @@ export default function ArtistProfileScreen() {
                       {pkg.estimated_delivery_days && (
                         <View style={styles.packageMetaItem}>
                           <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
-                          <Text style={styles.packageMetaText}>{pkg.estimated_delivery_days} days</Text>
+                          <Text style={styles.packageMetaText}><Text style={{ fontWeight: '700' }}>{pkg.estimated_delivery_days}</Text> days</Text>
                         </View>
                       )}
                       <View style={styles.packageMetaItem}>
                         <Ionicons name="refresh-outline" size={14} color={colors.text.secondary} />
-                        <Text style={styles.packageMetaText}>{pkg.revision_count || 0} revisions</Text>
+                        <Text style={styles.packageMetaText}><Text style={{ fontWeight: '700' }}>{pkg.revision_count || 0}</Text> revisions</Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -1547,22 +1667,22 @@ const styles = StyleSheet.create({
   artistHeader: {
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingTop: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingTop: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
   },
   avatarContainer: {
-    marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
   },
   avatar: {
-    width: IS_SMALL_SCREEN ? 100 : 110,
-    height: IS_SMALL_SCREEN ? 100 : 110,
-    borderRadius: IS_SMALL_SCREEN ? 50 : 55,
-    borderWidth: 3,
-    borderColor: colors.primary + '30',
+    width: IS_SMALL_SCREEN ? 110 : 120,
+    height: IS_SMALL_SCREEN ? 110 : 120,
+    borderRadius: IS_SMALL_SCREEN ? 55 : 60,
+    borderWidth: 4,
+    borderColor: colors.primary + '40',
   },
   nameContainer: {
     alignItems: 'center',
-    marginBottom: 0,
+    marginBottom: spacing.md,
     width: '100%',
   },
   nameRow: {
@@ -1571,25 +1691,28 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   artistName: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 24 : 28,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 26 : 30,
+    fontWeight: '800',
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   artistUsernameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
+    justifyContent: 'center',
   },
   artistUsername: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     textAlign: 'center',
+    fontWeight: '500',
   },
   verifiedBadge: {
     marginTop: 2,
@@ -1598,27 +1721,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    width: '100%',
   },
   ratingStars: {
     flexDirection: 'row',
     gap: spacing.xs - 1,
   },
   ratingText: {
-    ...typography.caption,
+    ...typography.body,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 12 : 13,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '600',
   },
   bio: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     textAlign: 'center',
-    marginBottom: spacing.md,
-    lineHeight: IS_SMALL_SCREEN ? 20 : 22,
-    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xl,
+    lineHeight: IS_SMALL_SCREEN ? 22 : 24,
+    paddingHorizontal: spacing.lg,
+    fontWeight: '400',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -1626,36 +1755,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginBottom: spacing.xs,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    marginBottom: spacing.lg,
     width: '100%',
-    gap: spacing.xs,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: spacing.xs,
     minWidth: 0,
   },
   statValue: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 16 : 18,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontWeight: '800',
     textAlign: 'center',
   },
   statLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
     textAlign: 'center',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statDivider: {
     width: 1,
-    height: 36,
-    backgroundColor: colors.border + '40',
+    height: 48,
+    backgroundColor: colors.border + '60',
     marginHorizontal: spacing.xs,
   },
   statusBadge: {
@@ -1697,9 +1831,10 @@ const styles = StyleSheet.create({
   },
   statusAndQueueCentered: {
     marginTop: 0,
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
     alignItems: 'center',
+    width: '100%',
   },
   queueBadge: {
     marginTop: 0,
@@ -1744,8 +1879,9 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     width: '100%',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
   },
   actionButton: {
     flexDirection: 'row',
@@ -1788,7 +1924,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border + '50',
-    marginTop: spacing.sm,
   },
   similarButtonText: {
     ...typography.button,
@@ -2075,7 +2210,8 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     flex: 1,
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '700',
   },
   packageBadge: {
     backgroundColor: colors.primary + '20',
@@ -2116,7 +2252,8 @@ const styles = StyleSheet.create({
   packageMetaText: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
   },
   packageMetaTextBold: {
     fontWeight: '700',
@@ -2374,5 +2511,80 @@ const styles = StyleSheet.create({
   modalImage: {
     width: '100%',
     height: '100%',
+  },
+  ratingBadge: {
+    backgroundColor: colors.status.warning + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+    marginLeft: spacing.xs,
+  },
+  ratingBadgeText: {
+    ...typography.caption,
+    color: colors.status.warning,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    fontWeight: '700',
+  },
+  reviewsList: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  reviewsLoadingContainer: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyReviewsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  emptyReviewsText: {
+    ...typography.h3,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  emptyReviewsSubtext: {
+    ...typography.body,
+    color: colors.text.disabled,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  tabActive: {
+    backgroundColor: colors.primary + '15',
+    borderColor: colors.primary + '40',
+  },
+  tabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
   },
 });

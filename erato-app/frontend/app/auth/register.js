@@ -21,18 +21,30 @@ export default function RegisterScreen() {
     email: '',
     username: '',
     password: '',
+    confirmPassword: '',
     fullName: '',
     userType: 'client', // 'client' or 'artist'
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const register = useAuthStore((state) => state.register);
 
   const handleRegister = async () => {
-    if (!formData.email || !formData.username || !formData.password) {
+    if (!formData.email || !formData.username || !formData.password || !formData.confirmPassword) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
 
@@ -107,15 +119,51 @@ export default function RegisterScreen() {
               editable={!loading}
             />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Password *"
-              placeholderTextColor={colors.text.disabled}
-              value={formData.password}
-              onChangeText={(text) => setFormData({ ...formData, password: text })}
-              secureTextEntry
-              editable={!loading}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password *"
+                placeholderTextColor={colors.text.disabled}
+                value={formData.password}
+                onChangeText={(text) => setFormData({ ...formData, password: text })}
+                secureTextEntry={!showPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirm Password *"
+                placeholderTextColor={colors.text.disabled}
+                value={formData.confirmPassword}
+                onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
+                secureTextEntry={!showConfirmPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
 
             {/* User Type Selection */}
             <Text style={styles.label}>I am a:</Text>
@@ -203,35 +251,39 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   logo: {
-    fontSize: 48,
-    fontWeight: '700',
+    fontSize: 52,
+    fontWeight: '800',
     color: colors.primary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    letterSpacing: -1,
   },
   tagline: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '500',
   },
   form: {
     width: '100%',
   },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
     color: colors.text.primary,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+    textAlignVertical: 'center',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
     marginBottom: spacing.md,
   },
   passwordInput: {
@@ -239,6 +291,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     color: colors.text.primary,
     fontSize: 16,
+    textAlignVertical: 'center',
   },
   eyeButton: {
     padding: spacing.md,
@@ -258,9 +311,9 @@ const styles = StyleSheet.create({
   typeButton: {
     flex: 1,
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
     backgroundColor: colors.surface,
     alignItems: 'center',
   },
@@ -278,7 +331,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
     marginTop: spacing.md,

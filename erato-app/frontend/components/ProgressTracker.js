@@ -44,7 +44,15 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
         `${API_URL}/commissions/${commissionId}/progress`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setProgressUpdates(response.data.updates || []);
+      // Backend returns progress_updates, convert to updates format
+      const updates = response.data.updates || response.data.progress_updates || [];
+      // Convert image_url to images array format for display
+      const formattedUpdates = updates.map(update => ({
+        ...update,
+        images: update.images || (update.image_url ? [update.image_url] : []),
+        note: update.note || update.notes || null,
+      }));
+      setProgressUpdates(formattedUpdates);
     } catch (error) {
       console.error('Error loading progress updates:', error);
       Toast.show({
@@ -95,7 +103,7 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
 
     setUploading(true);
     try {
-      // First upload images to get URLs
+      // First upload images to get URLs using the artwork upload endpoint
       const uploadedImageUrls = [];
       for (const image of selectedImages) {
         const formData = new FormData();
@@ -106,7 +114,7 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
         });
 
         const uploadResponse = await axios.post(
-          `${API_URL}/uploads/commission-reference`,
+          `${API_URL}/uploads/artwork`,
           formData,
           {
             headers: {

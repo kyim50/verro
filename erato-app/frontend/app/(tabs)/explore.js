@@ -12,6 +12,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { showAlert } from '../../components/StyledAlert';
@@ -182,6 +183,7 @@ export default function CommissionDashboard() {
   const [engagementMetrics, setEngagementMetrics] = useState(null);
   const [loadingEngagement, setLoadingEngagement] = useState(false);
   const [detailTab, setDetailTab] = useState('details'); // details, progress, files
+  const [updatingStatus, setUpdatingStatus] = useState(new Set()); // Track which commissions are being updated
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -314,23 +316,80 @@ export default function CommissionDashboard() {
 
     setLoadingEngagement(true);
     try {
-      // Use user.id directly as the backend expects user_id, not artist table ID
-      // In the schema, artist.id = user.id, so we should pass the user's ID
-      const artistUserId = user.id;
-
-      const response = await axios.get(
-        `${API_URL}/engagement/artist/${artistUserId}/metrics`,
+      // Get the artist.id from the artists table using user_id
+      const artistResponse = await axios.get(
+        `${API_URL}/artists?user_id=${user.id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setEngagementMetrics(response.data.data);
+
+      const artists = artistResponse.data?.artists || [];
+      if (artists.length === 0) {
+        // Don't throw error - just return early if no artist profile exists
+        console.log('No artist profile found - skipping engagement metrics');
+        setLoadingEngagement(false);
+        return;
+      }
+
+      const artistId = artists[0].id;
+
+      // Fetch engagement metrics using the artistId
+      const response = await axios.get(
+        `${API_URL}/engagement/artist/${artistId}/metrics`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data?.success && response.data?.data) {
+        setEngagementMetrics(response.data.data);
+      } else if (response.data?.data) {
+        // Handle case where success flag might be missing but data exists
+        setEngagementMetrics(response.data.data);
+      } else {
+        throw new Error('Invalid response format from engagement metrics endpoint');
+      }
     } catch (error) {
       console.error('Error loading engagement metrics:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to load engagement metrics',
-        visibilityTime: 2000,
-      });
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to load engagement metrics';
+      
+      // If it's a 403 error or artist not found, show helpful message
+      if (error.response?.status === 403 || error.message.includes('No artist profile')) {
+        Toast.show({
+          type: 'info',
+          text1: 'No Metrics Yet',
+          text2: 'Complete your artist profile to start tracking engagement',
+          visibilityTime: 3000,
+        });
+        // Set empty metrics
+        setEngagementMetrics({
+          total_artworks: 0,
+          total_views: 0,
+          total_clicks: 0,
+          total_likes: 0,
+          total_saves: 0,
+          total_shares: 0,
+          total_commission_inquiries: 0,
+          average_engagement_score: 0,
+          top_artworks: [],
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage,
+          visibilityTime: 3000,
+        });
+        // Set empty metrics on error so UI doesn't break
+        setEngagementMetrics({
+          total_artworks: 0,
+          total_views: 0,
+          total_clicks: 0,
+          total_likes: 0,
+          total_saves: 0,
+          total_shares: 0,
+          total_commission_inquiries: 0,
+          average_engagement_score: 0,
+          top_artworks: [],
+        });
+      }
     } finally {
       setLoadingEngagement(false);
     }
@@ -476,12 +535,16 @@ export default function CommissionDashboard() {
     : commissions.filter(c => c.status === selectedFilter);
 
   const handleUpdateStatus = async (commissionId, newStatus, closeModal = false) => {
+    // Prevent multiple simultaneous updates
+    if (updatingStatus.has(commissionId)) {
+      return;
+    }
+
     try {
-      // Close modal if requested
-      if (closeModal) {
-        setShowCommissionModal(false);
-        setSelectedCommission(null);
-      }
+      setUpdatingStatus(prev => new Set(prev).add(commissionId));
+
+      // Find commission to get artwork_id for engagement tracking
+      const commission = commissions.find(c => c.id === commissionId);
 
       // Update commission status via API
       await axios.patch(
@@ -490,16 +553,58 @@ export default function CommissionDashboard() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Show success message
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
-        visibilityTime: 2000,
-      });
+      // Close modal immediately if requested (before heavy operations)
+      if (closeModal) {
+        setShowCommissionModal(false);
+        setSelectedCommission(null);
+      }
 
-      // Reload commissions to reflect the change
-      await loadCommissions();
+      // Show success message after a brief delay to ensure modal closes first
+      setTimeout(() => {
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
+          visibilityTime: 2000,
+        });
+      }, 100);
+
+      // Track engagement metrics if artwork exists (fire-and-forget, don't block UI)
+      if (commission?.artwork_id && token) {
+        const engagementType = newStatus === 'accepted' || newStatus === 'in_progress' 
+          ? 'commission_inquiry' 
+          : null;
+        
+        if (engagementType) {
+          // Don't await - fire and forget to prevent blocking
+          setTimeout(() => {
+            axios.post(
+              `${API_URL}/engagement/track`,
+              {
+                artwork_id: commission.artwork_id,
+                engagement_type: engagementType,
+                metadata: {
+                  commission_id: commissionId,
+                  action: newStatus === 'accepted' || newStatus === 'in_progress' ? 'accepted' : 'declined',
+                  source: 'commission_management'
+                }
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            ).catch((engagementError) => {
+              // Fail silently - don't disrupt user experience
+              console.warn('Failed to track engagement:', engagementError);
+            });
+          }, 200);
+        }
+      }
+
+      // Reload commissions in background (don't await to prevent blocking)
+      // Use longer delay to ensure UI is responsive first
+      setTimeout(() => {
+        loadCommissions().catch((error) => {
+          console.warn('Error reloading commissions:', error);
+        });
+      }, 300);
     } catch (error) {
       console.error('Error updating status:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
@@ -509,6 +614,15 @@ export default function CommissionDashboard() {
         text2: errorMessage,
         visibilityTime: 3000,
       });
+    } finally {
+      // Clear updating status after a short delay to allow UI to update
+      setTimeout(() => {
+        setUpdatingStatus(prev => {
+          const next = new Set(prev);
+          next.delete(commissionId);
+          return next;
+        });
+      }, 50);
     }
   };
 
@@ -668,9 +782,40 @@ export default function CommissionDashboard() {
           {item.status === 'pending' && isArtist && (
             <View style={styles.compactActions}>
               <TouchableOpacity
-                style={styles.compactAcceptButton}
+                style={[styles.compactDeclineButton, updatingStatus.has(item.id) && styles.compactDeclineButtonDisabled]}
                 onPress={(e) => {
                   e.stopPropagation();
+                  if (updatingStatus.has(item.id)) return;
+                  showAlert({
+                    title: 'Decline Commission',
+                    message: 'Are you sure you want to decline this commission? This action cannot be undone.',
+                    type: 'warning',
+                    buttons: [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Decline',
+                        style: 'destructive',
+                        onPress: () => {
+                          handleUpdateStatus(item.id, 'declined');
+                        }
+                      }
+                    ]
+                  });
+                }}
+                activeOpacity={0.7}
+                disabled={updatingStatus.has(item.id)}
+              >
+                {updatingStatus.has(item.id) ? (
+                  <ActivityIndicator size="small" color={colors.status.error} />
+                ) : (
+                  <Ionicons name="close-circle" size={20} color={colors.status.error} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.compactAcceptButton, updatingStatus.has(item.id) && styles.compactAcceptButtonDisabled]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  if (updatingStatus.has(item.id)) return;
                   showAlert({
                     title: 'Accept Commission',
                     message: 'Accept this commission request?',
@@ -688,8 +833,13 @@ export default function CommissionDashboard() {
                   });
                 }}
                 activeOpacity={0.7}
+                disabled={updatingStatus.has(item.id)}
               >
+                {updatingStatus.has(item.id) ? (
+                  <ActivityIndicator size="small" color={colors.text.primary} />
+                ) : (
                 <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -806,9 +956,40 @@ export default function CommissionDashboard() {
           {item.status === 'pending' && isArtist && !batchMode && (
             <View style={styles.compactActions}>
               <TouchableOpacity
-                style={styles.compactAcceptButton}
+                style={[styles.compactDeclineButton, updatingStatus.has(item.id) && styles.compactDeclineButtonDisabled]}
                 onPress={(e) => {
                   e.stopPropagation();
+                  if (updatingStatus.has(item.id)) return;
+                  showAlert({
+                    title: 'Decline Commission',
+                    message: 'Are you sure you want to decline this commission? This action cannot be undone.',
+                    type: 'warning',
+                    buttons: [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Decline',
+                        style: 'destructive',
+                        onPress: () => {
+                          handleUpdateStatus(item.id, 'declined');
+                        }
+                      }
+                    ]
+                  });
+                }}
+                activeOpacity={0.7}
+                disabled={updatingStatus.has(item.id)}
+              >
+                {updatingStatus.has(item.id) ? (
+                  <ActivityIndicator size="small" color={colors.status.error} />
+                ) : (
+                  <Ionicons name="close-circle" size={20} color={colors.status.error} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.compactAcceptButton, updatingStatus.has(item.id) && styles.compactAcceptButtonDisabled]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  if (updatingStatus.has(item.id)) return;
                   showAlert({
                     title: 'Accept Commission',
                     message: 'Accept this commission request?',
@@ -826,8 +1007,13 @@ export default function CommissionDashboard() {
                   });
                 }}
                 activeOpacity={0.7}
+                disabled={updatingStatus.has(item.id)}
               >
-                <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+                {updatingStatus.has(item.id) ? (
+                  <ActivityIndicator size="small" color={colors.text.primary} />
+                ) : (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -855,18 +1041,33 @@ export default function CommissionDashboard() {
 
         {/* Stats Section - Above buttons */}
         <View style={styles.statsSection}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{commissionStats.pending}</Text>
-              <Text style={styles.statLabel}>Pending</Text>
+          <View style={styles.statsCardsContainer}>
+            <View style={[styles.statCardItem, styles.statCardPending]}>
+              <View style={styles.statCardIconContainer}>
+                <Ionicons name="time-outline" size={24} color={colors.status.warning} />
+              </View>
+              <View style={styles.statCardContent}>
+                <Text style={styles.statCardValue}>{commissionStats.pending}</Text>
+                <Text style={styles.statCardLabel}>Pending</Text>
+              </View>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{commissionStats.in_progress}</Text>
-              <Text style={styles.statLabel}>Active</Text>
+            <View style={[styles.statCardItem, styles.statCardActive]}>
+              <View style={styles.statCardIconContainer}>
+                <Ionicons name="flash-outline" size={24} color={colors.status.info} />
+              </View>
+              <View style={styles.statCardContent}>
+                <Text style={styles.statCardValue}>{commissionStats.in_progress}</Text>
+                <Text style={styles.statCardLabel}>Active</Text>
+              </View>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{commissionStats.completed}</Text>
-              <Text style={styles.statLabel}>Completed</Text>
+            <View style={[styles.statCardItem, styles.statCardCompleted]}>
+              <View style={styles.statCardIconContainer}>
+                <Ionicons name="checkmark-circle-outline" size={24} color={colors.status.success} />
+              </View>
+              <View style={styles.statCardContent}>
+                <Text style={styles.statCardValue}>{commissionStats.completed}</Text>
+                <Text style={styles.statCardLabel}>Completed</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -887,13 +1088,26 @@ export default function CommissionDashboard() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={async () => {
+              onPress={() => {
                 setShowEngagementModal(true);
-                if (isArtist) {
-                  await loadEngagementMetrics();
-                } else {
-                  await loadClientEngagementMetrics();
-                }
+                // Load metrics when modal opens (defer to avoid blocking UI)
+                setTimeout(async () => {
+                  try {
+                    if (isArtist) {
+                      await loadEngagementMetrics();
+                    } else {
+                      await loadClientEngagementMetrics();
+                    }
+                  } catch (error) {
+                    console.error('Error loading engagement metrics:', error);
+                    Toast.show({
+                      type: 'error',
+                      text1: 'Error',
+                      text2: 'Failed to load engagement metrics',
+                      visibilityTime: 2000,
+                    });
+                  }
+                }, 100);
               }}
             >
               <Ionicons name="analytics-outline" size={20} color={colors.primary} />
@@ -1420,56 +1634,63 @@ export default function CommissionDashboard() {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.commissionDetailModal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Commission</Text>
+              <View style={styles.detailModalHeader}>
+                <View style={styles.detailModalHeaderLeft}>
+                  <Text style={styles.detailModalTitle}>Commission Details</Text>
+                </View>
                 <TouchableOpacity
                   onPress={() => {
                     setShowCommissionModal(false);
                     setDetailTab('details');
                   }}
-                  style={styles.modalCloseButton}
+                  style={styles.detailModalCloseButton}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={24} color={colors.text.primary} />
+                  <Ionicons name="close" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
               </View>
 
-              {/* Pinterest-style Tab Bar */}
-              <View style={styles.pinterestFilterBar}>
+              {/* Tab Bar - Only show Progress/Files tabs if commission is accepted/in_progress */}
+              <View style={styles.detailTabBar}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.pinterestFilterContent}
+                  contentContainerStyle={styles.detailTabContent}
                 >
                   <TouchableOpacity
-                    style={styles.pinterestFilterItem}
+                    style={styles.detailTab}
                     onPress={() => setDetailTab('details')}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.pinterestFilterText, detailTab === 'details' && styles.pinterestFilterTextActive]}>
+                    <Text style={[styles.detailTabText, detailTab === 'details' && styles.detailTabTextActive]}>
                       Details
                     </Text>
-                    {detailTab === 'details' && <View style={styles.pinterestFilterUnderline} />}
+                    {detailTab === 'details' && <View style={styles.detailTabUnderline} />}
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.pinterestFilterItem}
-                    onPress={() => setDetailTab('progress')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.pinterestFilterText, detailTab === 'progress' && styles.pinterestFilterTextActive]}>
-                      Progress
-                    </Text>
-                    {detailTab === 'progress' && <View style={styles.pinterestFilterUnderline} />}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.pinterestFilterItem}
-                    onPress={() => setDetailTab('files')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.pinterestFilterText, detailTab === 'files' && styles.pinterestFilterTextActive]}>
-                      Files
-                    </Text>
-                    {detailTab === 'files' && <View style={styles.pinterestFilterUnderline} />}
-                  </TouchableOpacity>
+                  {(selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') && (
+                    <>
+                      <TouchableOpacity
+                        style={styles.detailTab}
+                        onPress={() => setDetailTab('progress')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.detailTabText, detailTab === 'progress' && styles.detailTabTextActive]}>
+                          Progress
+                        </Text>
+                        {detailTab === 'progress' && <View style={styles.detailTabUnderline} />}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.detailTab}
+                        onPress={() => setDetailTab('files')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.detailTabText, detailTab === 'files' && styles.detailTabTextActive]}>
+                          Files
+                        </Text>
+                        {detailTab === 'files' && <View style={styles.detailTabUnderline} />}
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </ScrollView>
               </View>
 
@@ -1491,12 +1712,15 @@ export default function CommissionDashboard() {
                             // If client view, navigate to artist profile
                             if (isArtist) {
                               // Artist view: navigate to client profile
-                              // Check if client has an artist record, otherwise just show user info
                               const clientId = selectedCommission.client_id;
                               if (clientId) {
-                                // Try to navigate to artist profile (works if client is also an artist)
-                                // If not an artist, the route will handle it gracefully
-                                router.push(`/artist/${clientId}`);
+                                // Close modal first
+                                setShowCommissionModal(false);
+                                setSelectedCommission(null);
+                                // Navigate to client profile
+                                setTimeout(() => {
+                                  router.push(`/client/${clientId}`);
+                                }, 100);
                               }
                             } else {
                               // Client view: navigate to artist profile
@@ -1559,14 +1783,12 @@ export default function CommissionDashboard() {
                   </View>
 
                   {/* Client Note */}
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Client Note</Text>
-                    {selectedCommission.client_note || selectedCommission.note ? (
+                  {selectedCommission.client_note || selectedCommission.note ? (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Client Note</Text>
                       <Text style={styles.detailText}>{selectedCommission.client_note || selectedCommission.note}</Text>
-                    ) : (
-                      <Text style={styles.detailTextPlaceholder}>No additional notes</Text>
-                    )}
-                  </View>
+                    </View>
+                  ) : null}
 
                   {/* Escrow Status */}
                   {selectedCommission.escrow_status && (
@@ -1620,11 +1842,11 @@ export default function CommissionDashboard() {
                         commissionId={selectedCommission.id}
                         isClient={!isArtist}
                         onPayMilestone={async (milestone) => {
-                          // TODO: Implement Stripe checkout
+                          // TODO: Implement PayPal checkout
                           Toast.show({
                             type: 'info',
                             text1: 'Payment',
-                            text2: 'Stripe checkout coming soon',
+                            text2: 'PayPal checkout coming soon',
                             visibilityTime: 2000,
                           });
                         }}
@@ -1641,13 +1863,20 @@ export default function CommissionDashboard() {
                 </ScrollView>
                 ) : detailTab === 'progress' ? (
                   <View style={{ flex: 1, minHeight: 200 }}>
-                    {selectedCommission?.id ? (
+                    {selectedCommission?.id && (selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') ? (
                       <ProgressTracker
                         commissionId={selectedCommission.id}
                         token={token}
                         isArtist={isArtist}
                         onProgressUpdate={loadCommissions}
                       />
+                    ) : selectedCommission?.id ? (
+                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                        <Ionicons name="lock-closed-outline" size={48} color={colors.text.disabled} />
+                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary, textAlign: 'center' }}>
+                          Accept the commission to view progress updates
+                        </Text>
+                      </View>
                     ) : (
                       <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
                         <ActivityIndicator size="large" color={colors.primary} />
@@ -1655,14 +1884,21 @@ export default function CommissionDashboard() {
                       </View>
                     )}
                   </View>
-                ) : (
+                ) : detailTab === 'files' ? (
                   <View style={{ flex: 1, minHeight: 200 }}>
-                    {selectedCommission?.id ? (
+                    {selectedCommission?.id && (selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') ? (
                       <CommissionFilesTab 
                         commissionId={selectedCommission.id}
                         token={token}
                         isArtist={isArtist}
                       />
+                    ) : selectedCommission?.id ? (
+                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                        <Ionicons name="lock-closed-outline" size={48} color={colors.text.disabled} />
+                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary, textAlign: 'center' }}>
+                          Accept the commission to view files
+                        </Text>
+                      </View>
                     ) : (
                       <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
                         <ActivityIndicator size="large" color={colors.primary} />
@@ -1670,112 +1906,133 @@ export default function CommissionDashboard() {
                       </View>
                     )}
                   </View>
-                )}
+                ) : null}
               </View>
 
-              <View style={styles.detailFooterBar}>
+              <View style={[styles.detailFooterBar, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
                 {selectedCommission.status === 'pending' && isArtist && (
                   <View style={styles.detailFooterButtons}>
                     <TouchableOpacity
-                      style={styles.detailDeclineButton}
+                      style={[styles.detailDeclineButton, updatingStatus.has(selectedCommission.id) && styles.detailDeclineButtonDisabled]}
                       onPress={() => {
+                        if (updatingStatus.has(selectedCommission.id)) return;
                         const commissionId = selectedCommission.id;
-                        // Close modal immediately (synchronously)
-                        setShowCommissionModal(false);
-                        setSelectedCommission(null);
                         
-                        // Show confirmation after UI updates
-                        setTimeout(() => {
-                          showAlert({
-                            title: 'Decline Commission',
-                            message: 'Are you sure?',
-                            type: 'warning',
-                            buttons: [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Decline',
-                                style: 'destructive',
-                                onPress: () => {
-                                  // Handle action immediately without blocking
+                        // Use React Native Alert instead of StyledAlert to avoid modal conflicts
+                        Alert.alert(
+                          'Decline Commission',
+                          'Are you sure you want to decline this commission? This action cannot be undone.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Decline',
+                              style: 'destructive',
+                              onPress: () => {
+                                // Close modal immediately
+                                setShowCommissionModal(false);
+                                setSelectedCommission(null);
+                                // Handle async operation after UI updates
+                                setTimeout(() => {
                                   handleUpdateStatus(commissionId, 'declined', false);
-                                }
+                                }, 50);
                               }
-                            ]
-                          });
-                        }, 200);
+                            }
+                          ]
+                        );
                       }}
+                      disabled={updatingStatus.has(selectedCommission.id)}
                     >
-                      <Ionicons name="close-circle-outline" size={20} color={colors.text.primary} />
-                      <Text style={styles.detailDeclineButtonText}>Decline</Text>
+                      {updatingStatus.has(selectedCommission.id) ? (
+                        <ActivityIndicator size="small" color={colors.text.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="close-circle-outline" size={20} color={colors.text.primary} />
+                          <Text style={styles.detailDeclineButtonText}>Decline</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.detailAcceptButton}
+                      style={[styles.detailAcceptButton, updatingStatus.has(selectedCommission.id) && styles.detailAcceptButtonDisabled]}
                       onPress={() => {
+                        if (updatingStatus.has(selectedCommission.id)) return;
                         const commissionId = selectedCommission.id;
-                        // Close modal immediately (synchronously)
-                        setShowCommissionModal(false);
-                        setSelectedCommission(null);
                         
-                        // Show confirmation after UI updates
-                        setTimeout(() => {
-                          showAlert({
-                            title: 'Accept Commission',
-                            message: 'Accept this request?',
-                            type: 'info',
-                            buttons: [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Accept',
-                                style: 'default',
-                                onPress: () => {
-                                  // Handle action immediately without blocking
+                        // Use React Native Alert instead of StyledAlert to avoid modal conflicts
+                        Alert.alert(
+                          'Accept Commission',
+                          'Accept this request?',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Accept',
+                              style: 'default',
+                              onPress: () => {
+                                // Close modal immediately
+                                setShowCommissionModal(false);
+                                setSelectedCommission(null);
+                                // Handle async operation after UI updates
+                                setTimeout(() => {
                                   handleUpdateStatus(commissionId, 'accepted', false);
-                                }
+                                }, 50);
                               }
-                            ]
-                          });
-                        }, 200);
+                            }
+                          ]
+                        );
                       }}
+                      disabled={updatingStatus.has(selectedCommission.id)}
                     >
-                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />
-                      <Text style={styles.detailAcceptButtonText}>Accept</Text>
+                      {updatingStatus.has(selectedCommission.id) ? (
+                        <ActivityIndicator size="small" color={colors.text.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />
+                          <Text style={styles.detailAcceptButtonText}>Accept</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   </View>
                 )}
 
                 {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && isArtist && (
                   <TouchableOpacity
-                    style={styles.detailCompleteButton}
+                    style={[styles.detailCompleteButton, updatingStatus.has(selectedCommission.id) && styles.detailCompleteButtonDisabled]}
                     onPress={() => {
+                      if (updatingStatus.has(selectedCommission.id)) return;
                       const commissionId = selectedCommission.id;
-                      // Close modal immediately (synchronously)
-                      setShowCommissionModal(false);
-                      setSelectedCommission(null);
                       
-                      // Show confirmation after UI updates
-                      setTimeout(() => {
-                        showAlert({
-                          title: 'Complete Commission',
-                          message: 'Mark as completed?',
-                          type: 'info',
-                          buttons: [
-                            { text: 'Not Yet', style: 'cancel' },
-                            {
-                              text: 'Complete',
-                              style: 'default',
-                              onPress: () => {
-                                // Handle action immediately without blocking
+                      // Use React Native Alert instead of StyledAlert to avoid modal conflicts
+                      Alert.alert(
+                        'Complete Commission',
+                        'Mark as completed?',
+                        [
+                          { text: 'Not Yet', style: 'cancel' },
+                          {
+                            text: 'Complete',
+                            style: 'default',
+                            onPress: () => {
+                              // Close modal immediately
+                              setShowCommissionModal(false);
+                              setSelectedCommission(null);
+                              // Handle async operation after UI updates
+                              setTimeout(() => {
                                 handleUpdateStatus(commissionId, 'completed', false);
-                              }
+                              }, 50);
                             }
-                          ]
-                        });
-                      }, 200);
+                          }
+                        ]
+                      );
                     }}
+                    disabled={updatingStatus.has(selectedCommission.id)}
                   >
+                    {updatingStatus.has(selectedCommission.id) ? (
+                      <ActivityIndicator size="small" color={colors.text.primary} />
+                    ) : (
+                      <>
                     <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />
                     <Text style={styles.detailCompleteButtonText}>Mark Complete</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 )}
               </View>
@@ -1846,8 +2103,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '30',
+    borderBottomWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -1892,7 +2148,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
     ...shadows.small,
   },
   statIconBg: {
@@ -1988,8 +2245,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: 0,
   },
   batchSelectedText: {
     ...typography.bodyBold,
@@ -2108,9 +2364,11 @@ const styles = StyleSheet.create({
   },
   commissionCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
     ...shadows.small,
   },
   pendingCommissionCard: {
@@ -2207,8 +2465,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
+    borderTopWidth: 0,
   },
   metaChips: {
     flexDirection: 'row',
@@ -2283,6 +2540,69 @@ const styles = StyleSheet.create({
     width: '100%',
     flex: 1,
     flexDirection: 'column',
+    ...shadows.large,
+  },
+  detailTabBar: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing.sm,
+  },
+  detailTabContent: {
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  detailTab: {
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
+  },
+  detailTabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  detailTabTextActive: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  detailTabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+    backgroundColor: colors.background,
+  },
+  detailModalHeaderLeft: {
+    flex: 1,
+  },
+  detailModalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  detailModalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   templatesModal: {
     backgroundColor: colors.background,
@@ -2302,11 +2622,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border + '40',
   },
   modalTitle: {
     ...typography.h2,
@@ -2315,10 +2635,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalCloseButton: {
-    width: IS_SMALL_SCREEN ? 32 : 36,
-    height: IS_SMALL_SCREEN ? 32 : 36,
+    width: 36,
+    height: 36,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2326,14 +2646,13 @@ const styles = StyleSheet.create({
     padding: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
   },
   templateCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+    ...shadows.small,
   },
   templateHeader: {
     flexDirection: 'row',
@@ -2418,16 +2737,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   detailSection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
   },
   detailSectionTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: spacing.sm,
-    letterSpacing: 0.3,
+    marginBottom: spacing.md,
+    letterSpacing: 0.2,
   },
   detailContentBox: {
     backgroundColor: colors.surface,
@@ -2448,12 +2767,28 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 15,
     lineHeight: 24,
-    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  detailTextPlaceholder: {
+    ...typography.body,
+    color: colors.text.disabled,
+    fontSize: 15,
+    lineHeight: 24,
+    fontStyle: 'italic',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   detailPriceText: {
-    ...typography.bodyBold,
+    ...typography.h2,
     color: colors.primary,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
   },
   detailFooterBar: {
@@ -2461,7 +2796,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.border + '40',
+    backgroundColor: colors.background,
+  },
+  commissionDetailContent: {
+    flex: 1,
   },
   detailFooterButtons: {
     flexDirection: 'row',
@@ -2478,6 +2817,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 2,
     borderColor: colors.status.error,
+  },
+  detailDeclineButtonDisabled: {
+    opacity: 0.5,
   },
   detailDeclineButtonText: {
     ...typography.bodyBold,
@@ -2496,6 +2838,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     ...shadows.medium,
   },
+  detailAcceptButtonDisabled: {
+    opacity: 0.5,
+  },
   detailAcceptButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
@@ -2512,6 +2857,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     ...shadows.medium,
   },
+  detailCompleteButtonDisabled: {
+    opacity: 0.5,
+  },
   detailCompleteButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
@@ -2522,7 +2870,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   notesInput: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     color: colors.text.primary,
@@ -2530,8 +2878,9 @@ const styles = StyleSheet.create({
     minHeight: 140,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
     lineHeight: 22,
+    textAlignVertical: 'top',
   },
   saveNoteButton: {
     flexDirection: 'row',
@@ -2632,8 +2981,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingVertical: spacing.sm,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '30',
   },
   pinterestFilterContent: {
     paddingHorizontal: spacing.lg,
@@ -2660,7 +3007,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: colors.text.primary,
+    backgroundColor: colors.primary,
     borderRadius: 1,
   },
   // Pinterest-style Card Elements
@@ -2752,33 +3099,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingBottom: spacing.sm,
   },
-  statsRow: {
+  statsCardsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
+    gap: spacing.md,
     paddingHorizontal: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.xs,
   },
-  statItem: {
-    alignItems: 'center',
+  statCardItem: {
     flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.border + '60',
+    ...shadows.medium,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  statValue: {
-    ...typography.h3,
+  statCardPending: {
+    borderColor: colors.status.warning + '40',
+    backgroundColor: colors.status.warning + '08',
+  },
+  statCardActive: {
+    borderColor: colors.status.info + '40',
+    backgroundColor: colors.status.info + '08',
+  },
+  statCardCompleted: {
+    borderColor: colors.status.success + '40',
+    backgroundColor: colors.status.success + '08',
+  },
+  statCardIconContainer: {
+    marginBottom: spacing.sm,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background + '80',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statCardContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statCardValue: {
+    ...typography.h1,
     color: colors.text.primary,
-    fontSize: 26,
-    fontWeight: '700',
-    marginBottom: spacing.xs / 2,
+    fontSize: IS_SMALL_SCREEN ? 32 : 36,
+    fontWeight: '800',
+    marginBottom: spacing.xs,
+    letterSpacing: -1,
   },
-  statLabel: {
-    ...typography.caption,
+  statCardLabel: {
+    ...typography.body,
     color: colors.text.secondary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   actionsSection: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
@@ -2795,10 +3174,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
     minWidth: IS_SMALL_SCREEN ? 90 : 110,
+    ...shadows.small,
   },
   actionButtonText: {
     ...typography.body,
@@ -2807,11 +3187,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   compactTitle: {
-    ...typography.h2,
+    ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 22 : 24,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 28 : 32,
+    fontWeight: '800',
     letterSpacing: -0.5,
+    marginBottom: spacing.xs,
   },
   compactHeaderActions: {
     flexDirection: 'row',
@@ -2896,7 +3277,10 @@ const styles = StyleSheet.create({
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   compactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginLeft: spacing.xs,
+    gap: spacing.xs,
   },
   compactAcceptButton: {
     width: 32,
@@ -2905,6 +3289,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  compactAcceptButtonDisabled: {
+    opacity: 0.5,
+  },
+  compactDeclineButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.status.error + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactDeclineButtonDisabled: {
+    opacity: 0.5,
   },
   // Stats Modal Styles
   statsModal: {
@@ -2916,6 +3314,7 @@ const styles = StyleSheet.create({
   },
   statsContent: {
     padding: spacing.lg,
+    backgroundColor: colors.background,
   },
   statsSection: {
     marginBottom: spacing.lg,
@@ -2937,30 +3336,33 @@ const styles = StyleSheet.create({
     minWidth: '45%',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+    ...shadows.small,
   },
   statBoxValue: {
     ...typography.h2,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 26 : 28,
     fontWeight: '700',
-    marginBottom: spacing.xs / 2,
+    marginBottom: spacing.xs,
   },
   statBoxLabel: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
+    fontWeight: '600',
   },
   statCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+    ...shadows.small,
   },
   statCardRow: {
     flexDirection: 'row',
@@ -2970,12 +3372,13 @@ const styles = StyleSheet.create({
   },
   statCardRowWithBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '30',
+    borderBottomColor: colors.border + '40',
   },
   statCardLabel: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '600',
   },
   statCardValue: {
     ...typography.bodyBold,
@@ -2992,7 +3395,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+    ...shadows.small,
   },
   topArtworkImage: {
     width: IS_SMALL_SCREEN ? 50 : 60,
@@ -3081,22 +3485,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   detailPricingCard: {
-    backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
     marginHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.primary + '20',
+    borderColor: colors.border + '40',
+    ...shadows.small,
   },
   detailPricingLabel: {
-    ...typography.caption,
+    ...typography.body,
     color: colors.text.secondary,
-    fontSize: 11,
-    marginBottom: spacing.xs / 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 15,
+    fontWeight: '600',
   },
   detailBudgetLabel: {
     ...typography.body,

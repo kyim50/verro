@@ -112,27 +112,38 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
 
       // Upload each image as a separate reference
       for (const asset of result.assets) {
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', {
-          uri: asset.uri,
-          type: 'image/jpeg',
-          name: `reference_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`,
-        });
-        formDataUpload.append('reference_type', selectedType);
-        formDataUpload.append('title', formData.title || 'Reference Image');
-        formDataUpload.append('description', formData.description || '');
-        formDataUpload.append('commission_id', commissionId);
-
-        await axios.post(
-          `${API_URL}/references/commission/${commissionId}`,
-          formDataUpload,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'multipart/form-data',
-            },
+        try {
+          // Upload image using the utility function first
+          const imageUrl = await uploadImage(asset.uri, 'artworks', '', token);
+          
+          if (imageUrl) {
+            // Create reference with the uploaded image URL
+            await axios.post(
+              `${API_URL}/references/commission/${commissionId}`,
+              {
+                file_url: imageUrl,
+                reference_type: selectedType,
+                title: formData.title || 'Reference Image',
+                description: formData.description || '',
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
           }
-        );
+        } catch (error) {
+          console.error('Error uploading reference image:', error);
+          Toast.show({
+            type: 'error',
+            text1: 'Upload Failed',
+            text2: error.response?.data?.error || 'Failed to upload image',
+            visibilityTime: 3000,
+          });
+          // Continue with other images even if one fails
+        }
       }
 
       Toast.show({
@@ -993,4 +1004,6 @@ const styles = StyleSheet.create({
     padding: spacing.xs,
   },
 });
+
+
 

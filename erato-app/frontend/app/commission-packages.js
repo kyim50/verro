@@ -24,7 +24,6 @@ import { useAuthStore } from '../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
 import { showAlert } from '../components/StyledAlert';
 import { uploadImage, validateImage } from '../utils/imageUpload';
-import FormBuilder from '../components/FormBuilder';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get('window');
@@ -41,8 +40,6 @@ export default function CommissionPackagesScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [addonForm, setAddonForm] = useState({ name: '', price: '', description: '' });
   const [savingAddon, setSavingAddon] = useState(false);
-  const [showFormBuilder, setShowFormBuilder] = useState(false);
-  const [customFormFields, setCustomFormFields] = useState([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -65,7 +62,6 @@ export default function CommissionPackagesScreen() {
       is_active: true,
       example_image_urls: [],
     });
-    setCustomFormFields([]);
     setEditingPackage(null);
   };
 
@@ -157,7 +153,6 @@ export default function CommissionPackagesScreen() {
         revision_count: parsedRevisions,
         is_active: formData.is_active,
         example_image_urls: formData.example_image_urls,
-        custom_form_fields: customFormFields.length > 0 ? customFormFields : null,
       };
 
       if (editingPackage) {
@@ -214,7 +209,6 @@ export default function CommissionPackagesScreen() {
       is_active: pkg.is_active,
       example_image_urls: pkg.example_image_urls || [],
     });
-    setCustomFormFields(pkg.custom_form_fields || []);
     setAddonForm({ name: '', price: '', description: '' });
     setShowCreateModal(true);
   };
@@ -452,12 +446,12 @@ export default function CommissionPackagesScreen() {
         {item.estimated_delivery_days && (
           <View style={styles.metaItem}>
             <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
-            <Text style={styles.metaText}>{item.estimated_delivery_days} days</Text>
+            <Text style={styles.metaText}><Text style={{ fontWeight: '700' }}>{item.estimated_delivery_days}</Text> days</Text>
           </View>
         )}
         <View style={styles.metaItem}>
           <Ionicons name="refresh-outline" size={14} color={colors.text.secondary} />
-          <Text style={styles.metaText}>{item.revision_count || 0} revisions</Text>
+          <Text style={styles.metaText}><Text style={{ fontWeight: '700' }}>{item.revision_count || 0}</Text> revisions</Text>
         </View>
       </View>
 
@@ -725,6 +719,7 @@ export default function CommissionPackagesScreen() {
                 placeholder="e.g. 7"
                 placeholderTextColor={colors.text.disabled}
                 keyboardType="number-pad"
+                textAlignVertical="center"
               />
 
               <Text style={styles.inputLabel}>Revisions Included</Text>
@@ -735,6 +730,7 @@ export default function CommissionPackagesScreen() {
                 placeholder="e.g. 2"
                 placeholderTextColor={colors.text.disabled}
                 keyboardType="number-pad"
+                textAlignVertical="center"
               />
 
               <TouchableOpacity
@@ -749,32 +745,6 @@ export default function CommissionPackagesScreen() {
                 <Text style={styles.checkboxLabel}>Visible to clients</Text>
               </TouchableOpacity>
 
-              {/* Custom Form Builder Section */}
-              <View style={styles.formBuilderSection}>
-                <View style={styles.formBuilderHeader}>
-                  <Text style={styles.inputLabel}>Custom Form Fields</Text>
-                  <TouchableOpacity
-                    style={styles.formBuilderButton}
-                    onPress={() => setShowFormBuilder(true)}
-                  >
-                    <Ionicons name="create-outline" size={18} color={colors.primary} />
-                    <Text style={styles.formBuilderButtonText}>
-                      {customFormFields.length > 0 ? 'Edit Form' : 'Build Form'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {customFormFields.length > 0 && (
-                  <View style={styles.formFieldsPreview}>
-                    <Text style={styles.formFieldsCount}>
-                      {customFormFields.length} field{customFormFields.length !== 1 ? 's' : ''} configured
-                    </Text>
-                    <Text style={styles.formFieldsHint}>
-                      Clients will see these fields when requesting this package
-                    </Text>
-                  </View>
-                )}
-              </View>
-
               <TouchableOpacity style={styles.saveButton} onPress={handleSavePackage}>
                 <Text style={styles.saveButtonText}>
                   {editingPackage ? 'Update Package' : 'Create Package'}
@@ -783,28 +753,6 @@ export default function CommissionPackagesScreen() {
             </ScrollView>
           </View>
         </View>
-      </Modal>
-
-      {/* Form Builder Modal */}
-      <Modal
-        visible={showFormBuilder}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setShowFormBuilder(false)}
-      >
-        <FormBuilder
-          formFields={customFormFields}
-          onSave={(fields) => {
-            setCustomFormFields(fields);
-            setShowFormBuilder(false);
-            Toast.show({
-              type: 'success',
-              text1: 'Form Saved',
-              text2: `${fields.length} field${fields.length !== 1 ? 's' : ''} configured`,
-            });
-          }}
-          onCancel={() => setShowFormBuilder(false)}
-        />
       </Modal>
     </View>
   );
@@ -895,7 +843,8 @@ const styles = StyleSheet.create({
   packageName: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 17,
+    fontSize: 18,
+    fontWeight: '700',
     fontWeight: '700',
     flex: 1,
   },
@@ -940,7 +889,8 @@ const styles = StyleSheet.create({
   packagePrice: {
     ...typography.h2,
     color: colors.primary,
-    fontSize: 20,
+    fontSize: 22,
+    fontWeight: '700',
     fontWeight: '700',
   },
   packageDescription: {
@@ -1029,8 +979,8 @@ const styles = StyleSheet.create({
   inputLabel: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: spacing.xs,
     marginTop: spacing.sm,
   },
@@ -1038,14 +988,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    paddingTop: spacing.md,
     color: colors.text.primary,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
+    minHeight: 48,
+    textAlignVertical: 'center',
   },
   textArea: {
-    height: 100,
+    minHeight: 100,
     textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   imagesHeader: {
     flexDirection: 'row',
@@ -1123,48 +1077,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
     fontSize: 15,
-  },
-  formBuilderSection: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  formBuilderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  formBuilderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary + '20',
-    borderRadius: borderRadius.md,
-  },
-  formBuilderButtonText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  formFieldsPreview: {
-    marginTop: spacing.sm,
-  },
-  formFieldsCount: {
-    ...typography.body,
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-  formFieldsHint: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
   },
   saveButton: {
     backgroundColor: colors.primary,

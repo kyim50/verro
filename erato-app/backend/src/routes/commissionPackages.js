@@ -191,6 +191,11 @@ router.post('/create', authenticate, verifyArtist, async (req, res) => {
       return res.status(400).json({ error: 'base_price must be positive' });
     }
 
+    // Set thumbnail_url from first example image if available
+    const thumbnailUrl = (example_image_urls && example_image_urls.length > 0) 
+      ? example_image_urls[0] 
+      : null;
+
     const { data: newPackage, error } = await supabaseAdmin
       .from('commission_packages')
       .insert({
@@ -201,6 +206,7 @@ router.post('/create', authenticate, verifyArtist, async (req, res) => {
         estimated_delivery_days,
         revision_count: revision_count || 2,
         example_image_urls: example_image_urls || [],
+        thumbnail_url: thumbnailUrl,
         custom_form_fields: custom_form_fields || null,
         is_active,
         display_order
@@ -269,7 +275,13 @@ router.put('/:packageId', authenticate, verifyArtist, async (req, res) => {
     }
     if (estimated_delivery_days !== undefined) updates.estimated_delivery_days = estimated_delivery_days;
     if (revision_count !== undefined) updates.revision_count = revision_count;
-    if (example_image_urls !== undefined) updates.example_image_urls = example_image_urls;
+    if (example_image_urls !== undefined) {
+      updates.example_image_urls = example_image_urls;
+      // Set thumbnail_url from first example image if available
+      updates.thumbnail_url = (example_image_urls && example_image_urls.length > 0) 
+        ? example_image_urls[0] 
+        : null;
+    }
     if (custom_form_fields !== undefined) updates.custom_form_fields = custom_form_fields || null;
     if (is_active !== undefined) updates.is_active = is_active;
     if (display_order !== undefined) updates.display_order = display_order;

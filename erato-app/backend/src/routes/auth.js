@@ -141,7 +141,7 @@ router.post(
   '/login',
   authLimiter,
   [
-    body('email').isEmail().normalizeEmail(),
+    body('email').notEmpty().withMessage('Email or username is required'),
     body('password').notEmpty(),
   ],
   async (req, res, next) => {
@@ -151,11 +151,30 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, password } = req.body;
+      const { email: emailOrUsername, password } = req.body;
+
+      // Check if input is email or username
+      let userEmail = emailOrUsername;
+      const isEmail = emailOrUsername.includes('@');
+
+      if (!isEmail) {
+        // It's a username, fetch the user's email
+        const { data: userData, error: userError } = await supabaseAdmin
+          .from('users')
+          .select('email')
+          .eq('username', emailOrUsername)
+          .single();
+
+        if (userError || !userData) {
+          throw new AppError('Invalid credentials', 401);
+        }
+
+        userEmail = userData.email;
+      }
 
       // Sign in with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: userEmail,
         password,
       });
 

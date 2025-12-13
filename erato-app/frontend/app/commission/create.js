@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,21 +10,24 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Toast from 'react-native-toast-message';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function CreateCommissionScreen() {
   const { artistId, packageId: initialPackageId } = useLocalSearchParams();
   const { token, user } = useAuthStore();
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -35,13 +38,32 @@ export default function CreateCommissionScreen() {
   const [selectedPackageId, setSelectedPackageId] = useState(null);
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(!artistId);
+  const [currentArtistId, setCurrentArtistId] = useState(artistId);
+
+  const searchTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (artistId) {
+      setCurrentArtistId(artistId);
+      setShowSearch(false);
+    }
+  }, [artistId]);
 
   useEffect(() => {
     const fetchPackages = async () => {
-      if (!artistId) return;
+      if (!currentArtistId) {
+        setPackages([]);
+        setPackagesLoading(false);
+        return;
+      }
       setPackagesLoading(true);
       try {
-        const response = await axios.get(`${API_URL}/artists/${artistId}/packages`);
+        const response = await axios.get(`${API_URL}/artists/${currentArtistId}/packages`);
         setPackages(response.data || []);
         if (initialPackageId) {
           const match = (response.data || []).find((p) => String(p.id) === String(initialPackageId));
@@ -59,7 +81,52 @@ export default function CreateCommissionScreen() {
     };
 
     fetchPackages();
-  }, [artistId, initialPackageId]);
+  }, [currentArtistId, initialPackageId]);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/artists`, {
+          params: {
+            search: searchQuery.trim(),
+            limit: 20,
+            commission_status: 'open',
+          },
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        setSearchResults(response.data.artists || []);
+      } catch (error) {
+        console.error('Error searching artists:', error);
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, token]);
+
+  const handleSelectArtist = (artist) => {
+    setSelectedArtist(artist);
+    setCurrentArtistId(artist.id);
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
 
   const handleSubmit = async () => {
     // Check if current user is an artist
@@ -71,6 +138,16 @@ export default function CreateCommissionScreen() {
         visibilityTime: 3000,
       });
       router.back();
+      return;
+    }
+
+    if (!currentArtistId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Required',
+        text2: 'Please select an artist to request a commission from',
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -100,7 +177,7 @@ export default function CreateCommissionScreen() {
       await axios.post(
         `${API_URL}/commissions/request`,
         {
-          artist_id: artistId,
+          artist_id: currentArtistId,
           details: description.trim(),
           client_note: title.trim(),
           budget: budget.trim() ? parseFloat(budget.trim()) : null,
@@ -137,8 +214,8 @@ export default function CreateCommissionScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -149,23 +226,150 @@ export default function CreateCommissionScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: spacing.xl }}
+      >
         <Text style={styles.description}>
           Describe what you'd like the artist to create for you
         </Text>
 
-        {/* Package selection */}
-        <View style={styles.inputGroup}>
-          <View style={styles.packageHeader}>
-            <Text style={styles.label}>Choose a package (optional)</Text>
-            {packagesLoading && <ActivityIndicator size="small" color={colors.primary} />}
-          </View>
+        {/* Artist Search Section */}
+        {showSearch && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Search for an Artist *</Text>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color={colors.text.secondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by username or name..."
+                placeholderTextColor={colors.text.disabled}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus={showSearch}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}>
+                  <Ionicons name="close-circle" size={20} color={colors.text.secondary} />
+                </TouchableOpacity>
+              )}
+            </View>
 
-          {packagesLoading ? null : packages.length === 0 ? (
-            <Text style={styles.packageEmptyText}>
-              This artist hasn't published packages yet. You can still send a custom request.
-            </Text>
-          ) : (
+            {searchLoading && (
+              <View style={styles.searchLoadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.searchLoadingText}>Searching...</Text>
+              </View>
+            )}
+
+            {!searchLoading && searchResults.length > 0 && (
+              <View style={styles.searchResultsContainer}>
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => {
+                    const artistUser = item.users || {};
+                    const displayName = artistUser.full_name || artistUser.username || 'Unknown Artist';
+                    const username = artistUser.username || 'unknown';
+                    return (
+                      <TouchableOpacity
+                        style={styles.artistResultItem}
+                        onPress={() => handleSelectArtist(item)}
+                        activeOpacity={0.7}
+                      >
+                        <Image
+                          source={{ uri: artistUser.avatar_url || DEFAULT_AVATAR }}
+                          style={styles.artistResultAvatar}
+                          contentFit="cover"
+                        />
+                        <View style={styles.artistResultInfo}>
+                          <Text style={styles.artistResultName} numberOfLines={1}>
+                            {displayName}
+                          </Text>
+                          <Text style={styles.artistResultUsername} numberOfLines={1}>
+                            @{username}
+                          </Text>
+                          {item.rating != null && typeof item.rating === 'number' && (
+                            <View style={styles.artistResultRating}>
+                              <Ionicons name="star" size={12} color={colors.status.warning} />
+                              <Text style={styles.artistResultRatingText}>
+                                {item.rating.toFixed(1)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                      </TouchableOpacity>
+                    );
+                  }}
+                  scrollEnabled={false}
+                />
+              </View>
+            )}
+
+            {!searchLoading && searchQuery.length >= 2 && searchResults.length === 0 && (
+              <View style={styles.searchEmptyContainer}>
+                <Ionicons name="person-outline" size={48} color={colors.text.disabled} />
+                <Text style={styles.searchEmptyText}>No artists found</Text>
+                <Text style={styles.searchEmptySubtext}>
+                  Try searching with a different name or username
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Selected Artist Display */}
+        {selectedArtist && !showSearch && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Selected Artist</Text>
+            <TouchableOpacity
+              style={styles.selectedArtistCard}
+              onPress={() => {
+                setShowSearch(true);
+                setSelectedArtist(null);
+                setCurrentArtistId(null);
+                setPackages([]);
+                setSelectedPackageId(null);
+              }}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={{ uri: selectedArtist.users?.avatar_url || DEFAULT_AVATAR }}
+                style={styles.selectedArtistAvatar}
+                contentFit="cover"
+              />
+              <View style={styles.selectedArtistInfo}>
+                <Text style={styles.selectedArtistName} numberOfLines={1}>
+                  {selectedArtist.users?.full_name || selectedArtist.users?.username}
+                </Text>
+                <Text style={styles.selectedArtistUsername} numberOfLines={1}>
+                  @{selectedArtist.users?.username}
+                </Text>
+              </View>
+              <Ionicons name="close-circle" size={20} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Package selection - Only show if artist is selected */}
+        {currentArtistId && (
+          <View style={styles.inputGroup}>
+            <View style={styles.packageHeader}>
+              <Text style={styles.label}>Choose a package (optional)</Text>
+              {packagesLoading && <ActivityIndicator size="small" color={colors.primary} />}
+            </View>
+
+            {packagesLoading ? null : packages.length === 0 ? (
+              <Text style={styles.packageEmptyText}>
+                This artist hasn't published packages yet. You can still send a custom request.
+              </Text>
+            ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -210,7 +414,7 @@ export default function CreateCommissionScreen() {
                       {pkg.estimated_delivery_days && (
                         <View style={styles.packageMetaCompact}>
                           <Ionicons name="time-outline" size={12} color={colors.text.secondary} />
-                          <Text style={styles.packageMetaTextCompact}>{pkg.estimated_delivery_days}d</Text>
+                          <Text style={styles.packageMetaTextCompact}><Text style={{ fontWeight: '700' }}>{pkg.estimated_delivery_days}</Text>d</Text>
                         </View>
                       )}
                     </View>
@@ -254,7 +458,8 @@ export default function CreateCommissionScreen() {
               })}
             </View>
           ) : null}
-        </View>
+          </View>
+        )}
 
         {/* Title */}
         <View style={styles.inputGroup}>
@@ -323,7 +528,7 @@ export default function CreateCommissionScreen() {
       </ScrollView>
 
       {/* Submit Button */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <TouchableOpacity
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
           onPress={handleSubmit}
@@ -448,13 +653,15 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 16,
+    fontWeight: '700',
     flex: 1,
     marginRight: spacing.sm,
   },
   packageOptionPrice: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '700',
   },
   packageOptionDescription: {
     ...typography.caption,
@@ -544,11 +751,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    paddingTop: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
+    minHeight: 48,
+    fontSize: 15,
+    textAlignVertical: 'center',
   },
   textArea: {
     minHeight: 120,
+    textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   characterCount: {
     ...typography.caption,
@@ -586,9 +799,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   footer: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.border + '40',
+    backgroundColor: colors.background,
   },
   submitButton: {
     backgroundColor: colors.primary,
@@ -606,5 +821,122 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text.primary,
+    paddingVertical: spacing.md,
+  },
+  searchLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  searchLoadingText: {
+    ...typography.body,
+    color: colors.text.secondary,
+  },
+  searchResultsContainer: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: 300,
+  },
+  artistResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+    gap: spacing.md,
+  },
+  artistResultAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: borderRadius.full,
+  },
+  artistResultInfo: {
+    flex: 1,
+    gap: spacing.xs / 2,
+  },
+  artistResultName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  artistResultUsername: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  artistResultRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  artistResultRatingText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  selectedArtistCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+    gap: spacing.md,
+  },
+  selectedArtistAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: borderRadius.full,
+  },
+  selectedArtistInfo: {
+    flex: 1,
+    gap: spacing.xs / 2,
+  },
+  selectedArtistName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  selectedArtistUsername: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  searchEmptyContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  searchEmptyText: {
+    ...typography.h3,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  searchEmptySubtext: {
+    ...typography.body,
+    color: colors.text.disabled,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
 });

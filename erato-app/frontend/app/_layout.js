@@ -163,10 +163,37 @@ export default function RootLayout() {
             animation: 'fade',
             gestureEnabled: true,
             gestureDirection: 'horizontal',
-            animationDuration: 200,
+            animationDuration: 300,
             fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
           }}
-        />
+        >
+          <Stack.Screen 
+            name="auth/login" 
+            options={{ 
+              gestureEnabled: false, // Disable swipe back on login
+              animation: 'fade',
+              animationDuration: 150, // Faster transition for logout
+            }} 
+          />
+          <Stack.Screen 
+            name="auth/register" 
+            options={{ 
+              gestureEnabled: false, // Disable swipe back on register
+            }} 
+          />
+          <Stack.Screen 
+            name="auth/profile-picture" 
+            options={{ 
+              gestureEnabled: false, // Disable swipe back on profile picture
+            }} 
+          />
+          <Stack.Screen 
+            name="(tabs)" 
+            options={{ 
+              gestureEnabled: false, // Disable swipe back from tabs to auth
+            }} 
+          />
+        </Stack>
         <Toast 
           config={toastConfig}
           topOffset={60}

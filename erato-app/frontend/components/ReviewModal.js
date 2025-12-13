@@ -95,6 +95,7 @@ export default function ReviewModal({
       visible={visible}
       transparent
       animationType="fade"
+      statusBarTranslucent={true}
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView

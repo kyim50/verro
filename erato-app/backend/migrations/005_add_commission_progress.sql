@@ -42,3 +42,5 @@ ALTER TABLE commissions
   ADD COLUMN IF NOT EXISTS current_revision_count INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS max_revision_count INTEGER DEFAULT 2; -- From package or default
 
+
+

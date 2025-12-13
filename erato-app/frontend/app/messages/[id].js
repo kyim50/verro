@@ -31,7 +31,7 @@ import ReviewModal from '../../components/ReviewModal';
 import { initSocket, getSocket, disconnectSocket } from '../../lib/socket';
 import { showAlert } from '../../components/StyledAlert';
 import PaymentOptions from '../../components/PaymentOptions';
-import StripeCheckout from '../../components/StripeCheckout';
+import PayPalCheckout from '../../components/PayPalCheckout';
 import EscrowStatus from '../../components/EscrowStatus';
 import MilestoneTracker from '../../components/MilestoneTracker';
 import TipJar from '../../components/TipJar';
@@ -67,7 +67,7 @@ export default function ConversationScreen() {
   const [markupPaths, setMarkupPaths] = useState([]);
   const [showReferences, setShowReferences] = useState(false);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-  const [showStripeCheckout, setShowStripeCheckout] = useState(false);
+  const [showPayPalCheckout, setShowPayPalCheckout] = useState(false);
   const [showTipJar, setShowTipJar] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const flatListRef = useRef(null);
@@ -1169,7 +1169,7 @@ export default function ConversationScreen() {
                             milestoneId: milestone.id,
                           });
                           setShowDetailsModal(false);
-                          setShowStripeCheckout(true);
+                          setShowPayPalCheckout(true);
                         }}
                       />
                     </View>
@@ -1603,6 +1603,51 @@ export default function ConversationScreen() {
         </Animated.View>
         </Animated.View>
       </KeyboardAvoidingView>
+
+      {/* Payment Options Modal */}
+      <PaymentOptions
+        visible={showPaymentOptions}
+        onClose={() => setShowPaymentOptions(false)}
+        commission={commission}
+        onProceed={(paymentData) => {
+          // Calculate amount based on payment type
+          let amount = commission.final_price || commission.total_price || 0;
+          if (paymentData.paymentType === 'deposit' && paymentData.depositPercentage) {
+            amount = amount * (paymentData.depositPercentage / 100);
+          }
+          
+          setPaymentData({
+            ...paymentData,
+            commissionId: commission.id,
+            amount,
+          });
+          setShowPaymentOptions(false);
+          setShowPayPalCheckout(true);
+        }}
+      />
+
+      {/* PayPal Checkout Modal */}
+      {paymentData && (
+        <PayPalCheckout
+          visible={showPayPalCheckout}
+          onClose={() => {
+            setShowPayPalCheckout(false);
+            setPaymentData(null);
+          }}
+          commissionId={paymentData.commissionId}
+          amount={paymentData.amount}
+          paymentType={paymentData.paymentType}
+          onSuccess={(data) => {
+            setShowPayPalCheckout(false);
+            setPaymentData(null);
+            fetchConversationDetails();
+            fetchMessages();
+          }}
+          onError={(error) => {
+            console.error('Payment error:', error);
+          }}
+        />
+      )}
     </>
   );
 }

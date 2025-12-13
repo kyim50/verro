@@ -799,7 +799,7 @@ router.get('/:id/notes', authenticate, async (req, res) => {
 // Create a progress update (WIP image, approval checkpoint, or revision request)
 router.post('/:id/progress', authenticate, async (req, res) => {
   try {
-    const { update_type, image_url, notes, requires_approval, revision_notes, markup_data } = req.body;
+    const { update_type, image_url, additional_images, notes, requires_approval, revision_notes, markup_data } = req.body;
 
     if (!['wip_image', 'approval_checkpoint', 'revision_request'].includes(update_type)) {
       return res.status(400).json({ error: 'Invalid update_type' });
@@ -851,6 +851,14 @@ router.post('/:id/progress', authenticate, async (req, res) => {
 
     if (image_url) {
       progressData.image_url = image_url;
+    }
+
+    // Handle additional images - combine with primary image_url into images array
+    if (additional_images && Array.isArray(additional_images) && additional_images.length > 0) {
+      const allImages = [image_url, ...additional_images].filter(Boolean);
+      progressData.images = allImages; // Store as JSON array
+    } else if (image_url) {
+      progressData.images = [image_url]; // Single image as array
     }
 
     if (update_type === 'approval_checkpoint') {
@@ -993,7 +1001,24 @@ router.get('/:id/progress', authenticate, async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ progress_updates: progressUpdates || [] });
+    // Format progress updates to include images array
+    const formattedUpdates = (progressUpdates || []).map(update => {
+      // Convert image_url to images array format
+      let images = [];
+      if (update.images && Array.isArray(update.images)) {
+        images = update.images;
+      } else if (update.image_url) {
+        images = [update.image_url];
+      }
+      
+      return {
+        ...update,
+        images: images,
+        note: update.note || update.notes || null,
+      };
+    });
+
+    res.json({ updates: formattedUpdates, progress_updates: formattedUpdates });
   } catch (error) {
     console.error('Error fetching progress updates:', error);
     res.status(500).json({ error: error.message });

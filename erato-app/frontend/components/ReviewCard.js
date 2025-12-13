@@ -340,6 +340,7 @@ const styles = StyleSheet.create({
   reviewerName: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontWeight: '700',
   },
   verifiedBadge: {
     flexDirection: 'row',
@@ -519,4 +520,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 });
+
+
+
 

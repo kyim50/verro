@@ -23,6 +23,8 @@ import StylePreferenceQuiz from './StylePreferenceQuiz';
 import Constants from 'expo-constants';
 import axios from 'axios';
 
+const IS_SMALL_SCREEN = Dimensions.get('window').width < 400;
+
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 const { width } = Dimensions.get('window');
@@ -269,7 +271,7 @@ export default function SearchModal({ visible, onClose }) {
             <Ionicons name="search" size={20} color={colors.text.secondary} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search artworks or artists..."
+              placeholder={activeTab === 'artworks' ? 'Search artworks...' : 'Search artists...'}
               placeholderTextColor={colors.text.disabled}
               value={localQuery}
               onChangeText={setLocalQuery}
@@ -287,17 +289,6 @@ export default function SearchModal({ visible, onClose }) {
               </TouchableOpacity>
             )}
           </View>
-          {activeTab === 'artists' && (
-            <TouchableOpacity
-              style={styles.filterButton}
-              onPress={() => setShowFilters(true)}
-            >
-              <Ionicons name="filter" size={20} color={colors.primary} />
-              {Object.keys(filters).length > 0 && (
-                <View style={styles.filterBadge} />
-              )}
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Tabs */}
@@ -391,8 +382,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingTop: Math.max(Constants.statusBarHeight - spacing.md, spacing.sm),
     paddingBottom: spacing.md,
     gap: spacing.md,
   },
