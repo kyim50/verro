@@ -51,7 +51,7 @@ function MessagesTabIcon({ color }) {
 
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="chatbubbles" size={22} color={color} />
+      <Ionicons name="chatbubble" size={22} color={color} />
       {unreadCount > 0 && (
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>{Math.min(unreadCount, 9)}{unreadCount > 9 ? '+' : ''}</Text>
@@ -99,7 +99,7 @@ function CommissionsTabIcon({ color }) {
 
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="briefcase" size={22} color={color} />
+      <Ionicons name="document-text" size={22} color={color} />
       {pendingCount > 0 && (
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>{Math.min(pendingCount, 9)}{pendingCount > 9 ? '+' : ''}</Text>
@@ -113,7 +113,7 @@ function BoardsTabIcon({ color }) {
   // Boards tab should not show any notifications - it's just for saved boards
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="library" size={22} color={color} />
+      <Ionicons name="albums" size={22} color={color} />
     </View>
   );
 }
@@ -133,6 +133,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        animation: 'fade',
+        animationDuration: 200,
         tabBarStyle: [
           styles.tabBar,
           {
@@ -140,12 +142,18 @@ export default function TabsLayout() {
             paddingBottom: Platform.OS === 'ios' 
               ? Math.max(28, insets.bottom) 
               : Math.max(8, insets.bottom),
+            paddingTop: 5,
+            paddingHorizontal: 0,
           }
         ],
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarItemStyle: {
+          paddingVertical: 2,
+          paddingHorizontal: 2,
+        },
         tabBarBackground: () => (
           <View style={{ 
             flex: 1, 
@@ -161,7 +169,7 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={22} color={color} />
+            <Ionicons name="grid" size={22} color={color} />
           ),
         }}
       />
@@ -169,10 +177,8 @@ export default function TabsLayout() {
         name="explore"
         options={{
           title: 'Commissions',
+          tabBarLabel: 'Orders',
           tabBarIcon: ({ color }) => <CommissionsTabIcon color={color} />,
-        }}
-        listeners={{
-          focus: () => {},
         }}
       />
       <Tabs.Screen
@@ -183,8 +189,8 @@ export default function TabsLayout() {
             <View style={[styles.createWrapper, focused && styles.createWrapperFocused]}>
               <View style={[styles.createButton, focused && styles.createButtonFocused]}>
                 <Ionicons 
-                  name={isArtist ? "add" : "search"} 
-                  size={30} 
+                  name={isArtist ? "add-circle" : "search"} 
+                  size={26} 
                   color={colors.text.primary} 
                 />
               </View>
@@ -225,18 +231,20 @@ const styles = StyleSheet.create({
     height: Platform.OS === 'ios' ? 88 : 65,
     paddingBottom: Platform.OS === 'ios' ? 28 : 8,
     paddingTop: 5,
+    paddingHorizontal: 0,
     elevation: 0,
     shadowOpacity: 0,
   },
   tabBarLabel: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
+    marginBottom: 0,
   },
   createButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -247,25 +255,25 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   createWrapper: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: `${colors.surface}F2`,
-    borderWidth: 1,
-    borderColor: `${colors.border}B3`,
-    marginBottom: Platform.OS === 'ios' ? 12 : 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
+    borderWidth: 2,
+    borderColor: `${colors.primary}E6`,
+    marginTop: -20, // Pull button up to center it above the tab bar
+    shadowColor: colors.primary,
+    shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
     elevation: 5,
   },
   createWrapperFocused: {
-    borderColor: `${colors.primary}CC`,
+    borderColor: colors.primary,
     shadowColor: colors.primary,
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.25,
     elevation: 8,
   },
   unreadBadge: {

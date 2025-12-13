@@ -335,7 +335,7 @@ export default function ArtworkDetailScreen() {
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={28}
-                color={isLiked ? colors.likeColor : colors.text.secondary}
+                color={isLiked ? colors.primary : colors.text.secondary}
               />
             </TouchableOpacity>
           </View>
@@ -570,10 +570,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   likeButton: {
-    padding: spacing.xs,
-    minWidth: 44,
+    padding: spacing.sm,
+    minWidth: 48,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface + '80',
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   statsRow: {
     flexDirection: 'row',

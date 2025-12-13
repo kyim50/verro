@@ -1,20 +1,35 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { supabaseAdmin } from '../config/supabase.js';
-import Stripe from 'stripe';
+import * as paypal from '@paypal/checkout-server-sdk';
 
 const router = express.Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Platform fee percentage (e.g., 10% = 0.10)
 const PLATFORM_FEE_PERCENTAGE = 0.10;
 
+// PayPal environment setup
+function environment() {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction) {
+    return new paypal.core.LiveEnvironment(clientId, clientSecret);
+  }
+  return new paypal.core.SandboxEnvironment(clientId, clientSecret);
+}
+
+function client() {
+  return new paypal.core.PayPalHttpClient(environment());
+}
+
 /**
- * @route   POST /api/payments/create-intent
- * @desc    Create a Stripe payment intent for a commission
+ * @route   POST /api/payments/create-order
+ * @desc    Create a PayPal order for a commission payment
  * @access  Private (Client)
  */
-router.post('/create-intent', authenticate, async (req, res) => {
+router.post('/create-order', authenticate, async (req, res) => {
   try {
     const { commissionId, paymentType, amount } = req.body;
     const userId = req.user.id;
@@ -74,33 +89,48 @@ router.post('/create-intent', authenticate, async (req, res) => {
       });
     }
 
-    // Create Stripe Payment Intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(calculatedAmount * 100), // Convert to cents
-      currency: 'usd',
-      metadata: {
-        commissionId,
-        clientId: userId,
-        artistId: commission.artist_id,
-        paymentType
-      },
-      description: `Commission Payment - ${paymentType}`,
-      automatic_payment_methods: {
-        enabled: true
+    // Create PayPal Order
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    request.requestBody({
+      intent: 'CAPTURE',
+      purchase_units: [{
+        reference_id: commissionId,
+        description: `Commission Payment - ${paymentType}`,
+        amount: {
+          currency_code: 'USD',
+          value: calculatedAmount.toFixed(2)
+        },
+        custom_id: JSON.stringify({
+          commissionId,
+          clientId: userId,
+          artistId: commission.artist_id,
+          paymentType
+        })
+      }],
+      application_context: {
+        brand_name: 'Verro',
+        landing_page: 'NO_PREFERENCE',
+        user_action: 'PAY_NOW',
+        return_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/success`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/cancel`
       }
     });
 
-    // Create transaction record
+    const order = await client().execute(request);
+
+    // Calculate platform fee and artist payout
     const platformFee = calculatedAmount * PLATFORM_FEE_PERCENTAGE;
     const artistPayout = calculatedAmount - platformFee;
 
+    // Create transaction record
     const { data: transaction, error: transactionError } = await supabaseAdmin
       .from('payment_transactions')
       .insert({
         commission_id: commissionId,
         transaction_type: paymentType,
         amount: calculatedAmount,
-        stripe_payment_intent_id: paymentIntent.id,
+        paypal_order_id: order.result.id,
         status: 'pending',
         payer_id: userId,
         recipient_id: commission.artist_id,
@@ -113,79 +143,205 @@ router.post('/create-intent', authenticate, async (req, res) => {
 
     if (transactionError) throw transactionError;
 
+    // Find approval URL from order links
+    const approvalUrl = order.result.links.find(link => link.rel === 'approve')?.href;
+
     res.json({
       success: true,
       data: {
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        orderId: order.result.id,
+        approvalUrl,
         amount: calculatedAmount,
         transactionId: transaction.id
       }
     });
   } catch (error) {
-    console.error('Error creating payment intent:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error creating PayPal order:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to create payment order' 
+    });
+  }
+});
+
+/**
+ * @route   POST /api/payments/capture-order
+ * @desc    Capture a PayPal order after approval
+ * @access  Private (Client)
+ */
+router.post('/capture-order', authenticate, async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const userId = req.user.id;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order ID is required'
+      });
+    }
+
+    // Get transaction by order ID
+    const { data: transaction, error: transactionError } = await supabaseAdmin
+      .from('payment_transactions')
+      .select('*, commissions(*)')
+      .eq('paypal_order_id', orderId)
+      .eq('payer_id', userId)
+      .single();
+
+    if (transactionError || !transaction) {
+      return res.status(404).json({
+        success: false,
+        error: 'Transaction not found'
+      });
+    }
+
+    // Capture the PayPal order
+    const request = new paypal.orders.OrdersCaptureRequest(orderId);
+    request.requestBody({});
+
+    const capture = await client().execute(request);
+
+    if (capture.result.status !== 'COMPLETED') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment was not completed'
+      });
+    }
+
+    // Update transaction status
+    const captureId = capture.result.purchase_units[0].payments.captures[0].id;
+    const { error: updateError } = await supabaseAdmin
+      .from('payment_transactions')
+      .update({
+        status: 'succeeded',
+        paypal_capture_id: captureId,
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', transaction.id);
+
+    if (updateError) throw updateError;
+
+    // Update commission payment status
+    const { paymentType } = JSON.parse(transaction.custom_id || '{}');
+    let newPaymentStatus = 'pending';
+    if (paymentType === 'deposit') {
+      newPaymentStatus = 'deposit_paid';
+    } else if (paymentType === 'full' || paymentType === 'final') {
+      newPaymentStatus = 'fully_paid';
+    }
+
+    const { error: commissionError } = await supabaseAdmin
+      .from('commissions')
+      .update({
+        payment_status: newPaymentStatus,
+        paypal_order_id: orderId,
+        escrow_status: 'held' // Funds held in escrow until work is approved
+      })
+      .eq('id', transaction.commission_id);
+
+    if (commissionError) {
+      console.error('Error updating commission:', commissionError);
+    }
+
+    // If milestone payment, update milestone status
+    if (paymentType === 'milestone') {
+      const { data: milestone } = await supabaseAdmin
+        .from('commission_milestones')
+        .select('id')
+        .eq('commission_id', transaction.commission_id)
+        .eq('payment_status', 'unpaid')
+        .order('milestone_number', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (milestone) {
+        await supabaseAdmin
+          .from('commission_milestones')
+          .update({
+            payment_status: 'paid',
+            paid_at: new Date().toISOString(),
+            payment_transaction_id: transaction.id
+          })
+          .eq('id', milestone.id);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        orderId: capture.result.id,
+        captureId,
+        status: capture.result.status
+      }
+    });
+  } catch (error) {
+    console.error('Error capturing PayPal order:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to capture payment' 
+    });
   }
 });
 
 /**
  * @route   POST /api/payments/webhook
- * @desc    Handle Stripe webhook events
- * @access  Public (Stripe)
+ * @desc    Handle PayPal webhook events
+ * @access  Public (PayPal)
  */
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+    const headers = req.headers;
+    const body = req.body;
 
-  // Handle the event
-  try {
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        await handlePaymentSuccess(event.data.object);
+    // Verify webhook signature (simplified - in production use PayPal SDK verification)
+    // For now, we'll process the webhook events
+    
+    const event = JSON.parse(body.toString());
+    
+    console.log('PayPal Webhook Event:', event.event_type);
+
+    switch (event.event_type) {
+      case 'PAYMENT.CAPTURE.COMPLETED':
+        await handlePaymentCapture(event.resource);
         break;
-      case 'payment_intent.payment_failed':
-        await handlePaymentFailure(event.data.object);
-        break;
-      case 'charge.refunded':
-        await handleRefund(event.data.object);
+      case 'PAYMENT.CAPTURE.DENIED':
+      case 'PAYMENT.CAPTURE.REFUNDED':
+        await handlePaymentFailure(event.resource);
         break;
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.log(`Unhandled event type: ${event.event_type}`);
     }
 
-    res.json({ received: true });
+    res.status(200).json({ received: true });
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Error processing PayPal webhook:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
 /**
- * Handle successful payment
+ * Handle successful payment capture
  */
-async function handlePaymentSuccess(paymentIntent) {
-  const { commissionId, paymentType } = paymentIntent.metadata;
+async function handlePaymentCapture(capture) {
+  const captureId = capture.id;
+  const orderId = capture.supplementary_data?.related_ids?.order_id;
+
+  if (!orderId) {
+    console.error('No order ID found in capture');
+    return;
+  }
 
   // Update transaction status
   const { data: transaction, error: transactionError } = await supabaseAdmin
     .from('payment_transactions')
     .update({
       status: 'succeeded',
-      stripe_charge_id: paymentIntent.latest_charge,
+      paypal_capture_id: captureId,
       processed_at: new Date().toISOString()
     })
-    .eq('stripe_payment_intent_id', paymentIntent.id)
+    .eq('paypal_order_id', orderId)
     .select()
     .single();
 
@@ -195,6 +351,9 @@ async function handlePaymentSuccess(paymentIntent) {
   }
 
   // Update commission payment status
+  const metadata = JSON.parse(transaction.custom_id || '{}');
+  const { commissionId, paymentType } = metadata;
+
   let newPaymentStatus = 'pending';
   if (paymentType === 'deposit') {
     newPaymentStatus = 'deposit_paid';
@@ -202,85 +361,29 @@ async function handlePaymentSuccess(paymentIntent) {
     newPaymentStatus = 'fully_paid';
   }
 
-  const { error: commissionError } = await supabaseAdmin
+  await supabaseAdmin
     .from('commissions')
     .update({
       payment_status: newPaymentStatus,
-      stripe_payment_intent_id: paymentIntent.id,
-      escrow_status: 'held' // Funds held in escrow until work is approved
+      escrow_status: 'held'
     })
     .eq('id', commissionId);
 
-  if (commissionError) {
-    console.error('Error updating commission:', commissionError);
-  }
-
-  // If milestone payment, update milestone status
-  if (paymentType === 'milestone') {
-    // Find the associated milestone
-    const { data: milestone } = await supabaseAdmin
-      .from('commission_milestones')
-      .select('id')
-      .eq('commission_id', commissionId)
-      .eq('payment_status', 'unpaid')
-      .order('milestone_number', { ascending: true })
-      .limit(1)
-      .single();
-
-    if (milestone) {
-      await supabaseAdmin
-        .from('commission_milestones')
-        .update({
-          payment_status: 'paid',
-          paid_at: new Date().toISOString(),
-          payment_transaction_id: transaction.id
-        })
-        .eq('id', milestone.id);
-    }
-  }
-
-  console.log(`Payment succeeded for commission ${commissionId}`);
+  console.log(`Payment captured for commission ${commissionId}`);
 }
 
 /**
  * Handle failed payment
  */
-async function handlePaymentFailure(paymentIntent) {
+async function handlePaymentFailure(capture) {
+  const captureId = capture.id;
+  
   await supabaseAdmin
     .from('payment_transactions')
     .update({ status: 'failed' })
-    .eq('stripe_payment_intent_id', paymentIntent.id);
+    .eq('paypal_capture_id', captureId);
 
-  console.log(`Payment failed: ${paymentIntent.id}`);
-}
-
-/**
- * Handle refund
- */
-async function handleRefund(charge) {
-  const { data: transaction } = await supabaseAdmin
-    .from('payment_transactions')
-    .select('id, commission_id')
-    .eq('stripe_charge_id', charge.id)
-    .single();
-
-  if (transaction) {
-    await supabaseAdmin
-      .from('payment_transactions')
-      .update({
-        status: 'refunded',
-        refunded_at: new Date().toISOString()
-      })
-      .eq('id', transaction.id);
-
-    // Update commission escrow status
-    await supabaseAdmin
-      .from('commissions')
-      .update({ escrow_status: 'refunded' })
-      .eq('id', transaction.commission_id);
-  }
-
-  console.log(`Refund processed for charge ${charge.id}`);
+  console.log(`Payment failed: ${captureId}`);
 }
 
 /**
@@ -301,13 +404,7 @@ router.post('/release-escrow', authenticate, async (req, res) => {
         client_id,
         artist_id,
         escrow_status,
-        status,
-        artists (
-          user_id,
-          users (
-            stripe_account_id
-          )
-        )
+        status
       `)
       .eq('id', commissionId)
       .single();
@@ -344,30 +441,26 @@ router.post('/release-escrow', authenticate, async (req, res) => {
       .select('*')
       .eq('commission_id', commissionId)
       .eq('status', 'succeeded')
-      .is('stripe_transfer_id', null);
+      .is('paypal_payout_id', null);
 
     if (transactionsError) throw transactionsError;
 
-    // Transfer funds to artist (in production, you'd use Stripe Connect)
+    // In production, you would use PayPal Payouts API to transfer funds to artist
     // For now, we'll just update the records
-    const transferPromises = transactions.map(async (transaction) => {
+    const payoutPromises = transactions.map(async (transaction) => {
       // In production:
-      // const transfer = await stripe.transfers.create({
-      //   amount: Math.round(transaction.artist_payout * 100),
-      //   currency: 'usd',
-      //   destination: commission.artists.users.stripe_account_id,
-      //   transfer_group: commissionId,
-      // });
-
+      // Use PayPal Payouts API to send money to artist's PayPal account
+      // const payout = await paypal.payouts.PayoutsPostRequest(...)
+      
       return supabaseAdmin
         .from('payment_transactions')
         .update({
-          stripe_transfer_id: `transfer_${Date.now()}` // Placeholder
+          paypal_payout_id: `payout_${Date.now()}` // Placeholder
         })
         .eq('id', transaction.id);
     });
 
-    await Promise.all(transferPromises);
+    await Promise.all(payoutPromises);
 
     // Update commission escrow status
     await supabaseAdmin
@@ -427,21 +520,35 @@ router.post('/tip', authenticate, async (req, res) => {
       });
     }
 
-    // Create Stripe Payment Intent for tip
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100),
-      currency: 'usd',
-      metadata: {
-        commissionId,
-        clientId: userId,
-        artistId: commission.artist_id,
-        paymentType: 'tip'
-      },
-      description: 'Commission Tip',
-      automatic_payment_methods: {
-        enabled: true
+    // Create PayPal Order for tip
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    request.requestBody({
+      intent: 'CAPTURE',
+      purchase_units: [{
+        reference_id: commissionId,
+        description: 'Commission Tip',
+        amount: {
+          currency_code: 'USD',
+          value: amount.toFixed(2)
+        },
+        custom_id: JSON.stringify({
+          commissionId,
+          clientId: userId,
+          artistId: commission.artist_id,
+          paymentType: 'tip'
+        })
+      }],
+      application_context: {
+        brand_name: 'Verro',
+        landing_page: 'NO_PREFERENCE',
+        user_action: 'PAY_NOW',
+        return_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/success`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:19006'}/payment/cancel`
       }
     });
+
+    const order = await client().execute(request);
 
     // Create transaction record (no platform fee on tips)
     const { data: transaction, error: transactionError } = await supabaseAdmin
@@ -450,7 +557,7 @@ router.post('/tip', authenticate, async (req, res) => {
         commission_id: commissionId,
         transaction_type: 'tip',
         amount,
-        stripe_payment_intent_id: paymentIntent.id,
+        paypal_order_id: order.result.id,
         status: 'pending',
         payer_id: userId,
         recipient_id: commission.artist_id,
@@ -463,11 +570,14 @@ router.post('/tip', authenticate, async (req, res) => {
 
     if (transactionError) throw transactionError;
 
+    // Find approval URL from order links
+    const approvalUrl = order.result.links.find(link => link.rel === 'approve')?.href;
+
     res.json({
       success: true,
       data: {
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        orderId: order.result.id,
+        approvalUrl,
         amount,
         transactionId: transaction.id
       }

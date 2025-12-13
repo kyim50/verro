@@ -1389,7 +1389,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
     borderBottomColor: colors.border,
   },
   modalTitle: {
@@ -1467,7 +1467,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.lg,
-    borderTopWidth: 1,
+    borderTopWidth: 0,
     borderTopColor: colors.border,
   },
   cancelButton: {

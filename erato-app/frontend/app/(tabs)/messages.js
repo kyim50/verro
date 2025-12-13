@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -32,6 +33,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'unread', 'commissions'
   const socketRef = useRef(null);
 
   const fetchConversations = useCallback(async () => {
@@ -214,13 +216,29 @@ export default function MessagesScreen() {
     return diffMinutes < 5;
   };
 
+  // Filter conversations based on active tab
+  const filteredConversations = conversations.filter((conv) => {
+    if (activeTab === 'unread') {
+      return conv.unread_count > 0;
+    }
+    if (activeTab === 'commissions') {
+      return conv.commissions && conv.commissions.length > 0;
+    }
+    return true; // 'all'
+  });
+
+  // Get counts for tabs
+  const unreadCount = conversations.filter(c => c.unread_count > 0).length;
+  const commissionCount = conversations.filter(c => c.commissions && c.commissions.length > 0).length;
+
   const renderConversation = ({ item }) => {
     const hasUnread = item.unread_count > 0;
     const isOnline = isUserOnline(item.other_participant);
+    const hasCommission = item.commissions && item.commissions.length > 0;
 
     return (
       <TouchableOpacity
-        style={styles.conversationCard}
+        style={[styles.conversationCard, hasUnread && styles.conversationCardUnread]}
         onPress={() => {
           // Optimistically clear unread count locally when opening
           setConversations((prev) =>
@@ -231,7 +249,7 @@ export default function MessagesScreen() {
           router.push(`/messages/${item.id}`);
         }}
         onLongPress={() => handleDeleteConversation(item.id)}
-        activeOpacity={0.6}
+        activeOpacity={0.7}
       >
         <View style={styles.cardContent}>
           <View style={styles.avatarContainer}>
@@ -246,14 +264,24 @@ export default function MessagesScreen() {
                   <View style={styles.onlineDot} />
                 </View>
               )}
+              {hasCommission && (
+                <View style={styles.commissionBadge}>
+                  <Ionicons name="document-text" size={12} color={colors.primary} />
+                </View>
+              )}
             </View>
           </View>
 
           <View style={styles.conversationContent}>
             <View style={styles.conversationHeader}>
-              <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
-                {getConversationTitle(item)}
-              </Text>
+              <View style={styles.nameContainer}>
+                <Text style={[styles.name, hasUnread && styles.nameUnread]} numberOfLines={1}>
+                  {getConversationTitle(item)}
+                </Text>
+                {hasCommission && (
+                  <Ionicons name="document-text" size={14} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+                )}
+              </View>
               {item.latest_message && (
                 <View style={styles.timeContainer}>
                   <Text style={[styles.time, hasUnread && styles.timeUnread]}>
@@ -302,7 +330,7 @@ export default function MessagesScreen() {
             style={styles.headerButton}
             onPress={() => router.push('/commission-requests')}
           >
-            <Ionicons name="briefcase-outline" size={24} color={colors.text.primary} />
+            <Ionicons name="document-text" size={24} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton}>
             <Ionicons name="create-outline" size={24} color={colors.text.primary} />
@@ -310,22 +338,92 @@ export default function MessagesScreen() {
         </View>
       </View>
 
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollContent}
+        >
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+            onPress={() => setActiveTab('all')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+              All
+            </Text>
+            {conversations.length > 0 && (
+              <View style={[styles.tabBadge, activeTab === 'all' && styles.tabBadgeActive]}>
+                <Text style={[styles.tabBadgeText, activeTab === 'all' && styles.tabBadgeTextActive]}>
+                  {conversations.length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'unread' && styles.tabActive]}
+            onPress={() => setActiveTab('unread')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'unread' && styles.tabTextActive]}>
+              Unread
+            </Text>
+            {unreadCount > 0 && (
+              <View style={[styles.tabBadge, activeTab === 'unread' && styles.tabBadgeActive]}>
+                <Text style={[styles.tabBadgeText, activeTab === 'unread' && styles.tabBadgeTextActive]}>
+                  {unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'commissions' && styles.tabActive]}
+            onPress={() => setActiveTab('commissions')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'commissions' && styles.tabTextActive]}>
+              Commissions
+            </Text>
+            {commissionCount > 0 && (
+              <View style={[styles.tabBadge, activeTab === 'commissions' && styles.tabBadgeActive]}>
+                <Text style={[styles.tabBadgeText, activeTab === 'commissions' && styles.tabBadgeTextActive]}>
+                  {commissionCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
       <FlatList
-        data={conversations}
+        data={filteredConversations}
         renderItem={renderConversation}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.listContent,
-          conversations.length === 0 && styles.emptyStateContainer,
+          filteredConversations.length === 0 && styles.emptyStateContainer,
           { paddingBottom: Math.max(insets.bottom, 20) + 80 }
         ]}
         ListEmptyComponent={
-          conversations.length === 0 && !loading ? (
+          filteredConversations.length === 0 && !loading ? (
             <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={64} color={colors.text.disabled} />
-              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Ionicons 
+                name={activeTab === 'unread' ? 'mail-outline' : activeTab === 'commissions' ? 'document-text-outline' : 'chatbubbles-outline'} 
+                size={64} 
+                color={colors.text.disabled} 
+              />
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'unread' ? 'No unread messages' : activeTab === 'commissions' ? 'No commission conversations' : 'No messages yet'}
+              </Text>
               <Text style={styles.emptySubtitle}>
-                Start a conversation by messaging an artist or client
+                {activeTab === 'unread' 
+                  ? 'All caught up! You have no unread messages.' 
+                  : activeTab === 'commissions'
+                  ? 'No conversations linked to commissions yet'
+                  : 'Start a conversation by messaging an artist or client'}
               </Text>
             </View>
           ) : null
@@ -377,6 +475,60 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: spacing.xs,
   },
+  tabsContainer: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+  },
+  tabsScrollContent: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    marginRight: spacing.sm,
+  },
+  tabActive: {
+    backgroundColor: colors.primary + '20',
+  },
+  tabText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  tabBadge: {
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.full,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabBadgeActive: {
+    backgroundColor: colors.primary,
+  },
+  tabBadgeText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tabBadgeTextActive: {
+    color: colors.text.primary,
+  },
   listContent: {
     paddingTop: spacing.xs,
     paddingBottom: spacing.xl,
@@ -387,7 +539,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border + '30',
     ...shadows.small,
+  },
+  conversationCardUnread: {
+    borderColor: colors.primary + '40',
+    backgroundColor: colors.surface + 'F0',
   },
   cardContent: {
     flexDirection: 'row',
@@ -423,6 +581,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.status.success,
   },
+  commissionBadge: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
   conversationContent: {
     flex: 1,
     justifyContent: 'center',
@@ -433,13 +604,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xs,
   },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: spacing.sm,
+  },
   name: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 16 : 17,
     fontWeight: '600',
     flex: 1,
-    marginRight: spacing.sm,
   },
   nameUnread: {
     fontWeight: '700',

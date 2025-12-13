@@ -774,49 +774,116 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
         )
       `);
 
-    // Filter by preferred tags if available
-    if (allPreferredTags.size > 0) {
-      query = query.overlaps('tags', Array.from(allPreferredTags));
+    // Exclude artworks user has already heavily engaged with (but only if we have many)
+    // For new users, show everything to help them discover
+    if (engagedArtworkIds.size > 10) {
+      query = query.not('id', 'in', `(${Array.from(engagedArtworkIds).slice(0, 100).join(',')})`);
     }
 
-    // Exclude artworks user has already heavily engaged with
-    if (engagedArtworkIds.size > 0) {
-      query = query.not('id', 'in', `(${Array.from(engagedArtworkIds).join(',')})`);
-    }
-
-    const { data: artworks, error } = await query
+    // Get initial results (more than needed for scoring)
+    const { data: allArtworks, error } = await query
       .order('created_at', { ascending: false })
-      .range(offset, offset + parseInt(limit) - 1);
+      .range(offset, offset + (parseInt(limit) * 3) - 1); // Get 3x more for better scoring
 
     if (error) throw error;
 
+    // If no preferences or tags, return recent artworks
+    if (allPreferredTags.size === 0 || !allArtworks || allArtworks.length === 0) {
+      // Fallback: get recent artworks without filtering
+      const fallbackQuery = supabaseAdmin
+        .from('artworks_with_engagement')
+        .select(`
+          *,
+          artist:artists(
+            id,
+            user:users(id, username, avatar_url, full_name)
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + parseInt(limit) - 1);
+      
+      const { data: fallbackArtworks, error: fallbackError } = await fallbackQuery;
+      
+      if (fallbackError) throw fallbackError;
+      
+      return res.json({
+        artworks: fallbackArtworks || [],
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: fallbackArtworks?.length || 0,
+          totalPages: Math.ceil((fallbackArtworks?.length || 0) / parseInt(limit)),
+        },
+        personalization_info: {
+          has_preferences: false,
+          preferred_tags_count: 0,
+          engagement_history_count: engagements?.length || 0,
+          fallback_used: true,
+        }
+      });
+    }
+
+    // Filter by preferred tags if available (but don't be too restrictive)
+    let artworks = allArtworks || [];
+    if (allPreferredTags.size > 0) {
+      // Score all artworks, then filter to top matches
+      const scored = artworks.map(artwork => {
+        const matchingTags = artwork.tags?.filter(tag => allPreferredTags.has(tag)) || [];
+        return { artwork, matchingTags: matchingTags.length };
+      });
+      
+      // Sort by tag matches, but include some variety
+      scored.sort((a, b) => b.matchingTags - a.matchingTags);
+      
+      // Take top matches, but ensure we have enough results
+      artworks = scored
+        .slice(0, Math.max(parseInt(limit), scored.filter(s => s.matchingTags > 0).length))
+        .map(s => s.artwork);
+      
+      // If we don't have enough matches, fill with recent artworks
+      if (artworks.length < parseInt(limit)) {
+        const recentArtworks = allArtworks
+          .filter(a => !artworks.some(aw => aw.id === a.id))
+          .slice(0, parseInt(limit) - artworks.length);
+        artworks = [...artworks, ...recentArtworks];
+      }
+      
+      // Limit to requested amount
+      artworks = artworks.slice(0, parseInt(limit));
+    }
+
     // Score artworks based on:
-    // 1. Tag match with user preferences (40%)
+    // 1. Tag match with user preferences (40% if preferences exist, else 0%)
     // 2. Engagement score (30%)
     // 3. Recency (30%)
-    const scoredArtworks = (artworks || []).map(artwork => {
+    const scoredArtworks = artworks.map(artwork => {
       // Tag match score
       const matchingTags = artwork.tags?.filter(tag => allPreferredTags.has(tag)) || [];
-      const tagMatchScore = allPreferredTags.size > 0
-        ? (matchingTags.length / allPreferredTags.size) * 100
-        : 50;
+      const tagMatchScore = allPreferredTags.size > 0 && matchingTags.length > 0
+        ? Math.min(100, (matchingTags.length / Math.max(1, artwork.tags?.length || 1)) * 100)
+        : allPreferredTags.size > 0 ? 20 : 50; // Lower score if no match but preferences exist
 
-      // Engagement score (normalized)
-      const engagementScore = artwork.engagement_score || 0;
+      // Engagement score (normalized to 0-100)
+      const engagementScore = Math.min(100, (artwork.engagement_score || 0) * 10);
 
       // Recency score
       const daysOld = (Date.now() - new Date(artwork.created_at).getTime()) / (1000 * 60 * 60 * 24);
       const recencyScore = Math.max(0, 100 - (daysOld * 2)); // 2 points off per day
 
-      // Calculate final score
-      const finalScore = (tagMatchScore * 0.4) + (engagementScore * 0.3) + (recencyScore * 0.3);
+      // Calculate final score - adjust weights based on whether preferences exist
+      const hasPreferences = allPreferredTags.size > 0;
+      const finalScore = hasPreferences
+        ? (tagMatchScore * 0.4) + (engagementScore * 0.3) + (recencyScore * 0.3)
+        : (engagementScore * 0.5) + (recencyScore * 0.5); // More weight on engagement/recency if no preferences
 
       return {
         ...artwork,
         personalization_score: finalScore,
         match_reasons: {
           matching_tags: matchingTags,
-          tag_match_percentage: Math.round((matchingTags.length / (artwork.tags?.length || 1)) * 100),
+          tag_match_percentage: artwork.tags?.length > 0 
+            ? Math.round((matchingTags.length / artwork.tags.length) * 100)
+            : 0,
         }
       };
     });
@@ -824,17 +891,25 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
     // Sort by personalization score
     scoredArtworks.sort((a, b) => b.personalization_score - a.personalization_score);
 
+    // Get total count for pagination (estimate based on current page)
+    const totalEstimate = scoredArtworks.length < parseInt(limit) 
+      ? offset + scoredArtworks.length 
+      : (offset + scoredArtworks.length) * 2; // Estimate if we got full page
+
     res.json({
       artworks: scoredArtworks,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: scoredArtworks.length,
+        total: totalEstimate,
+        totalPages: Math.ceil(totalEstimate / parseInt(limit)),
+        hasMore: scoredArtworks.length === parseInt(limit),
       },
       personalization_info: {
         has_preferences: !!preferences?.completed_quiz,
         preferred_tags_count: allPreferredTags.size,
         engagement_history_count: engagements?.length || 0,
+        fallback_used: false,
       }
     });
   } catch (error) {

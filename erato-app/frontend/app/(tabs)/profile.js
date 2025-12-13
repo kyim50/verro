@@ -22,7 +22,8 @@ import Constants from 'expo-constants';
 import { useAuthStore, useProfileStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
-import ReviewsSection from '../../components/ReviewsSection';
+import ReviewCard from '../../components/ReviewCard';
+import { showAlert } from '../../components/StyledAlert';
 
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = (width - spacing.md * 4) / 3;
@@ -42,108 +43,149 @@ export default function ProfileScreen() {
   const [deleteAction, setDeleteAction] = useState(null);
   const [portfolioTouchBlocked, setPortfolioTouchBlocked] = useState(false);
   const portfolioModalClosingRef = useRef(false);
+  const prevAvatarUrlRef = useRef(null);
+  const [reviewsReceived, setReviewsReceived] = useState([]);
+  const [reviewsGiven, setReviewsGiven] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [activeReviewTab, setActiveReviewTab] = useState('received'); // 'received' or 'given'
   const insets = useSafeAreaInsets();
 
-  // Auto-refresh when screen comes into focus to get latest profile data
+  // Auto-refresh when screen comes into focus - but only if needed
   useFocusEffect(
     useCallback(() => {
-      if (user?.id) {
-        // Always refresh profile when screen comes into focus to catch updates
-        // Force refresh to bypass cache for immediate updates
-        loadProfile(true);
+      // Don't refresh on every focus - only if we have profile data and it's been a while
+      // This prevents constant flashing
+      if (user?.id && profile?.id === user.id) {
+        // Only refresh if profile data seems stale (optional - can be removed if still flashing)
+        // For now, skip auto-refresh to prevent flashing
+        // loadProfile(true);
       }
-    }, [user?.id, loadProfile])
+    }, [user?.id, profile?.id])
   );
-  
-  // Also watch for changes in the user object from auth store to refresh immediately
-  useEffect(() => {
-    if (user?.id && (user?.username || user?.full_name || user?.bio || user?.avatar_url)) {
-      // User data changed, refresh profile
-      loadProfile();
-    }
-  }, [user?.username, user?.full_name, user?.bio, user?.avatar_url]);
-
-  // Watch for profile store changes (from portfolio/commission updates) to refresh UI
-  useEffect(() => {
-    // Force component re-render when artist data changes
-    // This effect doesn't need to do anything - just watching these values triggers re-render
-    // But we can update avatar key if avatar changed
-    if (profile?.artist) {
-      const newAvatarUrl = profile?.avatar_url || user?.avatar_url;
-      if (newAvatarUrl) {
-        setAvatarKey(prev => prev + 1);
-      }
-    }
-  }, [
-    profile?.artist?.portfolio_images?.length, 
-    profile?.artist?.commission_status, 
-    profile?.artist?.min_price, 
-    profile?.artist?.max_price,
-    profile?.artist?.turnaround_days,
-    profile?.artist?.specialties?.join(','), // Convert array to string for comparison
-    profile?.artist // Watch entire artist object
-  ]);
 
   useEffect(() => {
     // Only reset if user actually changed (not on every mount)
     const currentUserId = profile?.id;
     if (currentUserId && currentUserId !== user?.id) {
       reset();
+      setIsInitialLoad(true);
+      prevAvatarUrlRef.current = null; // Reset avatar ref on user change
     }
 
     if (user?.id) {
-      // If we already have profile data for this user, don't reset
+      // If we already have profile data for this user, don't reset or reload
       if (profile && profile.id === user.id) {
         setIsInitialLoad(false);
+        // Set avatar ref if not set (without updating key)
+        const currentAvatarUrl = profile?.avatar_url || user?.avatar_url;
+        if (currentAvatarUrl && !prevAvatarUrlRef.current) {
+          prevAvatarUrlRef.current = currentAvatarUrl;
+        }
         return;
       }
-      loadProfile();
+      // Only load if we don't have profile data yet
+      if (!profile || profile.id !== user.id) {
+        loadProfile();
+      }
     }
-  }, [user?.id]); // Use user.id to ensure it triggers on user change
+  }, [user?.id, loadProfile]); // Use user.id to ensure it triggers on user change
 
   const loadProfile = useCallback(async (forceRefresh = false) => {
     try {
       if (!user?.id) return;
-      const prevAvatarUrl = profile?.avatar_url || user?.avatar_url;
+      const prevAvatarUrl = prevAvatarUrlRef.current;
       await fetchProfile(user.id, token, forceRefresh);
       // Check if avatar changed and update key to force image refresh
       const updatedProfile = useProfileStore.getState().profile;
       const newAvatarUrl = updatedProfile?.avatar_url || user?.avatar_url;
-      if (prevAvatarUrl !== newAvatarUrl) {
+      // Only update avatar key if URL actually changed (not just on every load)
+      if (newAvatarUrl && prevAvatarUrl !== newAvatarUrl) {
+        prevAvatarUrlRef.current = newAvatarUrl;
         setAvatarKey(prev => prev + 1);
+      } else if (!prevAvatarUrlRef.current && newAvatarUrl) {
+        // Set initial avatar URL ref without updating key (prevents flash on first load)
+        prevAvatarUrlRef.current = newAvatarUrl;
       }
       setIsInitialLoad(false);
     } catch (error) {
       console.error('Error loading profile:', error);
       setIsInitialLoad(false);
     }
-  }, [user?.id, token, fetchProfile, profile?.avatar_url]);
+  }, [user?.id, token, fetchProfile]);
   
-  // Watch for avatar URL changes in user or profile to update key
+  // Watch for avatar URL changes - only update key when URL actually changes
+  // This handles cases where avatar changes outside of loadProfile (e.g., from edit profile)
   useEffect(() => {
-    if (profile?.avatar_url || user?.avatar_url) {
+    const currentAvatarUrl = profile?.avatar_url || user?.avatar_url;
+    // Only update if URL actually changed (not on every render)
+    if (currentAvatarUrl && currentAvatarUrl !== prevAvatarUrlRef.current) {
+      prevAvatarUrlRef.current = currentAvatarUrl;
       setAvatarKey(prev => prev + 1);
+    } else if (!prevAvatarUrlRef.current && currentAvatarUrl) {
+      // Set initial avatar URL ref without updating key
+      prevAvatarUrlRef.current = currentAvatarUrl;
     }
   }, [profile?.avatar_url, user?.avatar_url]);
+
+  const loadReviews = useCallback(async () => {
+    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
+    if (!user?.id || !isArtist || !profile?.artist?.id) return;
+    
+    setReviewsLoading(true);
+    try {
+      // Load reviews received (from clients)
+      const receivedResponse = await axios.get(
+        `${API_URL}/review-enhancements/artist/${profile.artist.id}/with-responses`,
+        {
+          params: { limit: 50 },
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }
+      );
+      setReviewsReceived(receivedResponse.data.data?.reviews || []);
+
+      // Load reviews given (to clients)
+      try {
+        const givenResponse = await axios.get(
+          `${API_URL}/reviews/user/${user.id}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        setReviewsGiven(givenResponse.data.reviews || []);
+      } catch (givenError) {
+        console.log('Error loading reviews given:', givenError);
+        setReviewsGiven([]);
+      }
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+      setReviewsReceived([]);
+      setReviewsGiven([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [user?.id, profile?.artist?.id, token, profile?.artist]);
+
+  useEffect(() => {
+    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
+    if (isArtist && profile?.artist?.id) {
+      loadReviews();
+    }
+  }, [profile?.artist?.id, loadReviews, profile?.artist]);
 
   const handleLogout = () => {
     setDeleteAction({
       title: 'Logout',
       message: 'Are you sure you want to logout?',
+      buttonText: 'Log Out',
       onConfirm: async () => {
         try {
           setShowDeleteModal(false);
-          // Clear profile immediately to prevent flash
+          // Clear profile store immediately to prevent seeing old data
           useProfileStore.getState().reset();
-          await logout();
-          Toast.show({
-            type: 'success',
-            text1: 'Logged out',
-            text2: 'See you next time!',
-            visibilityTime: 2000,
-          });
-          // Navigate immediately without delay
+          // Navigate immediately with a fast transition
           router.replace('/auth/login');
+          // Clear auth state after navigation starts
+          setTimeout(async () => {
+            await logout();
+          }, 50);
         } catch (error) {
           console.error('Logout error:', error);
         }
@@ -153,12 +195,16 @@ export default function ProfileScreen() {
   };
 
   // Early return if no user (prevents flash during logout)
+  // Return a blank screen with background color to prevent white flash
   if (!user) {
-    return null;
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }} />
+    );
   }
 
   // Prevent flash while initial profile load is in progress
-  if (isInitialLoad && isLoading) {
+  // Only show loading if we truly have no profile data
+  if (isInitialLoad && isLoading && !profile) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -209,20 +255,20 @@ export default function ProfileScreen() {
           await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure state clears
           await fetchProfile(user.id, token);
           
-          Toast.show({
+          showAlert({
+            title: 'Success',
+            message: 'Artwork deleted successfully',
             type: 'success',
-            text1: 'Success',
-            text2: 'Artwork deleted successfully',
-            visibilityTime: 2000,
+            duration: 2000,
           });
         } catch (error) {
           console.error('Error deleting artwork:', error);
           const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
-          Toast.show({
+          showAlert({
+            title: 'Error',
+            message: msg,
             type: 'error',
-            text1: 'Error',
-            text2: msg,
-            visibilityTime: 3000,
+            duration: 3000,
           });
         }
       },
@@ -255,20 +301,20 @@ export default function ProfileScreen() {
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
               );
               await fetchProfile(user.id, token);
-              Toast.show({
+              showAlert({
+                title: 'Removed',
+                message: 'Portfolio image removed successfully',
                 type: 'success',
-                text1: 'Removed',
-                text2: 'Portfolio image removed successfully',
-                visibilityTime: 2000,
+                duration: 2000,
               });
             } catch (error) {
               console.error('Error removing portfolio image:', error);
               const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
-              Toast.show({
+              showAlert({
+                title: 'Error',
+                message: msg,
                 type: 'error',
-                text1: 'Error',
-                text2: msg,
-                visibilityTime: 3000,
+                duration: 3000,
               });
             }
       },
@@ -303,20 +349,20 @@ export default function ProfileScreen() {
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
               );
               await fetchProfile(user.id, token);
-              Toast.show({
+              showAlert({
+                title: 'Removed',
+                message: 'Portfolio image removed successfully',
                 type: 'success',
-                text1: 'Removed',
-                text2: 'Portfolio image removed successfully',
-                visibilityTime: 2000,
+                duration: 2000,
               });
             } catch (error) {
               console.error('Error removing portfolio image:', error);
               const msg = error.response?.data?.error || 'Failed to remove image. Please try again.';
-              Toast.show({
+              showAlert({
+                title: 'Error',
+                message: msg,
                 type: 'error',
-                text1: 'Error',
-                text2: msg,
-                visibilityTime: 3000,
+                duration: 3000,
               });
             }
       },
@@ -359,17 +405,20 @@ export default function ProfileScreen() {
                 source={{ 
                   uri: (() => {
                     const url = profile?.avatar_url || user?.avatar_url;
-                    // Add cache-busting parameter that changes when avatar updates
-                    const separator = url?.includes('?') ? '&' : '?';
-                    return `${url}${separator}_v=${avatarKey}`;
+                    // Only add cache-busting parameter if avatar key changed (not on every render)
+                    if (avatarKey > 0) {
+                      const separator = url?.includes('?') ? '&' : '?';
+                      return `${url}${separator}_v=${avatarKey}`;
+                    }
+                    return url;
                   })()
                 }} 
                 style={styles.avatar}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                transition={200}
-                key={`${profile?.avatar_url || user?.avatar_url}-${avatarKey}`}
+                transition={300}
+                key={avatarKey > 0 ? `avatar-${avatarKey}` : 'avatar-initial'}
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
@@ -624,17 +673,94 @@ export default function ProfileScreen() {
                 <View style={styles.sectionTitleContainer}>
                   <Ionicons name="star-outline" size={20} color={colors.primary} />
                   <Text style={styles.sectionTitle}>Reviews</Text>
+                  {activeReviewTab === 'received' && reviewsReceived.length > 0 && (
+                    <View style={styles.ratingBadge}>
+                      <Text style={styles.ratingBadgeText}>
+                        {profile.artist.average_rating?.toFixed(1) || '0.0'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                {profile.artist.average_rating > 0 && (
-                  <View style={styles.ratingContainer}>
-                    <Ionicons name="star" size={16} color={colors.status.warning} />
-                    <Text style={styles.ratingText}>
-                      {profile.artist.average_rating.toFixed(1)} ({profile.artist.review_count || 0})
+              </View>
+
+              {/* Tabs */}
+              <View style={styles.tabsContainer}>
+                <TouchableOpacity
+                  style={[styles.tab, activeReviewTab === 'received' && styles.tabActive]}
+                  onPress={() => setActiveReviewTab('received')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name="star" 
+                    size={18} 
+                    color={activeReviewTab === 'received' ? colors.primary : colors.text.secondary} 
+                  />
+                  <Text style={[styles.tabText, activeReviewTab === 'received' && styles.tabTextActive]}>
+                    Received ({reviewsReceived.length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeReviewTab === 'given' && styles.tabActive]}
+                  onPress={() => setActiveReviewTab('given')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name="star-outline" 
+                    size={18} 
+                    color={activeReviewTab === 'given' ? colors.primary : colors.text.secondary} 
+                  />
+                  <Text style={[styles.tabText, activeReviewTab === 'given' && styles.tabTextActive]}>
+                    Given ({reviewsGiven.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Tab Content */}
+              {reviewsLoading ? (
+                <View style={styles.reviewsLoadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              ) : activeReviewTab === 'received' ? (
+                reviewsReceived.length > 0 ? (
+                  <View style={styles.reviewsList}>
+                    {reviewsReceived.map((review) => (
+                      <ReviewCard
+                        key={review.id}
+                        review={review}
+                        isArtist={isOwnProfile}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyReviewsContainer}>
+                    <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
+                    <Text style={styles.emptyReviewsText}>No reviews received yet</Text>
+                    <Text style={styles.emptyReviewsSubtext}>
+                      Clients will leave reviews after completing commissions
                     </Text>
                   </View>
-                )}
-              </View>
-              <ReviewsSection artistId={profile.artist.id} isArtistView={isOwnProfile} />
+                )
+              ) : (
+                reviewsGiven.length > 0 ? (
+                  <View style={styles.reviewsList}>
+                    {reviewsGiven.map((review) => (
+                      <ReviewCard
+                        key={review.id}
+                        review={review}
+                        isArtist={isOwnProfile}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyReviewsContainer}>
+                    <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
+                    <Text style={styles.emptyReviewsText}>No reviews given yet</Text>
+                    <Text style={styles.emptyReviewsSubtext}>
+                      Leave reviews for clients after completing commissions
+                    </Text>
+                  </View>
+                )
+              )}
             </View>
           </>
         )}
@@ -894,6 +1020,7 @@ export default function ProfileScreen() {
             visible={selectedPortfolioIndex !== null && validImages.length > 0}
             transparent={true}
             animationType="fade"
+            statusBarTranslucent={true}
             onRequestClose={() => {
               portfolioModalClosingRef.current = true;
               setSelectedPortfolioIndex(null);
@@ -972,6 +1099,7 @@ export default function ProfileScreen() {
         visible={showDeleteModal}
         transparent={true}
         animationType="fade"
+        statusBarTranslucent={true}
         onRequestClose={() => setShowDeleteModal(false)}
       >
         <View style={styles.deleteModalOverlay}>
@@ -992,7 +1120,9 @@ export default function ProfileScreen() {
                 style={[styles.deleteModalButton, styles.deleteModalButtonDelete]}
                 onPress={() => deleteAction?.onConfirm?.()}
               >
-                <Text style={styles.deleteModalButtonTextDelete}>Delete</Text>
+                <Text style={styles.deleteModalButtonTextDelete}>
+                  {deleteAction?.buttonText || 'Delete'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1317,6 +1447,81 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
   },
+  ratingBadge: {
+    backgroundColor: colors.status.warning + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+    marginLeft: spacing.xs,
+  },
+  ratingBadgeText: {
+    ...typography.caption,
+    color: colors.status.warning,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    fontWeight: '700',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  tabActive: {
+    backgroundColor: colors.primary + '15',
+    borderColor: colors.primary + '40',
+  },
+  tabText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  reviewsList: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  reviewsLoadingContainer: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyReviewsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  emptyReviewsText: {
+    ...typography.h3,
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  emptyReviewsSubtext: {
+    ...typography.body,
+    color: colors.text.disabled,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+  },
   boardsList: {
     gap: spacing.xs,
     marginTop: spacing.xs,
@@ -1427,8 +1632,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   clientStatDivider: {
-    height: 1,
-    backgroundColor: colors.border + '60',
+    height: 0,
+    backgroundColor: 'transparent',
     marginHorizontal: spacing.lg,
   },
   clientStatIconContainer: {

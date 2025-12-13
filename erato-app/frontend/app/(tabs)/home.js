@@ -95,6 +95,10 @@ export default function HomeScreen() {
   const heartOpacityAnims = useRef({});
   const [heartAnimations, setHeartAnimations] = useState({});
   const [avatarKey, setAvatarKey] = useState(0);
+  const exploreOpacity = useRef(new Animated.Value(1)).current;
+  const forYouOpacity = useRef(new Animated.Value(0)).current;
+  const exploreTranslateY = useRef(new Animated.Value(0)).current;
+  const forYouTranslateY = useRef(new Animated.Value(20)).current;
 
   // Load liked artworks from shared store
   const loadLikedArtworks = useCallback(async (forceReload = false) => {
@@ -122,45 +126,52 @@ export default function HomeScreen() {
   // Load art styles and curate based on quiz preferences (for both clients and artists)
   useEffect(() => {
     const loadArtStyles = async () => {
-      if (!token) return;
       setLoadingStyles(true);
       try {
-        // Load all styles
+        // Load all styles (works without token)
         const stylesResponse = await axios.get(`${API_URL}/artists/styles/list`);
-        const allStyles = stylesResponse.data.styles || [];
+        const allStyles = stylesResponse.data.styles || stylesResponse.data || [];
         
-        // Load user's style preferences (works for both clients and artists)
-        try {
-          const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          if (prefsResponse.data && prefsResponse.data.preferred_styles?.length > 0) {
-            // Sort styles: preferred first, then others
-            const preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
-            const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
-            const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
-            
-            // Sort preferred by weight if available
-            preferredStyles.sort((a, b) => {
-              const aWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === a.id)?.weight || 0;
-              const bWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === b.id)?.weight || 0;
-              return bWeight - aWeight;
+        // Load user's style preferences if logged in (works for both clients and artists)
+        if (token) {
+          try {
+            const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
+              headers: { Authorization: `Bearer ${token}` }
             });
             
-            setCuratedStyles(preferredStyles);
-            setArtStyles([...preferredStyles, ...otherStyles]);
-          } else {
+            if (prefsResponse.data && prefsResponse.data.preferred_styles?.length > 0) {
+              // Sort styles: preferred first, then others
+              const preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
+              const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
+              const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
+              
+              // Sort preferred by weight if available
+              preferredStyles.sort((a, b) => {
+                const aWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === a.id)?.weight || 0;
+                const bWeight = prefsResponse.data.preferred_styles.find(p => (p.style_id || p) === b.id)?.weight || 0;
+                return bWeight - aWeight;
+              });
+              
+              setCuratedStyles(preferredStyles);
+              setArtStyles([...preferredStyles, ...otherStyles]);
+            } else {
+              setArtStyles(allStyles);
+              setCuratedStyles([]);
+            }
+          } catch (prefError) {
+            // No preferences set, use all styles
             setArtStyles(allStyles);
             setCuratedStyles([]);
           }
-        } catch (prefError) {
-          // No preferences set, use all styles
+        } else {
+          // No token, just use all styles
           setArtStyles(allStyles);
           setCuratedStyles([]);
         }
       } catch (error) {
         console.error('Error loading art styles:', error);
+        setArtStyles([]);
+        setCuratedStyles([]);
       } finally {
         setLoadingStyles(false);
       }
@@ -261,32 +272,75 @@ export default function HomeScreen() {
   // Load For You artworks - using personalized algorithm
   const loadForYouArtworks = useCallback(async (reset = false) => {
     if (loadingRef.current || forYouLoading || (!reset && !forYouHasMore)) return;
-    if (!token) {
-      // If not logged in, fall back to regular feed
-      const response = await axios.get(`${API_URL}/artworks`, {
-        params: { page: reset ? 1 : forYouPage, limit: 20 }
-      });
-      const newArtworks = response.data.artworks || [];
-      setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
-      return;
-    }
     
     loadingRef.current = true;
     setForYouLoading(true);
-    const page = reset ? 1 : forYouPage;
+    
+    // Reset page state if resetting
+    if (reset) {
+      setForYouPage(1);
+    }
+    
+    const currentPage = reset ? 1 : forYouPage;
+    
+    if (!token) {
+      // If not logged in, fall back to regular feed
+      try {
+        const response = await axios.get(`${API_URL}/artworks`, {
+          params: { page: currentPage, limit: 20 }
+        });
+        const newArtworks = response.data.artworks || response.data.data || [];
+        const pagination = response.data.pagination || response.data;
+        const hasMore = pagination?.page < pagination?.totalPages || 
+                       (pagination?.hasMore !== false && newArtworks.length === 20);
+        
+        setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
+        if (!reset) {
+          setForYouPage(currentPage + 1);
+        } else {
+          setForYouPage(2);
+        }
+        setForYouHasMore(hasMore);
+      } catch (error) {
+        console.error('Error loading artworks:', error);
+        setForYouHasMore(false);
+      } finally {
+        setForYouLoading(false);
+        loadingRef.current = false;
+      }
+      return;
+    }
 
     try {
       // Use personalized feed endpoint
       const response = await axios.get(`${API_URL}/artworks/personalized/feed`, {
-        params: { page, limit: 20 },
+        params: { page: currentPage, limit: 20 },
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const newArtworks = response.data.artworks || [];
-      const hasMore = response.data.pagination?.page < response.data.pagination?.totalPages;
+      let newArtworks = response.data.artworks || response.data.data || [];
+      
+      // If personalized feed returns empty, fall back to regular feed immediately
+      if (newArtworks.length === 0 && reset) {
+        console.log('Personalized feed empty, falling back to regular feed');
+        const fallbackResponse = await axios.get(`${API_URL}/artworks`, {
+          params: { page: currentPage, limit: 20 },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        newArtworks = fallbackResponse.data.artworks || fallbackResponse.data.data || [];
+      }
+      
+      // Handle different response formats
+      const pagination = response.data.pagination || response.data;
+      const hasMore = pagination?.page < pagination?.totalPages || 
+                     (pagination?.hasMore !== false && newArtworks.length === 20);
 
       setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
-      setForYouPage(page + 1);
+      if (!reset) {
+        setForYouPage(currentPage + 1);
+      } else {
+        setForYouPage(2);
+      }
       setForYouHasMore(hasMore);
     } catch (error) {
       if (error.response?.status !== 429) {
@@ -294,20 +348,34 @@ export default function HomeScreen() {
         // Fallback to regular feed if personalized fails
         try {
           const fallbackResponse = await axios.get(`${API_URL}/artworks`, {
-            params: { page, limit: 20 },
+            params: { page: currentPage, limit: 20 },
             headers: { Authorization: `Bearer ${token}` }
           });
-          const newArtworks = fallbackResponse.data.artworks || [];
+          const newArtworks = fallbackResponse.data.artworks || fallbackResponse.data.data || [];
+          const pagination = fallbackResponse.data.pagination || fallbackResponse.data;
+          const hasMore = pagination?.page < pagination?.totalPages || 
+                         (pagination?.hasMore !== false && newArtworks.length === 20);
+          
           setForYouArtworks(prev => reset ? newArtworks : [...prev, ...newArtworks]);
+          if (!reset) {
+            setForYouPage(currentPage + 1);
+          } else {
+            setForYouPage(2);
+          }
+          setForYouHasMore(hasMore);
         } catch (fallbackError) {
           console.error('Fallback feed also failed:', fallbackError);
+          setForYouHasMore(false);
         }
+      } else {
+        // Rate limited - don't change state
+        setForYouHasMore(false);
       }
     } finally {
       setForYouLoading(false);
       loadingRef.current = false;
     }
-  }, [forYouLoading, forYouHasMore, forYouPage, token]);
+  }, [forYouPage, token]);
 
   // Auto-refresh when screen comes into focus
   useFocusEffect(
@@ -343,6 +411,12 @@ export default function HomeScreen() {
             }, 2000); // Longer delay to ensure backend has committed
           }
         } catch (error) {
+          // Handle 401 errors gracefully - token might be expired
+          if (error.response?.status === 401) {
+            console.log('Token expired or invalid during refresh, will be handled by interceptor');
+            // Don't log as error - the auth interceptor will handle it
+            return;
+          }
           if (error.response?.status !== 429) {
             console.error('Error refreshing data:', error);
           }
@@ -753,7 +827,7 @@ export default function HomeScreen() {
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={24}
-                color={isLiked ? colors.likeColor : colors.text.primary}
+                color={isLiked ? colors.primary : colors.text.secondary}
                 style={styles.likeIcon}
               />
             </TouchableOpacity>
@@ -969,7 +1043,7 @@ export default function HomeScreen() {
                   }
                 ]}
               >
-                <Ionicons name="heart" size={100} color={colors.likeColor} />
+                <Ionicons name="heart" size={100} color={colors.primary} />
               </Animated.View>
             )}
             
@@ -1084,21 +1158,26 @@ export default function HomeScreen() {
         />
 
         <View style={styles.tikTokActions}>
-          {token && (
-            <TouchableOpacity
-              style={styles.tikTokActionButton}
-              onPress={() => handleLikeArtwork(item)}
-            >
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={32}
-                color={isLiked ? colors.likeColor : colors.text.primary}
-              />
-              <Text style={styles.tikTokActionLabel}>
-                {isLiked ? 'Liked' : 'Like'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.tikTokActionButton}
+            onPress={() => {
+              if (token) {
+                handleLikeArtwork(item);
+              } else {
+                router.push('/auth/login');
+              }
+            }}
+            disabled={false}
+          >
+            <Ionicons
+              name={isLiked ? "heart" : "heart-outline"}
+              size={32}
+              color={isLiked ? colors.primary : colors.text.secondary}
+            />
+            <Text style={styles.tikTokActionLabel}>
+              {isLiked ? 'Liked' : 'Like'}
+            </Text>
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.tikTokActionButton}
@@ -1161,7 +1240,32 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[styles.tab, activeTab === 'explore' && styles.tabActive]}
             onPress={() => {
-              setActiveTab('explore');
+              if (activeTab !== 'explore') {
+                // Animate transition
+                Animated.parallel([
+                  Animated.timing(exploreOpacity, {
+                    toValue: 1,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(exploreTranslateY, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(forYouOpacity, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(forYouTranslateY, {
+                    toValue: 20,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
+                setActiveTab('explore');
+              }
             }}
           >
             <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]}>Explore</Text>
@@ -1169,12 +1273,37 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[styles.tab, activeTab === 'foryou' && styles.tabActive]}
             onPress={() => {
-              // Clear filters when switching to For You tab
-              setArtistFilters({});
-              setSelectedStyleFilter(null);
-              setShowDiscoverArtists(false);
-              setDiscoverArtists([]);
-              setActiveTab('foryou');
+              if (activeTab !== 'foryou') {
+                // Clear filters when switching to For You tab
+                setArtistFilters({});
+                setSelectedStyleFilter(null);
+                setShowDiscoverArtists(false);
+                setDiscoverArtists([]);
+                // Animate transition
+                Animated.parallel([
+                  Animated.timing(forYouOpacity, {
+                    toValue: 1,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(forYouTranslateY, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(exploreOpacity, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(exploreTranslateY, {
+                    toValue: -20,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
+                setActiveTab('foryou');
+              }
             }}
           >
             <Text style={[styles.tabText, activeTab === 'foryou' && styles.tabTextActive]}>For you</Text>
@@ -1191,14 +1320,6 @@ export default function HomeScreen() {
               <View style={styles.filterBadge} />
             )}
           </TouchableOpacity>
-          {!isArtist && token && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => setShowFilters(true)}
-            >
-              <Ionicons name="options-outline" size={20} color={colors.text.primary} />
-            </TouchableOpacity>
-          )}
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => setShowSearchModal(true)}
@@ -1232,7 +1353,7 @@ export default function HomeScreen() {
       </View>
 
       {/* Pinterest-style Filter Bar - Show curated styles first for all users */}
-      {token && artStyles.length > 0 && activeTab === 'explore' && (
+      {artStyles.length > 0 && activeTab === 'explore' && (
         <View style={styles.pinterestFilterBar}>
           <ScrollView 
             horizontal 
@@ -1333,101 +1454,131 @@ export default function HomeScreen() {
       )}
 
       {/* Content based on active tab */}
-      {activeTab === 'explore' ? (
-        // Explore tab - existing masonry layout
-        artworks.length === 0 ? (
-          renderEmpty()
-        ) : (
-          <ScrollView
-            ref={scrollViewRef}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingBottom: Math.max(insets.bottom, 20) + 80 }
-            ]}
-          >
-            <View style={styles.masonryContainer}>
-              {/* Left Column */}
-              <View style={styles.column}>
-                {columns[0].map(item => renderArtwork(item, true))}
-              </View>
-
-              {/* Right Column */}
-              <View style={styles.column}>
-                {columns[1].map(item => renderArtwork(item, true))}
-              </View>
-            </View>
-          </ScrollView>
-        )
-      ) : (
-        // For You tab - TikTok-style full screen vertical feed
-        forYouArtworks.length === 0 && forYouLoading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading artworks...</Text>
-          </View>
-        ) : forYouArtworks.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
-            <Text style={styles.emptyTitle}>No Artworks Yet</Text>
-            <Text style={styles.emptyText}>
-              Check back later for personalized recommendations!
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={scrollViewRef}
-            data={forYouArtworks}
-            renderItem={({ item, index }) => renderTikTokArtwork(item, index)}
-            keyExtractor={(item) => String(item.id)}
-            pagingEnabled
-            snapToInterval={height - 180}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            showsVerticalScrollIndicator={false}
-            getItemLayout={(data, index) => ({
-              length: height - 180,
-              offset: (height - 180) * index,
-              index,
-            })}
-            onEndReached={() => {
-              if (!forYouLoading && forYouHasMore) {
-                loadForYouArtworks();
+      <View style={{ flex: 1 }}>
+        {/* Explore tab - existing masonry layout */}
+        <Animated.View
+          style={[
+            {
+              position: activeTab === 'explore' ? 'relative' : 'absolute',
+              width: '100%',
+              height: '100%',
+              opacity: exploreOpacity,
+              transform: [{ translateY: exploreTranslateY }],
+            },
+            activeTab !== 'explore' && { pointerEvents: 'none' },
+          ]}
+        >
+          {artworks.length === 0 ? (
+            renderEmpty()
+          ) : (
+            <ScrollView
+              ref={scrollViewRef}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={colors.primary}
+                />
               }
-            }}
-            onEndReachedThreshold={0.5}
-            removeClippedSubviews={false}
-            maxToRenderPerBatch={2}
-            windowSize={3}
-            initialNumToRender={1}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={async () => {
-                  setRefreshing(true);
-                  await loadForYouArtworks(true);
-                  setRefreshing(false);
-                }}
-                tintColor={colors.primary}
-              />
-            }
-            ListFooterComponent={
-              forYouLoading ? (
-                <View style={styles.loadMoreContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: Math.max(insets.bottom, 20) + 80 }
+              ]}
+            >
+              <View style={styles.masonryContainer}>
+                {/* Left Column */}
+                <View style={styles.column}>
+                  {columns[0].map(item => renderArtwork(item, true))}
                 </View>
-              ) : null
-            }
-          />
-        )
-      )}
+
+                {/* Right Column */}
+                <View style={styles.column}>
+                  {columns[1].map(item => renderArtwork(item, true))}
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </Animated.View>
+
+        {/* For You tab - TikTok-style full screen vertical feed */}
+        <Animated.View
+          style={[
+            {
+              position: activeTab === 'foryou' ? 'relative' : 'absolute',
+              width: '100%',
+              height: '100%',
+              opacity: forYouOpacity,
+              transform: [{ translateY: forYouTranslateY }],
+            },
+            activeTab !== 'foryou' && { pointerEvents: 'none' },
+          ]}
+        >
+          {forYouArtworks.length === 0 && forYouLoading ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading artworks...</Text>
+            </View>
+          ) : forYouArtworks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
+              <Text style={styles.emptyTitle}>No Artworks Yet</Text>
+              <Text style={styles.emptyText}>
+                Check back later for personalized recommendations!
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={scrollViewRef}
+              data={forYouArtworks}
+              renderItem={({ item, index }) => renderTikTokArtwork(item, index)}
+              keyExtractor={(item) => String(item.id)}
+              pagingEnabled
+              snapToInterval={height - 180}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              showsVerticalScrollIndicator={false}
+              getItemLayout={(data, index) => ({
+                length: height - 180,
+                offset: (height - 180) * index,
+                index,
+              })}
+              onEndReached={() => {
+                if (!forYouLoading && forYouHasMore && !loadingRef.current) {
+                  loadForYouArtworks(false);
+                }
+              }}
+              onEndReachedThreshold={0.8}
+              removeClippedSubviews={false}
+              maxToRenderPerBatch={2}
+              windowSize={3}
+              initialNumToRender={1}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={async () => {
+                    if (loadingRef.current || forYouLoading) return;
+                    setRefreshing(true);
+                    try {
+                      await loadForYouArtworks(true);
+                    } finally {
+                      setRefreshing(false);
+                    }
+                  }}
+                  tintColor={colors.primary}
+                />
+              }
+              ListFooterComponent={
+                forYouLoading ? (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                ) : null
+              }
+            />
+          )}
+        </Animated.View>
+      </View>
 
       {/* Save to Board Modal */}
       <Modal
@@ -1756,13 +1907,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.overlayLight,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface + 'E6',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    ...shadows.small,
   },
   likeIcon: {
     textShadowColor: colors.overlayLight,
@@ -1863,7 +2017,7 @@ const styles = StyleSheet.create({
     left: 6,
     right: 6,
     height: 80,
-    zIndex: 2,
+    zIndex: 1,
     borderBottomLeftRadius: borderRadius.xl,
     borderBottomRightRadius: borderRadius.xl,
     overflow: 'hidden',
@@ -1879,7 +2033,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border + '40',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    zIndex: 4,
+    zIndex: 2,
     ...shadows.small,
   },
   tikTokProfileCardContent: {
@@ -1975,17 +2129,27 @@ const styles = StyleSheet.create({
     bottom: 130,
     alignItems: 'center',
     gap: spacing.xl,
-    zIndex: 3,
+    zIndex: 10,
+    elevation: 10,
+    pointerEvents: 'box-none',
   },
   tikTokActionButton: {
     alignItems: 'center',
     gap: spacing.xs,
+    backgroundColor: colors.surface + '80',
+    padding: spacing.sm,
+    borderRadius: borderRadius.full,
+    minWidth: 64,
+    minHeight: 64,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   tikTokActionLabel: {
     ...typography.caption,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -1999,8 +2163,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 0,
   },
   viewCountText: {
     ...typography.caption,
@@ -2016,8 +2179,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 0,
   },
   commissionBadgeText: {
     ...typography.caption,
@@ -2374,7 +2536,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: colors.text.primary,
+    backgroundColor: colors.primary,
     borderRadius: 1,
   },
   // Artists you might like card

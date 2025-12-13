@@ -515,15 +515,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    paddingTop: spacing.md,
     color: colors.text.primary,
     ...typography.body,
     borderWidth: 1,
     borderColor: colors.border + '60',
     minHeight: 48,
     fontSize: 15,
+    textAlignVertical: 'center',
   },
   textArea: {
     minHeight: 90,

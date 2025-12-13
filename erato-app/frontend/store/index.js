@@ -118,10 +118,10 @@ export const useAuthStore = create((set) => ({
     return null;
   },
 
-  login: async (email, password) => {
+  login: async (emailOrUsername, password) => {
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
-        email,
+        email: emailOrUsername, // Backend accepts this as email or username
         password,
       }, {
         timeout: 15000,
@@ -193,16 +193,9 @@ export const useAuthStore = create((set) => ({
 
   logout: async () => {
     try {
-      await axios.post(`${API_URL}/auth/logout`, {}, {
-        timeout: 5000,
-      });
-    } catch (error) {
-      console.error('Logout error (continuing anyway):', error);
-      // Don't fail logout if API call fails - still clear local state
-    } finally {
-      // Clear user immediately before token to prevent flash
+      // Clear user immediately to prevent flash
       set({ user: null, isAuthenticated: false });
-      // Clear profile store to prevent flash of previous account data
+      // Clear stores immediately to prevent seeing old data
       try {
         useProfileStore.getState().reset();
         useBoardStore.getState().reset();
@@ -212,6 +205,21 @@ export const useAuthStore = create((set) => ({
       } catch (clearError) {
         console.error('Error clearing stores on logout:', clearError);
         // Don't crash - continue
+      }
+      // Make API call after clearing state (fire and forget)
+      axios.post(`${API_URL}/auth/logout`, {}, {
+        timeout: 5000,
+      }).catch((error) => {
+        console.error('Logout API error (non-critical):', error);
+      });
+    } catch (error) {
+      console.error('Logout error (continuing anyway):', error);
+      // Ensure state is cleared even if something fails
+      set({ user: null, isAuthenticated: false });
+      try {
+        await useAuthStore.getState().setToken(null);
+      } catch (tokenError) {
+        console.error('Error clearing token:', tokenError);
       }
     }
   },
@@ -334,6 +342,21 @@ export const useFeedStore = create((set, get) => ({
             headers: { Authorization: `Bearer ${token}` },
             timeout: 15000,
           });
+          // Ensure response has artworks array
+          if (!response.data.artworks && Array.isArray(response.data)) {
+            response.data = { artworks: response.data };
+          }
+          
+          // If personalized feed returns empty, fall back to regular feed
+          const personalizedArtworks = response.data.artworks || response.data.data || [];
+          if (personalizedArtworks.length === 0 && reset) {
+            console.log('Personalized feed empty, falling back to regular feed');
+            response = await axios.get(`${API_URL}/artworks`, {
+              params,
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              timeout: 15000,
+            });
+          }
         } catch (personalizedError) {
           // Fallback to regular feed if personalized fails
           console.warn('Personalized feed failed, falling back to regular feed:', personalizedError);
@@ -369,7 +392,13 @@ export const useFeedStore = create((set, get) => ({
       }
 
       const removedIds = get().removedIds || [];
-      let newArtworks = (response.data.artworks || []).filter(
+      // Handle different response formats
+      let artworksArray = response.data.artworks || response.data.data || [];
+      if (Array.isArray(response.data) && !response.data.artworks) {
+        artworksArray = response.data;
+      }
+      
+      let newArtworks = artworksArray.filter(
         (a) => !removedIds.includes(String(a.id))
       );
 
@@ -384,7 +413,10 @@ export const useFeedStore = create((set, get) => ({
         }
       }
 
-      const hasMore = response.data.pagination?.page < response.data.pagination?.totalPages;
+      // Handle pagination - check multiple possible formats
+      const pagination = response.data.pagination || response.data;
+      const hasMore = pagination?.page < pagination?.totalPages || 
+                     (pagination?.hasMore !== false && newArtworks.length === 20);
 
       set({
         artworks: reset

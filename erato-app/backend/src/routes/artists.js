@@ -20,6 +20,7 @@ router.get(
     query('turnaround_max').optional().isInt({ min: 1 }).toInt(), // Max days
     query('language').optional().isString(), // Filter by language
     query('similar_to').optional().isUUID(), // Find artists similar to this artist ID
+    query('user_id').optional().isUUID(), // Filter by user_id
   ],
   async (req, res, next) => {
     try {
@@ -38,7 +39,8 @@ router.get(
         price_max,
         turnaround_max,
         language,
-        similar_to
+        similar_to,
+        user_id
       } = req.query;
 
       // Handle "find similar artists" feature
@@ -90,6 +92,23 @@ router.get(
 
         if (error) throw error;
         return res.json({ artists: artists || [] });
+      }
+
+      // Handle user_id filter (for getting artist by user_id)
+      if (user_id) {
+        const { data: artist, error: artistError } = await supabaseAdmin
+          .from('artists')
+          .select(`
+            *,
+            users(id, username, avatar_url, full_name, bio),
+            primary_style:art_styles!artists_primary_style_id_fkey(id, name, slug),
+            art_styles:artist_art_styles(style:art_styles(id, name, slug))
+          `)
+          .eq('user_id', user_id)
+          .maybeSingle();
+        
+        if (artistError) throw artistError;
+        return res.json({ artists: artist ? [artist] : [] });
       }
 
       // Build base query

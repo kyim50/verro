@@ -15,7 +15,7 @@ import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function LoginScreen() {
   const login = useAuthStore((state) => state.login);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!emailOrUsername || !password) {
       setError('Please fill in all fields');
       return;
     }
@@ -32,7 +32,7 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
 
-    const result = await login(email, password);
+    const result = await login(emailOrUsername, password);
 
     if (result.success) {
       // Navigate directly to home (loading already shown in _layout)
@@ -61,12 +61,11 @@ export default function LoginScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="Email or Username"
             placeholderTextColor={colors.text.disabled}
-            value={email}
-            onChangeText={setEmail}
+            value={emailOrUsername}
+            onChangeText={setEmailOrUsername}
             autoCapitalize="none"
-            keyboardType="email-address"
             editable={!loading}
           />
 
@@ -134,35 +133,39 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl * 2,
   },
   logo: {
-    fontSize: 48,
-    fontWeight: '700',
+    fontSize: 52,
+    fontWeight: '800',
     color: colors.primary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    letterSpacing: -1,
   },
   tagline: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '500',
   },
   form: {
     width: '100%',
   },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
     color: colors.text.primary,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+    textAlignVertical: 'center',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
     marginBottom: spacing.md,
   },
   passwordInput: {
@@ -170,6 +173,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     color: colors.text.primary,
     fontSize: 16,
+    textAlignVertical: 'center',
   },
   eyeButton: {
     padding: spacing.md,
@@ -177,7 +181,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
     marginTop: spacing.md,

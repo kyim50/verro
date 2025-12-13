@@ -9,14 +9,16 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
 import Constants from 'expo-constants';
-import Toast from 'react-native-toast-message';
+import axios from 'axios';
 import { useAuthStore } from '../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
+import { showAlert } from '../components/StyledAlert';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -65,11 +67,11 @@ export default function ArtistSettings() {
       setTurnaroundTime(settings.turnaround_time || '7-14');
     } catch (error) {
       console.error('Error loading settings:', error);
-      Toast.show({
+      showAlert({
+        title: 'Error',
+        message: 'Failed to load settings',
         type: 'error',
-        text1: 'Error',
-        text2: 'Failed to load settings',
-        visibilityTime: 2000,
+        duration: 2000,
       });
     } finally {
       setLoading(false);
@@ -100,19 +102,19 @@ export default function ArtistSettings() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      Toast.show({
+      showAlert({
+        title: 'Saved',
+        message: 'Commission settings updated',
         type: 'success',
-        text1: 'Saved',
-        text2: 'Commission settings updated',
-        visibilityTime: 1500,
+        duration: 1500,
       });
     } catch (error) {
       console.error('Error saving settings:', error);
-      Toast.show({
+      showAlert({
+        title: 'Error',
+        message: error.response?.data?.error || 'Failed to save settings',
         type: 'error',
-        text1: 'Error',
-        text2: error.response?.data?.error || 'Failed to save settings',
-        visibilityTime: 2000,
+        duration: 2000,
       });
     } finally {
       setSaving(false);
@@ -122,13 +124,16 @@ export default function ArtistSettings() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen
-          options={{
-            title: 'Commission Settings',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text.primary,
-          }}
-        />
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Commission Settings</Text>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading settings...</Text>
@@ -138,20 +143,28 @@ export default function ArtistSettings() {
   }
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: 'Commission Settings',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text.primary,
-          headerShown: true,
-        }}
-      />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Commission Settings</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: spacing.sm }]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Commission Status */}
         <View style={styles.section}>
@@ -205,6 +218,7 @@ export default function ArtistSettings() {
                 onChangeText={setQueueSlots}
                 keyboardType="number-pad"
                 maxLength={2}
+                textAlignVertical="center"
               />
             </View>
 
@@ -320,6 +334,7 @@ export default function ArtistSettings() {
                 onChangeText={setRevisionLimit}
                 keyboardType="number-pad"
                 maxLength={1}
+                textAlignVertical="center"
               />
             </View>
 
@@ -378,7 +393,7 @@ export default function ArtistSettings() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -401,7 +416,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   section: {
     marginBottom: spacing.xl,
@@ -411,6 +428,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.md,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: Constants.statusBarHeight + spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+    backgroundColor: colors.background,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontWeight: '700',
   },
   sectionTitle: {
     ...typography.h3,
@@ -433,17 +474,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.md,
+    minHeight: 60,
   },
   settingInfo: {
     flex: 1,
     marginRight: spacing.md,
+    justifyContent: 'center',
+    flexShrink: 1,
   },
   settingLabel: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 4,
   },
   settingDescription: {
@@ -460,34 +504,37 @@ const styles = StyleSheet.create({
   numberInput: {
     ...typography.h3,
     color: colors.text.primary,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    width: 60,
+    paddingVertical: spacing.md,
+    width: 70,
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
+    minHeight: 48,
   },
   textInput: {
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    width: 100,
+    paddingVertical: spacing.md,
+    width: 120,
     textAlign: 'right',
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
+    minHeight: 48,
   },
   inputLabel: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     marginBottom: spacing.xs,
   },
@@ -501,26 +548,30 @@ const styles = StyleSheet.create({
   multilineInput: {
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    fontSize: 14,
-    lineHeight: 20,
+    paddingTop: spacing.md,
+    fontSize: 15,
+    lineHeight: 22,
     minHeight: 120,
+    textAlignVertical: 'top',
   },
   largeMultilineInput: {
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    fontSize: 14,
-    lineHeight: 20,
+    paddingTop: spacing.md,
+    fontSize: 15,
+    lineHeight: 22,
     minHeight: 200,
+    textAlignVertical: 'top',
   },
   saveButton: {
     flexDirection: 'row',
