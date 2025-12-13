@@ -491,21 +491,23 @@ export default function CreateCommissionScreen() {
           <Text style={styles.characterCount}>{description.length}/1000</Text>
         </View>
 
-        {/* Budget */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Budget (Optional)</Text>
-          <View style={styles.inputWithPrefix}>
-            <Text style={styles.prefix}>$</Text>
-            <TextInput
-              style={[styles.input, styles.inputWithPrefixField]}
-              value={budget}
-              onChangeText={setBudget}
-              placeholder="100"
-              placeholderTextColor={colors.text.disabled}
-              keyboardType="decimal-pad"
-            />
+        {/* Budget - Only show if no package is selected */}
+        {!selectedPackageId && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Budget (Optional)</Text>
+            <View style={styles.inputWithPrefix}>
+              <Text style={styles.prefix}>$</Text>
+              <TextInput
+                style={[styles.input, styles.inputWithPrefixField]}
+                value={budget}
+                onChangeText={setBudget}
+                placeholder="100"
+                placeholderTextColor={colors.text.disabled}
+                keyboardType="decimal-pad"
+              />
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Deadline */}
         <View style={styles.inputGroup}>
@@ -757,11 +759,15 @@ const styles = StyleSheet.create({
     minHeight: 48,
     fontSize: 15,
     textAlignVertical: 'center',
+    includeFontPadding: false,
+    textAlign: 'left',
   },
   textArea: {
     minHeight: 120,
     textAlignVertical: 'top',
     paddingTop: spacing.md,
+    includeFontPadding: false,
+    textAlign: 'left',
   },
   characterCount: {
     ...typography.caption,
