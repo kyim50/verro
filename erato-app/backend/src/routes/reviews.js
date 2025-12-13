@@ -390,4 +390,64 @@ router.delete('/:id', authenticate, async (req, res) => {
   }
 });
 
+// Get reviews given by a user (artist to client reviews)
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Get reviews where this user (as artist) reviewed clients
+    const { data: reviews, error } = await supabaseAdmin
+      .from('reviews')
+      .select('*')
+      .eq('artist_id', userId)
+      .eq('review_type', 'artist_to_client')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!reviews || reviews.length === 0) {
+      return res.json({ reviews: [] });
+    }
+
+    // Get all client IDs
+    const clientIds = [...new Set(reviews.map(r => r.client_id).filter(Boolean))];
+    
+    // Fetch client users
+    const { data: clientUsers, error: clientError } = await supabaseAdmin
+      .from('users')
+      .select('id, username, full_name, avatar_url')
+      .in('id', clientIds);
+
+    if (clientError) throw clientError;
+
+    // Create a map for fast lookup
+    const clientMap = new Map(clientUsers?.map(u => [u.id, u]) || []);
+
+    // Get commission IDs
+    const commissionIds = reviews.map(r => r.commission_id).filter(Boolean);
+    
+    // Fetch commissions
+    const { data: commissions, error: commError } = await supabaseAdmin
+      .from('commissions')
+      .select('id, details, client_note, created_at')
+      .in('id', commissionIds);
+
+    if (commError) throw commError;
+
+    const commissionMap = new Map(commissions?.map(c => [c.id, c]) || []);
+
+    // Enrich reviews with client and commission data
+    const enrichedReviews = reviews.map(review => ({
+      ...review,
+      client: clientMap.get(review.client_id) || null,
+      commission: commissionMap.get(review.commission_id) || null,
+    }));
+
+    res.json({ reviews: enrichedReviews });
+  } catch (error) {
+    console.error('Error fetching reviews given:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

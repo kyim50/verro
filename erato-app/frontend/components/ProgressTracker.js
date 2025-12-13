@@ -178,9 +178,9 @@ export default function ProgressTracker({ commissionId, token, isArtist, onProgr
 
   const approveUpdate = async (updateId) => {
     try {
-      await axios.post(
-        `${API_URL}/commissions/progress/${updateId}/approve`,
-        {},
+      await axios.patch(
+        `${API_URL}/commissions/${commissionId}/progress/${updateId}/approve`,
+        { approval_status: 'approved' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

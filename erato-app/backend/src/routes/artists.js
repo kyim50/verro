@@ -403,6 +403,7 @@ router.get('/:id/packages', optionalAuth, async (req, res, next) => {
         estimated_delivery_days,
         revision_count,
         example_image_urls,
+        thumbnail_url,
         is_active,
         display_order,
         addons:commission_package_addons(id, name, description, price)
@@ -411,7 +412,19 @@ router.get('/:id/packages', optionalAuth, async (req, res, next) => {
       .eq('is_active', true)
       .order('display_order', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching packages:', error);
+      throw error;
+    }
+
+    // Ensure thumbnail_url is set from example_image_urls if available
+    if (packages) {
+      packages.forEach(pkg => {
+        if (!pkg.thumbnail_url && pkg.example_image_urls && pkg.example_image_urls.length > 0) {
+          pkg.thumbnail_url = pkg.example_image_urls[0];
+        }
+      });
+    }
 
     await cache.set(cacheKey, packages || [], 300);
     res.json(packages || []);
