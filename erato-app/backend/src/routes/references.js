@@ -188,7 +188,7 @@ router.post('/commission/:commissionId', authenticate, handleFileUpload, async (
         users:uploaded_by (
           id,
           username,
-          profile_picture
+          avatar_url
         )
       `)
       .single();
@@ -434,7 +434,7 @@ router.post('/color-palette', authenticate, async (req, res) => {
         users:uploaded_by (
           id,
           username,
-          profile_picture
+          avatar_url
         )
       `)
       .single();
@@ -517,7 +517,7 @@ router.post('/link', authenticate, async (req, res) => {
         users:uploaded_by (
           id,
           username,
-          profile_picture
+          avatar_url
         )
       `)
       .single();

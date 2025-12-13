@@ -132,8 +132,8 @@ const verifyArtist = async (req, res, next) => {
   try {
     const { data: artist, error } = await supabaseAdmin
       .from('artists')
-      .select('id')
-      .eq('id', req.user.id)
+      .select('id, user_id')
+      .eq('user_id', req.user.id)
       .maybeSingle();
 
     if (error || !artist) {
@@ -143,6 +143,7 @@ const verifyArtist = async (req, res, next) => {
     req.artistId = artist.id;
     next();
   } catch (error) {
+    console.error('Error verifying artist:', error);
     res.status(500).json({ error: error.message });
   }
 };
