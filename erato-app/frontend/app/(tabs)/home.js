@@ -33,7 +33,6 @@ import SearchModal from '../../components/SearchModal';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 import ArtistFilters from '../../components/ArtistFilters';
 import CreateBoardModal from '../../components/CreateBoardModal';
-import ReviewPromptModal from '../../components/ReviewPromptModal';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -73,9 +72,6 @@ export default function HomeScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [showDiscoverArtists, setShowDiscoverArtists] = useState(false);
   const [discoverArtists, setDiscoverArtists] = useState([]);
-  const [pendingReviews, setPendingReviews] = useState([]);
-  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
-  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
   const [loadingArtists, setLoadingArtists] = useState(false);
   const [artistFilters, setArtistFilters] = useState({});
   const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
@@ -559,50 +555,6 @@ export default function HomeScreen() {
     }, [currentUser?.id, token])
   );
 
-  // Load pending reviews on screen focus
-  useFocusEffect(
-    useCallback(() => {
-      const loadPendingReviews = async () => {
-        if (!token) return;
-        try {
-          const response = await axios.get(
-            `${API_URL}/reviews/pending`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const reviews = response.data.pendingReviews || [];
-          setPendingReviews(reviews);
-          if (reviews.length > 0) {
-            setCurrentReviewIndex(0);
-            setShowReviewPrompt(true);
-          }
-        } catch (error) {
-          console.error('Error loading pending reviews:', error);
-        }
-      };
-
-      loadPendingReviews();
-    }, [token])
-  );
-
-  const handleReviewSubmitted = () => {
-    // Move to next review or close modal
-    if (currentReviewIndex < pendingReviews.length - 1) {
-      setCurrentReviewIndex(currentReviewIndex + 1);
-    } else {
-      setShowReviewPrompt(false);
-      setPendingReviews([]);
-      setCurrentReviewIndex(0);
-    }
-  };
-
-  const handleCloseReviewPrompt = () => {
-    // Move to next review or close modal
-    if (currentReviewIndex < pendingReviews.length - 1) {
-      setCurrentReviewIndex(currentReviewIndex + 1);
-    } else {
-      setShowReviewPrompt(false);
-    }
-  };
 
   // Organize artworks into balanced columns (Pinterest masonry style) with suggested artist cards
   useEffect(() => {
@@ -2088,17 +2040,6 @@ export default function HomeScreen() {
         visible={showSearchModal}
         onClose={() => setShowSearchModal(false)}
       />
-
-      {/* Review Prompt Modal */}
-      {pendingReviews.length > 0 && (
-        <ReviewPromptModal
-          visible={showReviewPrompt}
-          onClose={handleCloseReviewPrompt}
-          pendingReview={pendingReviews[currentReviewIndex]}
-          token={token}
-          onReviewSubmitted={handleReviewSubmitted}
-        />
-      )}
 
       {!isArtist && (
         <>

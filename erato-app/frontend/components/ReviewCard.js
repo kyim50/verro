@@ -27,6 +27,17 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
   const [userMarkedHelpful, setUserMarkedHelpful] = useState(review.userMarkedHelpful || false);
   const [togglingHelpful, setTogglingHelpful] = useState(false);
 
+  // Determine who left the review
+  const isClientReview = review.review_type === 'client_to_artist';
+
+  // Get reviewer info based on review type
+  const reviewer = isClientReview
+    ? (review.client || review.clients)
+    : (review.artist || review.artists);
+
+  const reviewerName = reviewer?.full_name || reviewer?.username || 'Anonymous';
+  const reviewerAvatar = reviewer?.avatar_url || reviewer?.profile_picture || DEFAULT_AVATAR;
+
   const handleSubmitResponse = async () => {
     if (!responseText.trim()) {
       Toast.show({
@@ -40,14 +51,12 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
     setSubmitting(true);
     try {
       if (review.artist_response) {
-        // Update existing response
         await axios.put(
           `${API_URL}/review-enhancements/${review.id}/respond`,
           { response: responseText.trim() },
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
-        // Create new response
         await axios.post(
           `${API_URL}/review-enhancements/${review.id}/respond`,
           { response: responseText.trim() },
@@ -137,42 +146,53 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
   return (
     <>
       <View style={styles.card}>
-        <View style={styles.reviewHeader}>
+        {/* Header */}
+        <View style={styles.header}>
           <View style={styles.reviewerInfo}>
             <Image
-              source={{ uri: review.client?.avatar_url || review.clients?.avatar_url || review.clients?.profile_picture || DEFAULT_AVATAR }}
+              source={{ uri: reviewerAvatar }}
               style={styles.avatar}
               contentFit="cover"
             />
             <View style={styles.reviewerDetails}>
-              <View style={styles.reviewerNameRow}>
-                <Text style={styles.reviewerName}>
-                  {review.client?.full_name || review.client?.username || review.clients?.full_name || review.clients?.username || 'Anonymous'}
+              <Text style={styles.reviewerName} numberOfLines={1}>
+                {reviewerName}
+              </Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.reviewDate}>
+                  {new Date(review.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
                 </Text>
                 {review.verified_commission && (
-                  <View style={styles.verifiedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.status.success} />
-                    <Text style={styles.verifiedText}>Verified</Text>
-                  </View>
+                  <>
+                    <Text style={styles.dot}>•</Text>
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={12} color={colors.status.success} />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  </>
                 )}
               </View>
-              <Text style={styles.reviewDate}>
-                {new Date(review.created_at).toLocaleDateString()}
-              </Text>
             </View>
           </View>
+
+          {/* Stars */}
           <View style={styles.ratingContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
               <Ionicons
                 key={star}
                 name={star <= review.rating ? 'star' : 'star-outline'}
-                size={16}
+                size={18}
                 color={colors.status.warning}
               />
             ))}
           </View>
         </View>
 
+        {/* Comment */}
         {review.comment && (
           <Text style={styles.comment}>{review.comment}</Text>
         )}
@@ -181,52 +201,44 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
         {review.artist_response && (
           <View style={styles.responseContainer}>
             <View style={styles.responseHeader}>
-              <Ionicons name="chatbubble-outline" size={16} color={colors.primary} />
-              <Text style={styles.responseLabel}>Artist Response</Text>
+              <Ionicons name="chatbubble" size={14} color={colors.primary} />
+              <Text style={styles.responseLabel}>Response</Text>
             </View>
             <Text style={styles.responseText}>{review.artist_response}</Text>
-            {review.artist_responded_at && (
-              <Text style={styles.responseDate}>
-                {new Date(review.artist_responded_at).toLocaleDateString()}
-              </Text>
-            )}
           </View>
         )}
 
         {/* Actions */}
         <View style={styles.actions}>
-          {/* Helpful Button */}
           <TouchableOpacity
-            style={[styles.actionButton, userMarkedHelpful && styles.actionButtonActive]}
+            style={styles.actionButton}
             onPress={handleToggleHelpful}
             disabled={togglingHelpful || !token}
           >
             <Ionicons
               name={userMarkedHelpful ? 'thumbs-up' : 'thumbs-up-outline'}
-              size={16}
-              color={userMarkedHelpful ? colors.primary : colors.text.secondary}
+              size={18}
+              color={userMarkedHelpful ? colors.primary : colors.text.disabled}
             />
-            <Text style={[
-              styles.actionText,
-              userMarkedHelpful && styles.actionTextActive
-            ]}>
-              Helpful {helpfulCount > 0 && `(${helpfulCount})`}
-            </Text>
+            {helpfulCount > 0 && (
+              <Text style={[styles.actionText, userMarkedHelpful && styles.actionTextActive]}>
+                {helpfulCount}
+              </Text>
+            )}
           </TouchableOpacity>
 
-          {/* Artist Response Button */}
           {isArtist && review.review_type === 'client_to_artist' && (
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => setShowResponseModal(true)}
             >
               <Ionicons
-                name={review.artist_response ? 'pencil' : 'chatbubble-outline'}
-                size={16}
-                color={colors.primary}
+                name={review.artist_response ? 'create-outline' : 'chatbubble-outline'}
+                size={18}
+                color={colors.text.secondary}
               />
-              <Text style={[styles.actionText, { color: colors.primary }]}>
-                {review.artist_response ? 'Edit Response' : 'Respond'}
+              <Text style={styles.actionText}>
+                {review.artist_response ? 'Edit' : 'Respond'}
               </Text>
             </TouchableOpacity>
           )}
@@ -244,20 +256,19 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {review.artist_response ? 'Edit Response' : 'Respond to Review'}
+                {review.artist_response ? 'Edit Response' : 'Respond'}
               </Text>
               <TouchableOpacity onPress={() => setShowResponseModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
+                <Ionicons name="close" size={26} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Your Response</Text>
               <TextInput
                 style={styles.textArea}
                 value={responseText}
                 onChangeText={setResponseText}
-                placeholder="Thank the client for their feedback..."
+                placeholder="Thank your client for their feedback..."
                 placeholderTextColor={colors.text.disabled}
                 multiline
                 numberOfLines={6}
@@ -275,23 +286,17 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
                   style={styles.deleteButton}
                   onPress={handleDeleteResponse}
                 >
-                  <Ionicons name="trash-outline" size={18} color={colors.status.error} />
-                  <Text style={styles.deleteButtonText}>Delete</Text>
+                  <Ionicons name="trash-outline" size={20} color={colors.status.error} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowResponseModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
               <TouchableOpacity
                 style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
                 onPress={handleSubmitResponse}
                 disabled={submitting}
               >
                 {submitting ? (
-                  <ActivityIndicator color={colors.text.primary} />
+                  <ActivityIndicator size="small" color={colors.background} />
                 ) : (
                   <Text style={styles.submitButtonText}>Submit</Text>
                 )}
@@ -306,16 +311,18 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: spacing.lg,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
   },
-  reviewHeader: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   reviewerInfo: {
     flexDirection: 'row',
@@ -324,58 +331,62 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
   },
   reviewerDetails: {
     flex: 1,
   },
-  reviewerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
   reviewerName: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  reviewDate: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  dot: {
+    color: colors.text.disabled,
+    fontSize: 12,
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs / 2,
-    backgroundColor: colors.status.success + '20',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
   },
   verifiedText: {
-    ...typography.small,
-    color: colors.status.success,
-    fontSize: 10,
-  },
-  reviewDate: {
     ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: spacing.xs / 2,
+    color: colors.status.success,
+    fontSize: 12,
+    fontWeight: '500',
   },
   ratingContainer: {
     flexDirection: 'row',
-    gap: 2,
+    gap: 3,
   },
   comment: {
     ...typography.body,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: spacing.md,
   },
   responseContainer: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
     padding: spacing.md,
-    marginTop: spacing.sm,
+    marginBottom: spacing.md,
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,
   },
@@ -388,40 +399,32 @@ const styles = StyleSheet.create({
   responseLabel: {
     ...typography.caption,
     color: colors.primary,
+    fontSize: 12,
     fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   responseText: {
     ...typography.body,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  responseDate: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 11,
+    fontSize: 14,
+    lineHeight: 20,
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.sm,
+    gap: spacing.lg,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  actionButtonActive: {
-    backgroundColor: colors.primary + '20',
-    borderRadius: borderRadius.sm,
   },
   actionText: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   actionTextActive: {
     color: colors.primary,
@@ -434,97 +437,81 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: spacing.lg,
+    paddingBottom: spacing.md,
   },
   modalTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '700',
   },
   modalBody: {
-    padding: spacing.md,
-  },
-  inputLabel: {
-    ...typography.body,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
+    padding: spacing.lg,
+    paddingTop: 0,
   },
   textArea: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: spacing.lg,
     ...typography.body,
     color: colors.text.primary,
+    fontSize: 15,
     borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 120,
+    borderColor: colors.border + '30',
+    minHeight: 140,
   },
   charCount: {
     ...typography.caption,
     color: colors.text.disabled,
     textAlign: 'right',
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    fontSize: 12,
   },
   modalFooter: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    paddingTop: spacing.md,
   },
   deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-  },
-  deleteButtonText: {
-    ...typography.bodyBold,
-    color: colors.status.error,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  cancelButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.secondary,
   },
   submitButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+    minWidth: 100,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
   submitButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
+    ...typography.button,
+    color: colors.background,
+    fontWeight: '700',
+    fontSize: 16,
   },
 });
-
-
-
-
-
-
-
-
