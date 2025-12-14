@@ -163,26 +163,45 @@ router.get('/bids/my', authenticate, async (req, res, next) => {
 // Get client's own commission requests with bids (MUST be before /:id route)
 router.get('/my-requests', authenticate, async (req, res, next) => {
   try {
+    // First get the requests
     const { data: requests, error } = await supabaseAdmin
       .from('commission_requests')
-      .select(`
-        *,
-        bids:commission_request_bids(
-          *,
-          artist:users(id, username, avatar_url, full_name)
-        )
-      `)
+      .select('*')
       .eq('client_id', req.user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    // Enrich with bid statistics and add client info manually
-    const enrichedRequests = (requests || []).map(request => ({
-      ...request,
-      pending_bids_count: request.bids?.filter(b => b.status === 'pending').length || 0,
-      total_bids_count: request.bids?.length || 0
-    }));
+    // Then get bids for each request with artist info
+    const enrichedRequests = await Promise.all(
+      (requests || []).map(async (request) => {
+        const { data: bids } = await supabaseAdmin
+          .from('commission_request_bids')
+          .select('*')
+          .eq('request_id', request.id)
+          .order('created_at', { ascending: false });
+
+        // Get artist info for each bid
+        const bidsWithArtists = await Promise.all(
+          (bids || []).map(async (bid) => {
+            const { data: artist } = await supabaseAdmin
+              .from('users')
+              .select('id, username, avatar_url, full_name')
+              .eq('id', bid.artist_id)
+              .single();
+
+            return { ...bid, artist };
+          })
+        );
+
+        return {
+          ...request,
+          bids: bidsWithArtists,
+          pending_bids_count: bidsWithArtists.filter(b => b.status === 'pending').length,
+          total_bids_count: bidsWithArtists.length
+        };
+      })
+    );
 
     res.json({ requests: enrichedRequests });
   } catch (error) {
