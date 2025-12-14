@@ -400,7 +400,7 @@ export default function ArtworkDetailScreen() {
                 router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
               }}
             >
-              <Ionicons name="mail-outline" size={18} color={colors.text.primary} />
+              <Ionicons name="mail" size={20} color="#000" />
               <Text style={styles.commissionButtonText}>Request Commission</Text>
             </TouchableOpacity>
           )}
@@ -514,11 +514,10 @@ const styles = StyleSheet.create({
     width: IS_SMALL_SCREEN ? 36 : 40,
     height: IS_SMALL_SCREEN ? 36 : 40,
     borderRadius: IS_SMALL_SCREEN ? 18 : 20,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer Pinterest overlay
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 0, // Remove border for cleaner look
   },
   headerActions: {
     flexDirection: 'row',
@@ -534,10 +533,14 @@ const styles = StyleSheet.create({
     marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     marginTop: spacing.sm,
     marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.surface,
+    borderRadius: 20, // Pinterest-style soft rounding
+    backgroundColor: colors.background,
     overflow: 'hidden',
-    ...shadows.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, // Soft Pinterest shadow
+    shadowRadius: 16,
+    elevation: 4,
   },
   imageContainer: {
     width: '100%',
@@ -594,7 +597,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '500', // Pinterest-style
   },
   description: {
     ...typography.body,
@@ -603,6 +606,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontWeight: '400', // Pinterest-style
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -636,12 +640,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.error + '10',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.error + '40',
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full, // Pill shape
+    borderWidth: 0, // Remove border
   },
   deleteButtonText: {
     ...typography.bodyBold,
@@ -649,25 +652,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   artistCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    ...shadows.small,
+    borderRadius: 16, // Pinterest-style soft rounding
+    padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, // Soft Pinterest shadow
+    shadowRadius: 8,
+    elevation: 2,
   },
   artistCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   artistAvatar: {
-    width: width < 375 ? 44 : 48,
-    height: width < 375 ? 44 : 48,
-    borderRadius: width < 375 ? 22 : 24,
+    width: width < 375 ? 56 : 64,
+    height: width < 375 ? 56 : 64,
+    borderRadius: width < 375 ? 28 : 32,
     backgroundColor: colors.background,
-    marginRight: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginRight: spacing.md,
+    borderWidth: 0,
   },
   artistDetails: {
     flex: 1,
@@ -676,33 +682,41 @@ const styles = StyleSheet.create({
   artistName: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: width < 375 ? 15 : 16,
-    marginBottom: 2,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    fontSize: width < 375 ? 16 : 17,
+    marginBottom: 3,
+    fontWeight: '600', // Pinterest-style
   },
   artistBio: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: width < 375 ? 12 : 13,
-    lineHeight: 16,
+    fontSize: width < 375 ? 13 : 14,
+    fontWeight: '400', // Pinterest-style
+    lineHeight: 18,
   },
   commissionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
-    ...shadows.small,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.md,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 5,
+    width: '100%',
   },
   commissionButtonText: {
     ...typography.button,
-    color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '700',
   },
   similarSection: {
     marginTop: spacing.xl,

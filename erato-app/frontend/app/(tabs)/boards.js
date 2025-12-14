@@ -8,13 +8,12 @@ import {
   RefreshControl,
   Alert,
   Modal,
-  TextInput,
   ScrollView,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -27,6 +26,7 @@ import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import ReviewModal from '../../components/ReviewModal';
+import CreateBoardModal from '../../components/CreateBoardModal';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -727,9 +727,7 @@ export default function BoardsScreen() {
               style={styles.addButton}
               onPress={() => setShowCreateModal(true)}
             >
-              <View style={styles.addButtonBackground}>
-                <Ionicons name="add" size={24} color={colors.background} />
-              </View>
+              <Ionicons name="add" size={28} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -738,105 +736,20 @@ export default function BoardsScreen() {
       {/* Content */}
       {renderTabContent()}
 
-      {/* Create Board Modal */}
-      <Modal
+      {/* Create Board Modal - Shared Component */}
+      <CreateBoardModal
         visible={showCreateModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowCreateModal(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalOverlay}>
-              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalContent}>
-                  <SafeAreaView edges={['bottom']}>
-                    <View style={styles.modalHeader}>
-                      <Text style={styles.modalTitle}>Create Board</Text>
-                      <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                        <Ionicons name="close" size={24} color={colors.text.primary} />
-                      </TouchableOpacity>
-                    </View>
-
-                    <ScrollView
-                      style={styles.modalBody}
-                      keyboardShouldPersistTaps="handled"
-                      showsVerticalScrollIndicator={false}
-                    >
-                      <Text style={styles.label}>Name</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="My Favorite Art"
-                        placeholderTextColor={colors.text.disabled}
-                        value={newBoardName}
-                        onChangeText={setNewBoardName}
-                        autoFocus
-                        returnKeyType="next"
-                      />
-
-                      <Text style={styles.label}>Description (optional)</Text>
-                      <TextInput
-                        style={[styles.input, styles.textArea]}
-                        placeholder="What's this board about?"
-                        placeholderTextColor={colors.text.disabled}
-                        value={newBoardDescription}
-                        onChangeText={setNewBoardDescription}
-                        multiline
-                        numberOfLines={3}
-                        returnKeyType="done"
-                        blurOnSubmit={true}
-                      />
-
-                      <TouchableOpacity
-                        style={styles.publicToggle}
-                        onPress={() => setIsPublic(!isPublic)}
-                      >
-                        <View style={styles.toggleLeft}>
-                          <Ionicons
-                            name={isPublic ? 'globe-outline' : 'lock-closed-outline'}
-                            size={20}
-                            color={colors.text.primary}
-                          />
-                          <View>
-                            <Text style={styles.toggleLabel}>
-                              {isPublic ? 'Public' : 'Private'}
-                            </Text>
-                            <Text style={styles.toggleDescription}>
-                              {isPublic ? 'Anyone can see this board' : 'Only you can see this board'}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={[styles.switch, isPublic && styles.switchActive]}>
-                          <View style={[styles.switchThumb, isPublic && styles.switchThumbActive]} />
-                        </View>
-                      </TouchableOpacity>
-                    </ScrollView>
-
-                    <View style={styles.modalFooter}>
-                      <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={() => setShowCreateModal(false)}
-                      >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.saveButton}
-                        onPress={handleCreateBoard}
-                      >
-                        <Text style={styles.saveButtonText}>Create</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </SafeAreaView>
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
+        onClose={() => {
+          setShowCreateModal(false);
+          setNewBoardName('');
+          setIsPublic(false);
+        }}
+        onCreateBoard={handleCreateBoard}
+        boardName={newBoardName}
+        setBoardName={setNewBoardName}
+        isPublic={isPublic}
+        setIsPublic={setIsPublic}
+      />
 
       {/* Commission Detail Modal */}
       <Modal
@@ -1116,13 +1029,18 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm - 2,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '30',
     minHeight: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   searchIcon: {
     marginRight: spacing.sm,
@@ -1146,31 +1064,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  addButtonBackground: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.shadow.color,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-    borderWidth: 2,
-    borderColor: colors.background,
-  },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   sortButtonText: {
     ...typography.caption,
@@ -1235,9 +1142,14 @@ const styles = StyleSheet.create({
     height: 180,
     flexDirection: 'row',
     backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: spacing.xs + 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   gridItemLarge: {
     width: '60%',
@@ -1282,8 +1194,9 @@ const styles = StyleSheet.create({
   boardName: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
+    letterSpacing: -0.2,
     flex: 1,
   },
   lockIcon: {
@@ -1292,7 +1205,8 @@ const styles = StyleSheet.create({
   boardMeta: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '400',
   },
   commissionCardWrapper: {
     marginBottom: spacing.md,
@@ -1468,27 +1382,34 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: colors.overlayMedium,
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: Dimensions.get('window').height * 0.85,
-    width: '100%',
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '92%',
+    paddingTop: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 0,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '10',
   },
   modalTitle: {
-    ...typography.h2,
+    fontSize: 22,
+    fontWeight: '700',
     color: colors.text.primary,
+    letterSpacing: -0.3,
   },
   modalBody: {
     padding: spacing.lg,
@@ -1499,28 +1420,43 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
+    fontSize: 16,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: spacing.md + 2,
     color: colors.text.primary,
     ...typography.body,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '30',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   publicToggle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    padding: spacing.md + 2,
+    borderRadius: 16,
     marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '30',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   toggleLeft: {
     flexDirection: 'row',
@@ -1531,17 +1467,21 @@ const styles = StyleSheet.create({
   toggleLabel: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   toggleDescription: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: 2,
   },
   switch: {
     width: 50,
     height: 30,
     borderRadius: 15,
-    backgroundColor: colors.border,
+    backgroundColor: colors.border + '60',
     padding: 2,
     justifyContent: 'center',
   },
@@ -1552,39 +1492,114 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: colors.text.primary,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   switchThumbActive: {
     alignSelf: 'flex-end',
   },
   modalFooter: {
-    flexDirection: 'row',
-    gap: spacing.md,
     padding: spacing.lg,
-    borderTopWidth: 0,
-    borderTopColor: colors.border,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    ...typography.button,
-    color: colors.text.secondary,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '10',
   },
   saveButton: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    width: '100%',
+    padding: spacing.md + 2,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.surface,
+    opacity: 0.5,
   },
   saveButtonText: {
     ...typography.button,
     color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  // Pinterest-style create board preview
+  createBoardPreview: {
+    alignSelf: 'center',
+    marginBottom: spacing.xxl,
+  },
+  createBoardPreviewGrid: {
+    width: 160,
+    height: 160,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    overflow: 'hidden',
+  },
+  previewGridItem: {
+    width: '48%',
+    height: '48%',
+    backgroundColor: colors.border + '40',
+    borderRadius: borderRadius.sm,
+  },
+  createBoardInputSection: {
+    marginBottom: spacing.lg,
+  },
+  createBoardLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    marginBottom: spacing.sm,
+  },
+  createBoardNameInput: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: 0,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  createBoardFormContainer: {
+    flex: 1,
+  },
+  createBoardFormContent: {
+    flexGrow: 1,
+    padding: spacing.xl,
+    paddingTop: spacing.xxl,
+  },
+  createBoardFooter: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  createBoardButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  createBoardButtonDisabled: {
+    backgroundColor: colors.text.disabled,
+    opacity: 0.5,
+  },
+  createBoardButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
   },
   artistCard: {
     backgroundColor: colors.surface,

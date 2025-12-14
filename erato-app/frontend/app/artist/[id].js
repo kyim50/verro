@@ -639,18 +639,35 @@ export default function ArtistProfileScreen() {
         onPress={() => router.push(`/board/${item.id}`)}
         activeOpacity={0.9}
       >
-        {/* Cover Grid - show first 4 artworks */}
+        {/* Pinterest-style Cover Grid - 1 large + 3 small */}
         <View style={styles.coverGrid}>
           {firstArtworks.length > 0 ? (
-            firstArtworks.map((ba, index) => (
-              <View key={index} style={styles.gridItem}>
+            <>
+              {/* Large image on left */}
+              <View style={styles.gridItemLarge}>
                 <Image
-                  source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                  source={{ uri: firstArtworks[0]?.artworks?.thumbnail_url || firstArtworks[0]?.artworks?.image_url }}
                   style={styles.gridImage}
                   contentFit="cover"
                 />
               </View>
-            ))
+              
+              {/* Smaller images on right */}
+              <View style={styles.gridItemSmall}>
+                {firstArtworks.slice(1, 4).map((ba, index) => (
+                  <View key={index} style={styles.smallGridItem}>
+                    <Image
+                      source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                      style={styles.gridImage}
+                      contentFit="cover"
+                    />
+                  </View>
+                ))}
+                {firstArtworks.length < 4 && (
+                  <View style={[styles.smallGridItem, styles.emptySmallGrid]} />
+                )}
+              </View>
+            </>
           ) : (
             <View style={styles.emptyGrid}>
               <Ionicons name="images-outline" size={40} color={colors.text.disabled} />
@@ -805,101 +822,100 @@ export default function ArtistProfileScreen() {
             </Text>
           )}
 
-          {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Ionicons name="star" size={18} color={colors.primary} />
-              <Text style={styles.statValue}>{artist.rating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.statLabel}>Rating</Text>
+          {/* Stats - Pinterest-style Cards */}
+          <View style={styles.pinterestStatsGrid}>
+            <View style={styles.pinterestStatCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="star" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.pinterestStatValue}>{artist.rating?.toFixed(1) || '0.0'}</Text>
+              <Text style={styles.pinterestStatLabel}>Rating</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="briefcase-outline" size={18} color={colors.primary} />
-              <Text style={styles.statValue}>{artist.total_commissions || 0}</Text>
-              <Text style={styles.statLabel}>Commissions</Text>
+            <View style={styles.pinterestStatCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.pinterestStatValue}>{artist.total_commissions || 0}</Text>
+              <Text style={styles.pinterestStatLabel}>Commissions</Text>
             </View>
             {artist.min_price && artist.max_price && (
-              <>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Ionicons name="cash-outline" size={18} color={colors.primary} />
-                  <Text style={styles.statValue} numberOfLines={1}>
-                    ${artist.min_price} - ${artist.max_price}
-                  </Text>
-                  <Text style={styles.statLabel}>Price Range</Text>
+              <View style={[styles.pinterestStatCard, { flex: 2 }]}>
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="cash-outline" size={20} color={colors.primary} />
                 </View>
-              </>
+                <Text style={styles.pinterestStatValue} numberOfLines={1}>
+                  ${artist.min_price} - ${artist.max_price}
+                </Text>
+                <Text style={styles.pinterestStatLabel}>Price Range</Text>
+              </View>
             )}
           </View>
 
-          {/* Commission Status & Slots - Right under stats */}
-          <View style={styles.statusAndQueueCentered}>
-            <View style={[styles.statusBadge, artist.commission_status === 'open' ? styles.statusOpen : styles.statusClosed]}>
-              <Ionicons
-                name={artist.commission_status === 'open' ? 'checkmark-circle' : 'close-circle'}
-                size={14}
-                color={artist.commission_status === 'open' ? colors.success : colors.error}
-              />
-              <Text style={[styles.statusText, artist.commission_status === 'open' ? styles.statusOpenText : styles.statusClosedText]}>
-                Commissions {artist.commission_status === 'open' ? 'Open' : 'Closed'}
+          {/* Commission Status & Slots - Pinterest-style */}
+          <View style={styles.pinterestStatusRow}>
+            <View style={[styles.pinterestStatusBadge, artist.commission_status === 'open' ? styles.pinterestStatusOpen : styles.pinterestStatusClosed]}>
+              <View style={[styles.statusDotLarge, { backgroundColor: artist.commission_status === 'open' ? colors.success : colors.error }]} />
+              <Text style={styles.pinterestStatusText}>
+                {artist.commission_status === 'open' ? 'Open' : 'Closed'}
               </Text>
             </View>
             {queueStatus && (
-              <View style={styles.queueBadge}>
-                <Ionicons name="people-outline" size={14} color={colors.text.primary} />
-                <Text style={styles.queueText}>
-                  {Math.max(0, queueStatus.current || 0)}/{queueStatus.max || 0} slots filled
+              <View style={styles.pinterestQueueBadge}>
+                <View style={styles.queueIconContainer}>
+                  <Ionicons name="people" size={14} color={colors.text.primary} />
+                </View>
+                <Text style={styles.pinterestQueueText}>
+                  {Math.max(0, queueStatus.current || 0)}/{queueStatus.max || 0}
                 </Text>
                 {queueStatus.is_full && queueStatus.allow_waitlist && (
-                  <Text style={styles.queueWaitlist}>Waitlist available</Text>
+                  <Text style={styles.pinterestQueueWaitlist}>+ Waitlist</Text>
                 )}
               </View>
             )}
           </View>
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Pinterest-style */}
           {!isOwnProfile && (
-            <View style={styles.actionButtons}>
+            <View style={styles.pinterestActionButtons}>
               {/* Show Message button for artists (they can message each other) */}
               {(user?.user_type === 'artist' || user?.artists) && (
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.messageButton]}
+                  style={styles.pinterestSecondaryBtn}
                   onPress={handleMessage}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="chatbubble-outline" size={20} color={colors.text.primary} />
-                  <Text style={styles.messageButtonText}>Message</Text>
+                  <Ionicons name="chatbubble" size={18} color={colors.text.primary} />
+                  <Text style={styles.pinterestSecondaryBtnText}>Message</Text>
                 </TouchableOpacity>
               )}
               {/* Show Request Commission button only for clients */}
               {user?.user_type !== 'artist' && !user?.artists && (
                 <TouchableOpacity
                   style={[
-                    styles.actionButton,
-                    styles.commissionButton,
-                    artist.commission_status !== 'open' && styles.commissionButtonDisabled,
+                    styles.pinterestPrimaryBtn,
+                    artist.commission_status !== 'open' && styles.pinterestPrimaryBtnDisabled,
                   ]}
                   onPress={handleCommission}
                   disabled={artist.commission_status !== 'open'}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name="brush-outline" size={20} color={artist.commission_status === 'open' ? colors.text.primary : colors.text.secondary} />
+                  <Ionicons name="brush" size={18} color={artist.commission_status === 'open' ? colors.text.primary : colors.text.disabled} />
                   <Text style={[
-                    styles.commissionButtonText,
-                    artist.commission_status !== 'open' && styles.commissionButtonTextDisabled
+                    styles.pinterestPrimaryBtnText,
+                    artist.commission_status !== 'open' && styles.pinterestPrimaryBtnTextDisabled
                   ]}>
-                    {artist.commission_status === 'open' ? 'Request Commission' : 'Commissions Closed'}
+                    {artist.commission_status === 'open' ? 'Request' : 'Closed'}
                   </Text>
                 </TouchableOpacity>
               )}
               {/* Find Similar Artists button */}
               <TouchableOpacity
-                style={[styles.actionButton, styles.similarButton]}
+                style={styles.pinterestSecondaryBtn}
                 onPress={handleFindSimilar}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
-                <Ionicons name="people-outline" size={20} color={colors.text.primary} />
-                <Text style={styles.similarButtonText}>Find Similar</Text>
+                <Ionicons name="people" size={18} color={colors.text.primary} />
+                <Text style={styles.pinterestSecondaryBtnText}>Similar</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1742,35 +1758,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
+    borderBottomWidth: 0,
     backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border + '20',
+    borderWidth: 0,
   },
   favoriteButton: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border + '20',
+    borderWidth: 0,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 18 : 20,
+    fontSize: IS_SMALL_SCREEN ? 20 : 22,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   content: {
     paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
@@ -1828,8 +1842,7 @@ const styles = StyleSheet.create({
     width: IS_SMALL_SCREEN ? 110 : 120,
     height: IS_SMALL_SCREEN ? 110 : 120,
     borderRadius: IS_SMALL_SCREEN ? 55 : 60,
-    borderWidth: 4,
-    borderColor: colors.primary + '40',
+    borderWidth: 0, // Remove border for cleaner look
   },
   nameContainer: {
     alignItems: 'center',
@@ -1848,7 +1861,7 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 26 : 30,
-    fontWeight: '800',
+    fontWeight: '700', // Pinterest-style
     textAlign: 'center',
     letterSpacing: -0.5,
   },
@@ -1875,10 +1888,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: 16, // Pinterest-style soft rounding
     width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   ratingStars: {
     flexDirection: 'row',
@@ -1904,15 +1922,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    backgroundColor: colors.background,
+    borderRadius: 16,
     paddingVertical: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     marginBottom: spacing.lg,
     width: '100%',
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    borderWidth: 0, // Pinterest-style: no borders
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statItem: {
     flex: 1,
@@ -1924,8 +1946,8 @@ const styles = StyleSheet.create({
   statValue: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 20 : 22,
-    fontWeight: '800',
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
+    fontWeight: '700', // Pinterest-style (was 800)
     textAlign: 'center',
   },
   statLabel: {
@@ -1933,9 +1955,9 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
     textAlign: 'center',
-    fontWeight: '600',
+    fontWeight: '500', // Pinterest-style
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   statDivider: {
     width: 1,
@@ -1954,14 +1976,12 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   statusOpen: {
-    backgroundColor: colors.success + '15',
-    borderWidth: 1,
-    borderColor: colors.success + '30',
+    backgroundColor: colors.success + '20',
+    borderWidth: 0,
   },
   statusClosed: {
-    backgroundColor: colors.error + '15',
-    borderWidth: 1,
-    borderColor: colors.error + '30',
+    backgroundColor: colors.error + '20',
+    borderWidth: 0,
   },
   statusText: {
     ...typography.caption,
@@ -2022,11 +2042,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border + '30',
+    borderWidth: 0, // Remove border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   actionButtons: {
     width: '100%',
@@ -2038,15 +2062,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full, // Pill shape
     gap: spacing.sm,
     width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   messageButton: {
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border + '50',
+    backgroundColor: colors.background,
+    borderWidth: 0, // Remove border
   },
   messageButtonText: {
     ...typography.button,
@@ -2337,11 +2365,15 @@ const styles = StyleSheet.create({
   packageCard: {
     flexBasis: '48%',
     minWidth: 160,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '70',
+    backgroundColor: colors.background,
+    borderRadius: 16, // Pinterest-style soft rounding
+    padding: spacing.lg,
+    borderWidth: 0, // Remove border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   packageImage: {
     width: '100%',
@@ -2536,18 +2568,35 @@ const styles = StyleSheet.create({
   coverGrid: {
     width: '100%',
     height: ITEM_WIDTH,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: colors.surfaceLight,
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  gridItem: {
-    width: '50%',
-    height: '50%',
-    borderWidth: 0.5,
-    borderColor: colors.background,
-    overflow: 'hidden',
+  gridItemLarge: {
+    width: '60%',
+    height: '100%',
+    position: 'relative',
+  },
+  gridItemSmall: {
+    width: '40%',
+    height: '100%',
+    flexDirection: 'column',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.background,
+  },
+  smallGridItem: {
+    flex: 1,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.background,
+  },
+  emptySmallGrid: {
+    backgroundColor: colors.surfaceLight,
   },
   gridImage: {
     width: '100%',
@@ -2707,10 +2756,12 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.background,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.xs,
-    gap: spacing.sm,
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    marginBottom: spacing.md,
+    gap: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '20',
   },
   tab: {
     flex: 1,
@@ -2718,24 +2769,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    paddingVertical: spacing.md,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   tabActive: {
-    backgroundColor: colors.primary + '15',
-    borderColor: colors.primary + '40',
+    backgroundColor: 'transparent',
+    borderBottomColor: colors.error,
   },
   tabText: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   tabTextActive: {
-    color: colors.primary,
+    color: colors.text.primary,
     fontWeight: '700',
   },
   settingsCard: {
@@ -2792,5 +2844,177 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     textAlign: 'left',
+  },
+  // Pinterest-style Stats Grid
+  pinterestStatsGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  pinterestStatCard: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinterestStatValue: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: spacing.xs / 2,
+  },
+  pinterestStatLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Pinterest-style Status & Queue
+  pinterestStatusRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  pinterestStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  pinterestStatusOpen: {
+    backgroundColor: colors.success + '10',
+  },
+  pinterestStatusClosed: {
+    backgroundColor: colors.error + '10',
+  },
+  statusDotLarge: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pinterestStatusText: {
+    ...typography.bodyBold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  pinterestQueueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  queueIconContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinterestQueueText: {
+    ...typography.bodyBold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  pinterestQueueWaitlist: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  // Pinterest-style Action Buttons
+  pinterestActionButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  pinterestPrimaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  pinterestPrimaryBtnDisabled: {
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+  },
+  pinterestPrimaryBtnText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  pinterestPrimaryBtnTextDisabled: {
+    color: colors.text.disabled,
+  },
+  pinterestSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.background,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  pinterestSecondaryBtnText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

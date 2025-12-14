@@ -286,7 +286,18 @@ router.get('/conversations/:id', authenticate, async (req, res) => {
 
     const { data: participants, error: partsError } = await supabaseAdmin
       .from('conversation_participants')
-      .select('user_id, users(id, username, full_name, avatar_url, is_online, last_seen)')
+      .select(`
+        user_id,
+        users(
+          id,
+          username,
+          full_name,
+          avatar_url,
+          is_online,
+          last_seen,
+          artists(id)
+        )
+      `)
       .eq('conversation_id', req.params.id);
 
     if (partsError) throw partsError;
