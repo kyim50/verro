@@ -542,6 +542,7 @@ export default function HomeScreen() {
       setAvatarKey(prev => prev + 1);
     }
   }, [userProfile?.avatar_url, currentUser?.avatar_url]);
+
   
   // Also refresh when screen comes into focus
   useFocusEffect(
@@ -1696,86 +1697,176 @@ export default function HomeScreen() {
         visible={showSaveModal}
         animationType="slide"
         transparent={true}
+        style={{ zIndex: 9999 }}
         onRequestClose={() => {
           setShowSaveModal(false);
           setShowCreateBoard(false);
           setNewBoardName('');
         }}
       >
-        <View style={styles.modalOverlay}>
+        <View style={styles.saveBoardModalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1, justifyContent: 'flex-end' }}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <View style={styles.modalContent}>
-                <SafeAreaView edges={['bottom']}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Save to Board</Text>
-                <TouchableOpacity onPress={() => {
-                  setShowSaveModal(false);
-                  setShowCreateBoard(false);
-                  setNewBoardName('');
-                }}>
-                  <Ionicons name="close" size={24} color={colors.text.primary} />
-                </TouchableOpacity>
-              </View>
-
-              {!showCreateBoard ? (
-                <>
-                  <ScrollView style={styles.boardList}>
-                    {boards.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={styles.boardOption}
-                        onPress={() => handleBoardSelect(item)}
-                      >
-                        <Ionicons name="albums" size={24} color={colors.text.secondary} />
-                        <Text style={styles.boardOptionText}>{item.name}</Text>
-                        <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-
+            <TouchableWithoutFeedback onPress={() => {
+              if (!showCreateBoard) {
+                setShowSaveModal(false);
+                setShowCreateBoard(false);
+                setNewBoardName('');
+              }
+            }}>
+              <View style={styles.saveBoardModalContent}>
+                {/* Header */}
+                <View style={styles.saveBoardHeader}>
                   <TouchableOpacity
-                    style={styles.createBoardButton}
-                    onPress={() => setShowCreateBoard(true)}
+                    onPress={() => {
+                      setShowSaveModal(false);
+                      setShowCreateBoard(false);
+                      setNewBoardName('');
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="add-circle" size={24} color={colors.primary} />
-                    <Text style={styles.createBoardText}>Create New Board</Text>
+                    <Ionicons name="close" size={28} color={colors.text.primary} />
                   </TouchableOpacity>
-                </>
-              ) : (
-                <View style={styles.createBoardForm}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Board name"
-                    placeholderTextColor={colors.text.disabled}
-                    value={newBoardName}
-                    onChangeText={setNewBoardName}
-                    autoFocus
-                  />
-                  <View style={styles.createBoardActions}>
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={() => {
-                        setShowCreateBoard(false);
-                        setNewBoardName('');
-                      }}
-                    >
-                      <Text style={styles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.createButton}
-                      onPress={handleCreateAndSave}
-                    >
-                      <Text style={styles.createButtonText}>Create</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={styles.saveBoardTitle}>
+                    {showCreateBoard ? 'Create board' : 'Save to board'}
+                  </Text>
+                  <View style={{ width: 28 }} />
                 </View>
-              )}
-                </SafeAreaView>
+
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                  <View style={{ flex: 1 }}>
+                    {!showCreateBoard ? (
+                      <>
+                        {/* Board List */}
+                        <ScrollView
+                          style={styles.saveBoardList}
+                          contentContainerStyle={styles.saveBoardListContent}
+                          showsVerticalScrollIndicator={false}
+                          keyboardShouldPersistTaps="handled"
+                        >
+                          {boards.map((board) => {
+                            const firstArtworks = board.board_artworks?.slice(0, 4) || [];
+                            const artworkCount = board.board_artworks?.length || board.artworks?.[0]?.count || 0;
+
+                            return (
+                              <TouchableOpacity
+                                key={board.id}
+                                style={styles.saveBoardOption}
+                                onPress={() => handleBoardSelect(board)}
+                                activeOpacity={0.7}
+                              >
+                                {/* Board Thumbnail - Pinterest Grid Style */}
+                                <View style={styles.saveBoardThumbnail}>
+                                  {firstArtworks.length > 0 ? (
+                                    <View style={styles.saveThumbnailGrid}>
+                                      {/* Left large image */}
+                                      <View style={styles.saveGridLeft}>
+                                        <Image
+                                          source={{ uri: firstArtworks[0]?.artworks?.thumbnail_url || firstArtworks[0]?.artworks?.image_url }}
+                                          style={styles.saveGridImage}
+                                          contentFit="cover"
+                                        />
+                                      </View>
+                                      {/* Right small images */}
+                                      <View style={styles.saveGridRight}>
+                                        {firstArtworks.slice(1, 4).map((ba, index) => (
+                                          <View key={index} style={styles.saveGridSmallItem}>
+                                            <Image
+                                              source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                                              style={styles.saveGridImage}
+                                              contentFit="cover"
+                                            />
+                                          </View>
+                                        ))}
+                                        {firstArtworks.length < 4 && Array(4 - firstArtworks.length).fill(0).map((_, i) => (
+                                          <View key={`empty-${i}`} style={[styles.saveGridSmallItem, styles.saveGridEmpty]} />
+                                        ))}
+                                      </View>
+                                    </View>
+                                  ) : (
+                                    <View style={styles.saveGridEmptyFull}>
+                                      <Ionicons name="images-outline" size={24} color={colors.text.disabled} />
+                                    </View>
+                                  )}
+                                </View>
+
+                                {/* Board Info */}
+                                <View style={styles.saveBoardInfo}>
+                                  <Text style={styles.saveBoardName} numberOfLines={1}>
+                                    {board.name}
+                                  </Text>
+                                  <Text style={styles.saveBoardMeta}>
+                                    {artworkCount} {artworkCount === 1 ? 'pin' : 'pins'}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+
+                          {/* Create New Board Button */}
+                          <TouchableOpacity
+                            style={styles.createNewBoardOption}
+                            onPress={() => setShowCreateBoard(true)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.createNewBoardThumbnail}>
+                              <Ionicons name="add" size={32} color={colors.text.secondary} />
+                            </View>
+                            <View style={styles.saveBoardInfo}>
+                              <Text style={styles.createNewBoardText}>Create board</Text>
+                            </View>
+                          </TouchableOpacity>
+                        </ScrollView>
+                      </>
+                    ) : (
+                      <ScrollView
+                        style={styles.createBoardFormContainer}
+                        contentContainerStyle={styles.createBoardFormContent}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {/* Board Preview Thumbnail */}
+                        <View style={styles.createBoardPreview}>
+                          <View style={styles.createBoardPreviewGrid}>
+                            <View style={styles.previewGridItem} />
+                            <View style={styles.previewGridItem} />
+                            <View style={styles.previewGridItem} />
+                          </View>
+                        </View>
+
+                        {/* Board Name Input */}
+                        <View style={styles.createBoardInputSection}>
+                          <Text style={styles.createBoardLabel}>Board name</Text>
+                          <TextInput
+                            style={styles.createBoardNameInput}
+                            placeholder="Name your board"
+                            placeholderTextColor={colors.text.disabled}
+                            value={newBoardName}
+                            onChangeText={setNewBoardName}
+                            autoFocus
+                          />
+                        </View>
+
+                        {/* Spacer */}
+                        <View style={{ flex: 1 }} />
+
+                        {/* Action Buttons */}
+                        <View style={styles.createBoardFooter}>
+                          <TouchableOpacity
+                            style={[styles.createBoardButton, !newBoardName.trim() && styles.createBoardButtonDisabled]}
+                            onPress={handleCreateAndSave}
+                            disabled={!newBoardName.trim()}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.createBoardButtonText}>Create</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </ScrollView>
+                    )}
+                  </View>
+                </TouchableWithoutFeedback>
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
@@ -1789,19 +1880,20 @@ export default function HomeScreen() {
         transparent={true}
         onRequestClose={() => setShowSortFilterModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.sortFilterModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sort & Filter</Text>
-              <TouchableOpacity
-                onPress={() => setShowSortFilterModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.pinterestModalContent}>
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowSortFilterModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>Sort & Filter</Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView style={styles.sortFilterContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.pinterestBody} contentContainerStyle={styles.pinterestBodyContent} showsVerticalScrollIndicator={false}>
               {/* Sort Options */}
               <View style={styles.sortSection}>
                 <Text style={styles.sortSectionTitle}>Sort By</Text>
@@ -1921,8 +2013,9 @@ export default function HomeScreen() {
                   ))}
                 </View>
               )}
-            </ScrollView>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -2347,7 +2440,9 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10000,
   },
   sortFilterModal: {
     backgroundColor: colors.background,
@@ -2818,5 +2913,434 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.primary,
+  },
+
+  // Save to Board Modal Styles
+  modalContent: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.xl,
+    height: Dimensions.get('window').height * 0.6, // Fixed height that leaves room for keyboard
+    width: '90%',
+    maxWidth: 400,
+    ...shadows.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '40',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  boardList: {
+    maxHeight: 300,
+    paddingHorizontal: spacing.lg,
+  },
+  boardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    gap: spacing.md,
+  },
+  boardOptionText: {
+    ...typography.body,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  createBoardSection: {
+    padding: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '40',
+  },
+  createBoardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.background, // White background
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    gap: spacing.sm,
+  },
+  createBoardButtonText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  createBoardText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+  },
+  createBoardForm: {
+    padding: spacing.lg,
+    flex: 1,
+  },
+  createBoardHeader: {
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  createBoardTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  createBoardSubtitle: {
+    ...typography.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  createBoardInput: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    color: colors.text.primary,
+    ...typography.body,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: 16,
+    marginTop: spacing.sm,
+  },
+  createBoardActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.xl,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '40',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+  },
+  createButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  createButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+  },
+
+  // Pinterest-Style Save to Board Modal
+  saveBoardModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  saveBoardModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    height: '92%',
+    paddingTop: spacing.md,
+  },
+  saveBoardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  saveBoardTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  saveBoardList: {
+    flex: 1,
+  },
+  saveBoardListContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  saveBoardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  saveBoardThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  saveThumbnailGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 2,
+  },
+  saveGridLeft: {
+    flex: 1,
+    height: '100%',
+  },
+  saveGridRight: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: 2,
+  },
+  saveGridSmallItem: {
+    flex: 1,
+    backgroundColor: colors.surface,
+  },
+  saveGridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  saveGridEmpty: {
+    backgroundColor: colors.surface + '40',
+  },
+  saveGridEmptyFull: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
+  saveBoardInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+    justifyContent: 'center',
+  },
+  saveBoardName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  saveBoardMeta: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  createNewBoardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  createNewBoardThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  createNewBoardText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+
+  // Create Board Form (Pinterest Style)
+  createBoardFormContainer: {
+    flex: 1,
+  },
+  createBoardFormContent: {
+    flexGrow: 1,
+    padding: spacing.xl,
+    paddingTop: spacing.xxl,
+  },
+  createBoardPreview: {
+    alignSelf: 'center',
+    marginBottom: spacing.xxl,
+  },
+  createBoardPreviewGrid: {
+    width: 160,
+    height: 160,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    overflow: 'hidden',
+  },
+  previewGridItem: {
+    width: '48%',
+    height: '48%',
+    backgroundColor: colors.border + '40',
+    borderRadius: borderRadius.sm,
+  },
+  createBoardInputSection: {
+    marginBottom: spacing.lg,
+  },
+  createBoardLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    marginBottom: spacing.sm,
+  },
+  createBoardNameInput: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: 0,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  createBoardFooter: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  createBoardButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  createBoardButtonDisabled: {
+    backgroundColor: colors.text.disabled,
+    opacity: 0.5,
+  },
+  createBoardButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+
+  // Pinterest-Style Modal Styles
+  pinterestModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  pinterestModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    height: '92%',
+    paddingTop: spacing.md,
+  },
+  pinterestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  pinterestTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  pinterestSubtitle: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: 2,
+    fontSize: 13,
+  },
+  pinterestBody: {
+    flex: 1,
+  },
+  pinterestBodyContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  pinterestFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '30',
+    backgroundColor: colors.background,
+  },
+  pinterestSubmitButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  pinterestSubmitButtonDisabled: {
+    backgroundColor: colors.text.disabled,
+    opacity: 0.5,
+  },
+  pinterestSubmitButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  pinterestFooterActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pinterestSecondaryButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pinterestSecondaryButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+    fontSize: 15,
+  },
+  pinterestPrimaryButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  pinterestPrimaryButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

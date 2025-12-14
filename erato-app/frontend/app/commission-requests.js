@@ -11,6 +11,8 @@ import {
   ScrollView,
   TextInput,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,6 +39,7 @@ export default function CommissionRequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
+  const [showBidsModal, setShowBidsModal] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [artStyles, setArtStyles] = useState([]);
@@ -55,7 +58,6 @@ export default function CommissionRequestsScreen() {
     description: '',
     budget_min: '',
     budget_max: '',
-    deadline: '',
     preferred_styles: [],
     reference_images: [],
   });
@@ -262,11 +264,6 @@ export default function CommissionRequestsScreen() {
         payload.budget_max = parseFloat(formData.budget_max.trim());
       }
 
-      // Only add deadline if it has a value
-      if (formData.deadline && formData.deadline.trim()) {
-        payload.deadline = formData.deadline.trim();
-      }
-
       console.log('Sending payload:', payload);
 
       const response = await axios.post(
@@ -289,7 +286,6 @@ export default function CommissionRequestsScreen() {
         description: '',
         budget_min: '',
         budget_max: '',
-        deadline: '',
         preferred_styles: [],
         reference_images: [],
       });
@@ -368,9 +364,16 @@ export default function CommissionRequestsScreen() {
         colors.text.secondary;
 
       return (
-        <View style={styles.requestCard}>
+        <TouchableOpacity
+          style={styles.requestCard}
+          onPress={() => {
+            setSelectedRequest(item);
+            setShowBidsModal(true);
+          }}
+          activeOpacity={0.8}
+        >
           <View style={styles.cardHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.requestTitle} numberOfLines={2}>{item.title}</Text>
               <Text style={styles.timestamp}>
                 {new Date(item.created_at).toLocaleDateString('en-US', {
@@ -387,100 +390,133 @@ export default function CommissionRequestsScreen() {
             </View>
           </View>
 
-          <Text style={styles.requestDescription} numberOfLines={2}>
+          <Text style={styles.requestDescription} numberOfLines={3}>
             {item.description}
           </Text>
 
           <View style={styles.clientRequestFooter}>
             <View style={styles.bidsSummary}>
-              <Ionicons name="people" size={16} color={colors.primary} />
+              <Ionicons name="people" size={18} color={colors.primary} />
               <Text style={styles.bidsSummaryText}>
                 {item.bid_count || 0} {item.bid_count === 1 ? 'bid' : 'bids'}
-                {pendingBidsCount > 0 && ` (${pendingBidsCount} pending)`}
               </Text>
+              {pendingBidsCount > 0 && (
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>{pendingBidsCount} pending</Text>
+                </View>
+              )}
             </View>
             {item.budget_min || item.budget_max ? (
               <View style={styles.budgetContainer}>
-                <Ionicons name="cash-outline" size={14} color={colors.text.secondary} />
+                <Ionicons name="cash-outline" size={14} color={colors.primary} />
                 <Text style={styles.budgetText}>
                   {item.budget_min && item.budget_max
-                    ? `$${item.budget_min} - $${item.budget_max}`
+                    ? `$${item.budget_min}-$${item.budget_max}`
                     : item.budget_min
-                    ? `From $${item.budget_min}`
-                    : `Up to $${item.budget_max}`}
+                    ? `$${item.budget_min}+`
+                    : `$${item.budget_max}`}
                 </Text>
               </View>
             ) : null}
           </View>
-        </View>
+        </TouchableOpacity>
       );
     }
 
-    // For artists: show quest board with apply functionality
+    // For artists: Pinterest-style quest board with reference images
+    const hasReferenceImages = item.reference_images && item.reference_images.length > 0;
+
     return (
       <TouchableOpacity
-        style={styles.requestCard}
+        style={styles.pinterestQuestCard}
         onPress={() => {
           setSelectedRequest(item);
           if (!item.has_applied) {
             setShowBidModal(true);
           }
         }}
-        activeOpacity={0.7}
+        activeOpacity={0.9}
       >
-        <View style={styles.cardHeader}>
-          <View style={styles.clientInfo}>
-            <ExpoImage
-              source={{ uri: item.client?.avatar_url || DEFAULT_AVATAR }}
-              style={styles.clientAvatar}
-              contentFit="cover"
-            />
-            <View>
-              <Text style={styles.clientName}>{item.client?.username || 'Anonymous'}</Text>
-              <Text style={styles.timestamp}>
+        {/* Reference Images Preview - Pinterest Style */}
+        {hasReferenceImages && (
+          <View style={styles.questImagePreview}>
+            {item.reference_images.slice(0, 3).map((imageUrl, index) => (
+              <ExpoImage
+                key={index}
+                source={{ uri: imageUrl }}
+                style={[
+                  styles.questImage,
+                  item.reference_images.length === 1 && styles.questImageSingle,
+                  item.reference_images.length === 2 && styles.questImageDouble,
+                  item.reference_images.length >= 3 && styles.questImageTriple,
+                ]}
+                contentFit="cover"
+              />
+            ))}
+            {item.reference_images.length > 3 && (
+              <View style={styles.questImageMore}>
+                <Text style={styles.questImageMoreText}>+{item.reference_images.length - 3}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Client Info Header */}
+        <View style={styles.questCardHeader}>
+          <ExpoImage
+            source={{ uri: item.client?.avatar_url || DEFAULT_AVATAR }}
+            style={styles.questAvatar}
+            contentFit="cover"
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.questClientName}>{item.client?.username || 'Anonymous'}</Text>
+            <View style={styles.questMeta}>
+              <Text style={styles.questMetaText}>
                 {new Date(item.created_at).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric'
                 })}
               </Text>
+              <View style={styles.questMetaDot} />
+              <Text style={styles.questMetaText}>
+                {item.bid_count || 0} {item.bid_count === 1 ? 'bid' : 'bids'}
+              </Text>
             </View>
           </View>
-          <View style={styles.badges}>
-            {item.has_applied && (
-              <View style={styles.appliedBadge}>
-                <Ionicons name="checkmark-circle" size={12} color={colors.status.success} />
-                <Text style={styles.appliedText}>Applied</Text>
-              </View>
-            )}
-            <View style={styles.bidsBadge}>
-              <Ionicons name="people" size={12} color={colors.text.secondary} />
-              <Text style={styles.bidsText}>{item.bid_count || 0}</Text>
+          {item.has_applied && (
+            <View style={styles.questAppliedBadge}>
+              <Ionicons name="checkmark-circle" size={14} color={colors.status.success} />
+              <Text style={styles.questAppliedText}>Applied</Text>
             </View>
-          </View>
+          )}
         </View>
 
-        <Text style={styles.requestTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.requestDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
+        {/* Title & Description */}
+        <View style={styles.questCardBody}>
+          <Text style={styles.questTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={styles.questDescription} numberOfLines={hasReferenceImages ? 2 : 3}>
+            {item.description}
+          </Text>
+        </View>
 
-        <View style={styles.cardFooter}>
+        {/* Budget & Info Pills */}
+        <View style={styles.questInfoRow}>
           {item.budget_min || item.budget_max ? (
-            <View style={styles.budgetContainer}>
-              <Ionicons name="cash-outline" size={14} color={colors.primary} />
-              <Text style={styles.budgetText}>
+            <View style={styles.questBudgetPill}>
+              <Ionicons name="cash" size={14} color={colors.primary} />
+              <Text style={styles.questBudgetText}>
                 {item.budget_min && item.budget_max
-                  ? `$${item.budget_min} - $${item.budget_max}`
+                  ? `$${item.budget_min}-$${item.budget_max}`
                   : item.budget_min
-                  ? `From $${item.budget_min}`
-                  : `Up to $${item.budget_max}`}
+                  ? `$${item.budget_min}+`
+                  : `$${item.budget_max}`}
               </Text>
             </View>
           ) : null}
           {item.deadline && (
-            <View style={styles.deadlineContainer}>
+            <View style={styles.questDeadlinePill}>
               <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
-              <Text style={styles.deadlineText}>
+              <Text style={styles.questDeadlineText}>
                 {new Date(item.deadline).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric'
@@ -490,18 +526,19 @@ export default function CommissionRequestsScreen() {
           )}
         </View>
 
+        {/* Style Tags - Minimal */}
         {item.preferred_styles && item.preferred_styles.length > 0 && (
-          <View style={styles.stylesRow}>
+          <View style={styles.questStylesRow}>
             {artStyles
               .filter(s => item.preferred_styles.includes(s.id))
               .slice(0, 3)
               .map(style => (
-                <View key={style.id} style={styles.styleTag}>
-                  <Text style={styles.styleTagText}>{style.name}</Text>
+                <View key={style.id} style={styles.questStyleTag}>
+                  <Text style={styles.questStyleText}>{style.name}</Text>
                 </View>
               ))}
             {item.preferred_styles.length > 3 && (
-              <Text style={styles.moreStyles}>+{item.preferred_styles.length - 3}</Text>
+              <Text style={styles.questMoreStyles}>+{item.preferred_styles.length - 3}</Text>
             )}
           </View>
         )}
@@ -630,23 +667,30 @@ export default function CommissionRequestsScreen() {
         transparent={true}
         onRequestClose={() => setShowCreateModal(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowCreateModal(false)}
-        >
-          <Pressable style={styles.modalContent} onPress={() => {}}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Post Commission Request</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+          >
+            <View style={styles.pinterestModalContent}>
+              {/* Header */}
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowCreateModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>Post request</Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView
-              style={styles.modalBody}
-              contentContainerStyle={styles.modalBodyContent}
-              showsVerticalScrollIndicator={false}
-            >
+              <ScrollView
+                style={styles.pinterestBody}
+                contentContainerStyle={styles.pinterestBodyContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
               {/* Title Section */}
               <View style={styles.formSection}>
                 <Text style={styles.label}>Title *</Text>
@@ -751,23 +795,26 @@ export default function CommissionRequestsScreen() {
                 })}
               </ScrollView>
               </View>
-            </ScrollView>
+              </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <Pressable
-                style={[styles.submitButton, creating && styles.submitButtonDisabled]}
-                onPress={handleCreateRequest}
-                disabled={creating}
-              >
-                {creating ? (
-                  <ActivityIndicator color={colors.text.primary} />
-                ) : (
-                  <Text style={styles.submitButtonText}>Post Request</Text>
-                )}
-              </Pressable>
+              {/* Footer with Submit Button */}
+              <View style={styles.pinterestFooter}>
+                <TouchableOpacity
+                  style={[styles.pinterestSubmitButton, creating && styles.pinterestSubmitButtonDisabled]}
+                  onPress={handleCreateRequest}
+                  disabled={creating}
+                  activeOpacity={0.8}
+                >
+                  {creating ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.pinterestSubmitButtonText}>Post Request</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </Pressable>
-        </Pressable>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Bid Modal (Artists) */}
@@ -777,78 +824,140 @@ export default function CommissionRequestsScreen() {
         transparent={true}
         onRequestClose={() => setShowBidModal(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowBidModal(false)}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Submit Your Bid</Text>
-              <TouchableOpacity onPress={() => setShowBidModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+          >
+            <View style={styles.pinterestModalContent}>
+              {/* Header */}
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowBidModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={styles.pinterestTitle}>Submit bid</Text>
+                  {selectedRequest && (
+                    <Text style={styles.pinterestSubtitle} numberOfLines={1}>{selectedRequest.title}</Text>
+                  )}
+                </View>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView
-              style={styles.modalBody}
-              contentContainerStyle={[styles.modalBodyContent, { paddingBottom: insets.bottom + spacing.xl }]}
-              showsVerticalScrollIndicator={false}
-            >
+              <ScrollView
+                style={styles.pinterestBody}
+                contentContainerStyle={styles.pinterestBodyContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+              {/* Request Preview Card */}
               {selectedRequest && (
-                <View style={styles.requestPreview}>
-                  <Text style={styles.requestPreviewTitle}>{selectedRequest.title}</Text>
-                  <Text style={styles.requestPreviewBudget}>
-                    Budget: ${selectedRequest.budget_min} - ${selectedRequest.budget_max}
+                <View style={styles.bidRequestPreview}>
+                  <View style={styles.previewRow}>
+                    <View style={styles.previewItem}>
+                      <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                      <View>
+                        <Text style={styles.previewLabel}>Budget Range</Text>
+                        <Text style={styles.previewValue}>
+                          {selectedRequest.budget_min && selectedRequest.budget_max
+                            ? `$${selectedRequest.budget_min} - $${selectedRequest.budget_max}`
+                            : selectedRequest.budget_min
+                            ? `From $${selectedRequest.budget_min}`
+                            : selectedRequest.budget_max
+                            ? `Up to $${selectedRequest.budget_max}`
+                            : 'Not specified'}
+                        </Text>
+                      </View>
+                    </View>
+                    {selectedRequest.deadline && (
+                      <View style={styles.previewItem}>
+                        <Ionicons name="time-outline" size={20} color={colors.primary} />
+                        <View>
+                          <Text style={styles.previewLabel}>Deadline</Text>
+                          <Text style={styles.previewValue}>
+                            {new Date(selectedRequest.deadline).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.previewDescription} numberOfLines={3}>
+                    {selectedRequest.description}
                   </Text>
                 </View>
               )}
 
-              <Text style={styles.label}>Your Bid Amount *</Text>
-              <TextInput
-                style={styles.input}
-                value={bidData.bid_amount}
-                onChangeText={(text) => setBidData({ ...bidData, bid_amount: text })}
-                placeholder="Enter amount ($)"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="numeric"
-              />
+              {/* Bid Form */}
+              <View style={styles.formSection}>
+                <Text style={styles.label}>Your Bid Amount *</Text>
+                <View style={styles.inputWithIcon}>
+                  <Ionicons name="cash" size={20} color={colors.text.secondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, styles.inputWithPadding]}
+                    value={bidData.bid_amount}
+                    onChangeText={(text) => setBidData({ ...bidData, bid_amount: text })}
+                    placeholder="Enter amount"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
 
-              <Text style={styles.label}>Estimated Delivery (Days)</Text>
-              <TextInput
-                style={styles.input}
-                value={bidData.estimated_delivery_days}
-                onChangeText={(text) => setBidData({ ...bidData, estimated_delivery_days: text })}
-                placeholder="e.g., 14"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="numeric"
-              />
+              <View style={styles.formSection}>
+                <Text style={styles.label}>Estimated Delivery</Text>
+                <View style={styles.inputWithIcon}>
+                  <Ionicons name="calendar" size={20} color={colors.text.secondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, styles.inputWithPadding]}
+                    value={bidData.estimated_delivery_days}
+                    onChangeText={(text) => setBidData({ ...bidData, estimated_delivery_days: text })}
+                    placeholder="Days to complete"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
 
-              <Text style={styles.label}>Message to Client (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={bidData.message}
-                onChangeText={(text) => setBidData({ ...bidData, message: text })}
-                placeholder="Tell them why you're perfect for this project..."
-                placeholderTextColor={colors.text.disabled}
-                multiline
-                numberOfLines={4}
-                maxLength={1000}
-              />
+              <View style={styles.formSection}>
+                <Text style={styles.label}>Your Pitch (optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={bidData.message}
+                  onChangeText={(text) => setBidData({ ...bidData, message: text })}
+                  placeholder="Why you're the perfect artist for this project..."
+                  placeholderTextColor={colors.text.disabled}
+                  multiline
+                  numberOfLines={5}
+                  maxLength={1000}
+                  textAlignVertical="top"
+                />
+              </View>
+              </ScrollView>
 
-              <TouchableOpacity
-                style={styles.submitButton}
-                onPress={handleSubmitBid}
-                disabled={submittingBid}
-              >
-                {submittingBid ? (
-                  <ActivityIndicator color={colors.text.primary} />
-                ) : (
-                  <Text style={styles.submitButtonText}>Submit Bid</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
+              {/* Footer with Submit Button */}
+              <View style={styles.pinterestFooter}>
+                <TouchableOpacity
+                  style={[styles.pinterestSubmitButton, submittingBid && styles.pinterestSubmitButtonDisabled]}
+                  onPress={handleSubmitBid}
+                  disabled={submittingBid}
+                  activeOpacity={0.8}
+                >
+                  {submittingBid ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.pinterestSubmitButtonText}>Submit Bid</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Filters Modal (Artists) */}
@@ -858,21 +967,23 @@ export default function CommissionRequestsScreen() {
         transparent={true}
         onRequestClose={() => setShowFiltersModal(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowFiltersModal(false)}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter & Sort</Text>
-              <TouchableOpacity onPress={() => setShowFiltersModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
+        <View style={styles.pinterestModalOverlay}>
+          <View style={styles.pinterestModalContent}>
+            {/* Header */}
+            <View style={styles.pinterestHeader}>
+              <TouchableOpacity
+                onPress={() => setShowFiltersModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={28} color={colors.text.primary} />
               </TouchableOpacity>
+              <Text style={styles.pinterestTitle}>Sort & Filter</Text>
+              <View style={{ width: 28 }} />
             </View>
 
             <ScrollView
-              style={styles.modalBody}
-              contentContainerStyle={[styles.modalBodyContent, { paddingBottom: insets.bottom + spacing.md }]}
+              style={styles.pinterestBody}
+              contentContainerStyle={[styles.pinterestBodyContent, { paddingBottom: insets.bottom + spacing.xxl }]}
               showsVerticalScrollIndicator={false}
             >
               {/* SORT SECTION */}
@@ -988,26 +1099,159 @@ export default function CommissionRequestsScreen() {
                 </View>
               </View>
 
-              <View style={styles.modalActions}>
+            </ScrollView>
+
+            {/* Footer with Actions */}
+            <View style={styles.pinterestFooter}>
+              <View style={styles.pinterestFooterActions}>
                 <TouchableOpacity
-                  style={styles.secondaryButton}
+                  style={styles.pinterestSecondaryButton}
                   onPress={() => setFilters({ budget_min: '', budget_max: '', sort_by: 'recent', styles: [] })}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.secondaryButtonText}>Clear All</Text>
+                  <Text style={styles.pinterestSecondaryButtonText}>Clear All</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.submitButton}
+                  style={styles.pinterestPrimaryButton}
                   onPress={() => {
                     setShowFiltersModal(false);
                     loadRequests();
                   }}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.submitButtonText}>Apply</Text>
+                  <Text style={styles.pinterestPrimaryButtonText}>Apply</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* View Bids Modal (Clients) */}
+      <Modal
+        visible={showBidsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowBidsModal(false)}
+      >
+        <View style={styles.pinterestModalOverlay}>
+          <View style={styles.pinterestModalContent}>
+            {/* Header */}
+            <View style={styles.pinterestHeader}>
+              <TouchableOpacity
+                onPress={() => setShowBidsModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={28} color={colors.text.primary} />
+              </TouchableOpacity>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={styles.pinterestTitle}>Bids received</Text>
+                {selectedRequest && (
+                  <Text style={styles.pinterestSubtitle} numberOfLines={1}>{selectedRequest.title}</Text>
+                )}
+              </View>
+              <View style={{ width: 28 }} />
+            </View>
+
+            <ScrollView
+              style={styles.pinterestBody}
+              contentContainerStyle={[styles.pinterestBodyContent, { paddingBottom: spacing.xxl }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {selectedRequest?.bids && selectedRequest.bids.length > 0 ? (
+                selectedRequest.bids.map((bid, index) => (
+                  <View key={bid.id} style={styles.bidCard}>
+                    <View style={styles.bidHeader}>
+                      <View style={styles.artistInfo}>
+                        <ExpoImage
+                          source={{ uri: bid.artist?.avatar_url || DEFAULT_AVATAR }}
+                          style={styles.bidAvatar}
+                          contentFit="cover"
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.artistName}>{bid.artist?.username || 'Artist'}</Text>
+                          <Text style={styles.bidTimestamp}>
+                            {new Date(bid.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit'
+                            })}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.bidStatusBadge, { backgroundColor: bid.status === 'pending' ? colors.status.pending + '15' : bid.status === 'accepted' ? colors.status.success + '15' : colors.text.secondary + '15' }]}>
+                        <Text style={[styles.bidStatusText, { color: bid.status === 'pending' ? colors.status.pending : bid.status === 'accepted' ? colors.status.success : colors.text.secondary }]}>
+                          {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.bidDetails}>
+                      <View style={styles.bidDetailRow}>
+                        <View style={styles.bidDetailItem}>
+                          <Ionicons name="cash-outline" size={16} color={colors.primary} />
+                          <Text style={styles.bidDetailLabel}>Offer</Text>
+                          <Text style={styles.bidDetailValue}>${bid.bid_amount}</Text>
+                        </View>
+                        {bid.estimated_delivery_days && (
+                          <View style={styles.bidDetailItem}>
+                            <Ionicons name="time-outline" size={16} color={colors.primary} />
+                            <Text style={styles.bidDetailLabel}>Delivery</Text>
+                            <Text style={styles.bidDetailValue}>{bid.estimated_delivery_days} days</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {bid.message && (
+                        <View style={styles.bidMessage}>
+                          <Text style={styles.bidMessageLabel}>Message</Text>
+                          <Text style={styles.bidMessageText}>{bid.message}</Text>
+                        </View>
+                      )}
+
+                      {bid.status === 'pending' && selectedRequest.status === 'open' && (
+                        <TouchableOpacity
+                          style={styles.acceptBidButton}
+                          onPress={async () => {
+                            try {
+                              await axios.patch(
+                                `${API_URL}/commission-requests/${selectedRequest.id}/bids/${bid.id}/accept`,
+                                {},
+                                { headers: { Authorization: `Bearer ${token}` } }
+                              );
+                              Toast.show({
+                                type: 'success',
+                                text1: 'Success',
+                                text2: 'Bid accepted and commission created',
+                              });
+                              setShowBidsModal(false);
+                              loadRequests();
+                            } catch (error) {
+                              Toast.show({
+                                type: 'error',
+                                text1: 'Error',
+                                text2: error.response?.data?.error || 'Failed to accept bid',
+                              });
+                            }
+                          }}
+                        >
+                          <Text style={styles.acceptBidButtonText}>Accept Bid</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.noBidsState}>
+                  <Ionicons name="people-outline" size={64} color={colors.text.disabled} />
+                  <Text style={styles.noBidsTitle}>No bids yet</Text>
+                  <Text style={styles.noBidsText}>Artists will see your request and can submit bids</Text>
+                </View>
+              )}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1114,9 +1358,11 @@ const styles = StyleSheet.create({
   },
   requestCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    ...shadows.small,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border + '30',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1513,6 +1759,509 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: '700',
     fontSize: 16,
+  },
+  pendingBadge: {
+    backgroundColor: colors.status.pending + '20',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    marginLeft: spacing.xs,
+  },
+  pendingBadgeText: {
+    ...typography.small,
+    color: colors.status.pending,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  modalSubtitle: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginTop: spacing.xs / 2,
+  },
+  bidCard: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bidHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  artistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  bidAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+  },
+  artistName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  bidTimestamp: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  bidStatusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 2,
+    borderRadius: borderRadius.sm,
+  },
+  bidStatusText: {
+    ...typography.small,
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  bidDetails: {
+    gap: spacing.md,
+  },
+  bidDetailRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  bidDetailItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  bidDetailLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 11,
+  },
+  bidDetailValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    marginLeft: 'auto',
+  },
+  bidMessage: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  bidMessageLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    fontSize: 13,
+  },
+  bidMessageText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    lineHeight: 20,
+  },
+  acceptBidButton: {
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    ...shadows.small,
+  },
+  acceptBidButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  noBidsState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl * 2,
+  },
+  noBidsTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    marginTop: spacing.md,
+  },
+  noBidsText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xl,
+  },
+  // Artist Card Styles
+  artistCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  artistCardBody: {
+    marginBottom: spacing.md,
+  },
+  artistCardInfo: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+    marginBottom: spacing.sm,
+  },
+  infoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  infoChipText: {
+    ...typography.small,
+    color: colors.text.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Bid Modal Preview Styles
+  bidRequestPreview: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  previewRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  previewItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  previewLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  previewValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 13,
+  },
+  previewDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    lineHeight: 20,
+    fontSize: 13,
+  },
+  inputWithIcon: {
+    position: 'relative',
+  },
+  inputIcon: {
+    position: 'absolute',
+    left: spacing.md,
+    top: '50%',
+    transform: [{ translateY: -10 }],
+    zIndex: 1,
+  },
+  inputWithPadding: {
+    paddingLeft: spacing.xl + spacing.sm,
+  },
+
+  // Pinterest-Style Modal Styles
+  pinterestModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  pinterestModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    height: '92%',
+    paddingTop: spacing.md,
+  },
+  pinterestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  pinterestTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  pinterestSubtitle: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: 2,
+    fontSize: 13,
+  },
+  pinterestBody: {
+    flex: 1,
+  },
+  pinterestBodyContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  pinterestFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '30',
+    backgroundColor: colors.background,
+  },
+  pinterestSubmitButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  pinterestSubmitButtonDisabled: {
+    backgroundColor: colors.text.disabled,
+    opacity: 0.5,
+  },
+  pinterestSubmitButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  pinterestFooterActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pinterestSecondaryButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pinterestSecondaryButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+    fontSize: 15,
+  },
+  pinterestPrimaryButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  pinterestPrimaryButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  // Pinterest-Style Quest Board Cards
+  pinterestQuestCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20, // Subtly rounded borders
+    overflow: 'hidden',
+    ...shadows.medium,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
+    marginBottom: spacing.md,
+  },
+  questImagePreview: {
+    flexDirection: 'row',
+    height: 200,
+    backgroundColor: colors.background,
+    position: 'relative',
+  },
+  questImage: {
+    flex: 1,
+    backgroundColor: colors.surface,
+  },
+  questImageSingle: {
+    width: '100%',
+  },
+  questImageDouble: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderColor: colors.background,
+  },
+  questImageTriple: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderColor: colors.background,
+  },
+  questImageMore: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+  },
+  questImageMoreText: {
+    ...typography.small,
+    color: colors.text.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  questCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  questAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+  },
+  questClientName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  questMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  questMetaText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 11,
+  },
+  questMetaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.text.disabled,
+  },
+  questAppliedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.status.success + '15',
+  },
+  questAppliedText: {
+    ...typography.small,
+    color: colors.status.success,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  questCardBody: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  questTitle: {
+    ...typography.h4,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: spacing.xs,
+    lineHeight: 22,
+  },
+  questDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  questInfoRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  questBudgetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '15',
+  },
+  questBudgetText: {
+    ...typography.small,
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  questDeadlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  questDeadlineText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  questStylesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs / 2,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  questStyleTag: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  questStyleText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  questMoreStyles: {
+    ...typography.small,
+    color: colors.text.disabled,
+    fontSize: 10,
+    fontWeight: '600',
+    alignSelf: 'center',
+    paddingHorizontal: spacing.xs,
   },
 });
 

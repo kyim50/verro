@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { showAlert } from '../../components/StyledAlert';
@@ -1023,31 +1025,47 @@ export default function CommissionDashboard() {
           </View>
         )}
 
-        {/* Ultra Compact Card - Minimal Info */}
-        <View style={styles.compactCardContent}>
-          <Image
-            source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
-            style={styles.compactAvatar}
-            contentFit="cover"
-          />
-          <View style={styles.compactInfo}>
-            <Text style={styles.compactUsername} numberOfLines={1}>
-              {otherUser?.username || otherUser?.full_name || (isArtist ? 'Unknown Client' : 'Unknown Artist')}
-            </Text>
-            <View style={styles.compactMetaRow}>
-              <View style={[styles.compactStatusDot, { backgroundColor: statusColor }]} />
-              <Text style={styles.compactDate}>
-                {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        {/* Pinterest-Style Clean Card */}
+        <View style={styles.pinterestCommissionCard}>
+          <View style={styles.pinterestCardHeader}>
+            <Image
+              source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
+              style={styles.pinterestCardAvatar}
+              contentFit="cover"
+            />
+            <View style={styles.pinterestCardInfo}>
+              <Text style={styles.pinterestCardUsername} numberOfLines={1}>
+                {otherUser?.username || otherUser?.full_name || (isArtist ? 'Unknown Client' : 'Unknown Artist')}
               </Text>
+              <View style={styles.pinterestCardMeta}>
+                <View style={[styles.pinterestStatusPill, { backgroundColor: statusColor + '15' }]}>
+                  <View style={[styles.pinterestStatusDot, { backgroundColor: statusColor }]} />
+                  <Text style={[styles.pinterestStatusText, { color: statusColor }]}>
+                    {formatStatus(item.status)}
+                  </Text>
+                </View>
+                <Text style={styles.pinterestCardDate}>
+                  {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.compactPrice}>
-            {item.final_price || item.price ? (
-              <Text style={styles.compactPriceText}>${item.final_price || item.price}</Text>
-            ) : item.budget ? (
-              <Text style={styles.compactBudgetText}>${item.budget}</Text>
+            {item.final_price || item.price || item.budget ? (
+              <View style={styles.pinterestCardPriceContainer}>
+                <Text style={styles.pinterestCardPrice}>
+                  ${item.final_price || item.price || item.budget}
+                </Text>
+                {item.budget && !item.final_price && !item.price && (
+                  <Text style={styles.pinterestCardPriceLabel}>budget</Text>
+                )}
+              </View>
             ) : null}
           </View>
+
+          {item.details && (
+            <Text style={styles.pinterestCardDetails} numberOfLines={2}>
+              {item.details}
+            </Text>
+          )}
           {item.status === 'pending' && isArtist && !batchMode && (
             <View style={styles.compactActions}>
               <TouchableOpacity
@@ -1134,35 +1152,31 @@ export default function CommissionDashboard() {
           </View>
         </View>
 
-        {/* Stats Section - Above buttons */}
-        <View style={styles.statsSection}>
-          <View style={styles.statsCardsContainer}>
-            <View style={[styles.statCardItem, styles.statCardPending]}>
-              <View style={styles.statCardIconContainer}>
-                <Ionicons name="time-outline" size={24} color={colors.status.warning} />
+        {/* Stats Section - Pinterest Style Cards */}
+        <View style={styles.pinterestStatsSection}>
+          <View style={styles.pinterestStatsRow}>
+            <View style={[styles.pinterestStatCard, styles.pinterestStatCardPending]}>
+              <View style={[styles.pinterestStatIconCircle, { backgroundColor: colors.status.warning + '15' }]}>
+                <Ionicons name="time" size={20} color={colors.status.warning} />
               </View>
-              <View style={styles.statCardContent}>
-                <Text style={styles.statCardValue}>{commissionStats.pending}</Text>
-                <Text style={styles.statCardLabel}>Pending</Text>
-              </View>
+              <Text style={styles.pinterestStatValue}>{commissionStats.pending}</Text>
+              <Text style={styles.pinterestStatLabel}>Pending</Text>
             </View>
-            <View style={[styles.statCardItem, styles.statCardActive]}>
-              <View style={styles.statCardIconContainer}>
-                <Ionicons name="flash-outline" size={24} color={colors.status.info} />
+
+            <View style={[styles.pinterestStatCard, styles.pinterestStatCardActive]}>
+              <View style={[styles.pinterestStatIconCircle, { backgroundColor: colors.primary + '15' }]}>
+                <Ionicons name="flash" size={20} color={colors.primary} />
               </View>
-              <View style={styles.statCardContent}>
-                <Text style={styles.statCardValue}>{commissionStats.in_progress}</Text>
-                <Text style={styles.statCardLabel}>Active</Text>
-              </View>
+              <Text style={styles.pinterestStatValue}>{commissionStats.in_progress}</Text>
+              <Text style={styles.pinterestStatLabel}>Active</Text>
             </View>
-            <View style={[styles.statCardItem, styles.statCardCompleted]}>
-              <View style={styles.statCardIconContainer}>
-                <Ionicons name="checkmark-circle-outline" size={24} color={colors.status.success} />
+
+            <View style={[styles.pinterestStatCard, styles.pinterestStatCardCompleted]}>
+              <View style={[styles.pinterestStatIconCircle, { backgroundColor: colors.status.success + '15' }]}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.status.success} />
               </View>
-              <View style={styles.statCardContent}>
-                <Text style={styles.statCardValue}>{commissionStats.completed}</Text>
-                <Text style={styles.statCardLabel}>Completed</Text>
-              </View>
+              <Text style={styles.pinterestStatValue}>{commissionStats.completed}</Text>
+              <Text style={styles.pinterestStatLabel}>Done</Text>
             </View>
           </View>
         </View>
@@ -1361,19 +1375,20 @@ export default function CommissionDashboard() {
         transparent={true}
         onRequestClose={() => setShowStatsModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.statsModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Statistics</Text>
-              <TouchableOpacity
-                onPress={() => setShowStatsModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.pinterestModalContent}>
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowStatsModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>Statistics</Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.pinterestBody} contentContainerStyle={styles.pinterestBodyContent} showsVerticalScrollIndicator={false}>
               {/* Overview Stats */}
               <View style={styles.statsSection}>
                 <Text style={styles.statsSectionTitle}>Overview</Text>
@@ -1460,8 +1475,9 @@ export default function CommissionDashboard() {
                   </View>
                 </View>
               )}
-            </ScrollView>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1472,21 +1488,22 @@ export default function CommissionDashboard() {
         transparent={true}
         onRequestClose={() => setShowEngagementModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.statsModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isArtist ? 'Engagement Analytics' : 'My Engagement Activity'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowEngagementModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.pinterestModalContent}>
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowEngagementModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>
+                  {isArtist ? 'Engagement' : 'My Activity'}
+                </Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.pinterestBody} contentContainerStyle={styles.pinterestBodyContent} showsVerticalScrollIndicator={false}>
               {loadingEngagement ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color={colors.primary} />
@@ -1645,8 +1662,9 @@ export default function CommissionDashboard() {
                   </Text>
                 </View>
               )}
-            </ScrollView>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1657,19 +1675,20 @@ export default function CommissionDashboard() {
         transparent={true}
         onRequestClose={() => setShowTemplatesModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.templatesModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Quick Responses</Text>
-              <TouchableOpacity
-                onPress={() => setShowTemplatesModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.pinterestModalContent}>
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowTemplatesModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>Quick Responses</Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView style={styles.templatesContent}>
+              <ScrollView style={styles.pinterestBody} contentContainerStyle={styles.pinterestBodyContent}>
               {templates.map((template) => (
                 <TouchableOpacity
                   key={template.id}
@@ -1691,8 +1710,9 @@ export default function CommissionDashboard() {
                   <Text style={styles.templateMessage}>{template.message}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1703,19 +1723,20 @@ export default function CommissionDashboard() {
         transparent={true}
         onRequestClose={() => setShowTransactionHistoryModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.statsModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Transaction History</Text>
-              <TouchableOpacity
-                onPress={() => setShowTransactionHistoryModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.pinterestModalContent}>
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowTransactionHistoryModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>Transactions</Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <ScrollView style={styles.statsContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.pinterestBody} contentContainerStyle={styles.pinterestBodyContent} showsVerticalScrollIndicator={false}>
               {loadingTransactions ? (
                 <View style={styles.emptyState}>
                   <ActivityIndicator size="large" color={colors.primary} />
@@ -1873,8 +1894,9 @@ export default function CommissionDashboard() {
                   );
                 })()
               )}
-            </ScrollView>
-          </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1948,39 +1970,44 @@ export default function CommissionDashboard() {
         transparent={true}
         onRequestClose={() => setShowNotesModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.notesModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Client Note</Text>
-              <TouchableOpacity
-                onPress={() => setShowNotesModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.pinterestModalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.pinterestModalContent}>
+              <View style={styles.pinterestHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowNotesModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+                <Text style={styles.pinterestTitle}>Client Note</Text>
+                <View style={{ width: 28 }} />
+              </View>
 
-            <View style={styles.notesContent}>
-              <TextInput
-                style={styles.notesInput}
-                placeholder="Add notes about this client..."
-                placeholderTextColor={colors.text.disabled}
-                value={currentNote}
-                onChangeText={setCurrentNote}
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-              />
+              <View style={styles.pinterestBody}>
+              <View style={styles.pinterestBodyContent}>
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="Add notes about this client..."
+                  placeholderTextColor={colors.text.disabled}
+                  value={currentNote}
+                  onChangeText={setCurrentNote}
+                  multiline
+                  numberOfLines={6}
+                  textAlignVertical="top"
+                />
+              </View>
+              </View>
 
-              <TouchableOpacity
-                style={styles.saveNoteButton}
-                onPress={saveNote}
-              >
-                <Ionicons name="save-outline" size={20} color={colors.text.primary} />
-                <Text style={styles.saveNoteText}>Save Note</Text>
-              </TouchableOpacity>
+              <View style={styles.pinterestFooter}>
+                <TouchableOpacity
+                  style={styles.pinterestSubmitButton}
+                  onPress={saveNote}
+                >
+                  <Text style={styles.pinterestSubmitButtonText}>Save Note</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1992,23 +2019,22 @@ export default function CommissionDashboard() {
           transparent={true}
           onRequestClose={() => setShowCommissionModal(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.commissionDetailModal}>
-              <View style={styles.detailModalHeader}>
-                <View style={styles.detailModalHeaderLeft}>
-                  <Text style={styles.detailModalTitle}>Commission Details</Text>
+          <View style={styles.pinterestModalOverlay}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+              <View style={styles.pinterestModalContent}>
+                <View style={styles.pinterestHeader}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowCommissionModal(false);
+                      setDetailTab('details');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={28} color={colors.text.primary} />
+                  </TouchableOpacity>
+                  <Text style={styles.pinterestTitle}>Commission</Text>
+                  <View style={{ width: 28 }} />
                 </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowCommissionModal(false);
-                    setDetailTab('details');
-                  }}
-                  style={styles.detailModalCloseButton}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close" size={22} color={colors.text.primary} />
-                </TouchableOpacity>
-              </View>
 
               {/* Tab Bar - Only show Progress/Files tabs if commission is accepted/in_progress */}
               <View style={styles.detailTabBar}>
@@ -2494,7 +2520,8 @@ export default function CommissionDashboard() {
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
+              </View>
+            </KeyboardAvoidingView>
           </View>
         </Modal>
       )}
@@ -4175,5 +4202,234 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 13,
     marginTop: spacing.xs / 2,
+  },
+
+  // Pinterest-Style Modal Styles
+  pinterestModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  pinterestModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xxl,
+    borderTopRightRadius: borderRadius.xxl,
+    height: '92%',
+    paddingTop: spacing.md,
+  },
+  pinterestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '30',
+  },
+  pinterestTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  pinterestSubtitle: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: 2,
+    fontSize: 13,
+  },
+  pinterestBody: {
+    flex: 1,
+  },
+  pinterestBodyContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  pinterestFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '30',
+    backgroundColor: colors.background,
+  },
+  pinterestSubmitButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  pinterestSubmitButtonDisabled: {
+    backgroundColor: colors.text.disabled,
+    opacity: 0.5,
+  },
+  pinterestSubmitButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  pinterestFooterActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pinterestSecondaryButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pinterestSecondaryButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+    fontSize: 15,
+  },
+  pinterestPrimaryButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.small,
+  },
+  pinterestPrimaryButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  // Pinterest-Style Stats Cards
+  pinterestStatsSection: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  pinterestStatsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pinterestStatCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.border + '20',
+    ...shadows.small,
+  },
+  pinterestStatIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  pinterestStatValue: {
+    ...typography.h1,
+    color: colors.text.primary,
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 2,
+    letterSpacing: -0.5,
+  },
+  pinterestStatLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Pinterest-Style Commission Cards
+  pinterestCommissionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  pinterestCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  pinterestCardAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+  },
+  pinterestCardInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pinterestCardUsername: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  pinterestCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pinterestStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  pinterestStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  pinterestStatusText: {
+    ...typography.small,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  pinterestCardDate: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  pinterestCardPriceContainer: {
+    alignItems: 'flex-end',
+  },
+  pinterestCardPrice: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  pinterestCardPriceLabel: {
+    ...typography.small,
+    color: colors.text.disabled,
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  pinterestCardDetails: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 20,
+    paddingTop: 2,
   },
 });
