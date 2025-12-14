@@ -876,70 +876,6 @@ export default function CommissionDashboard() {
               <Text style={styles.compactBudgetText}>${item.budget}</Text>
             ) : null}
           </View>
-          {item.status === 'pending' && isArtist && (
-            <View style={styles.compactActions}>
-              <TouchableOpacity
-                style={[styles.compactDeclineButton, updatingStatus.has(item.id) && styles.compactDeclineButtonDisabled]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (updatingStatus.has(item.id)) return;
-                  showAlert({
-                    title: 'Decline Commission',
-                    message: 'Are you sure you want to decline this commission? This action cannot be undone.',
-                    type: 'warning',
-                    buttons: [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Decline',
-                        style: 'destructive',
-                        onPress: () => {
-                          handleUpdateStatus(item.id, 'declined');
-                        }
-                      }
-                    ]
-                  });
-                }}
-                activeOpacity={0.7}
-                disabled={updatingStatus.has(item.id)}
-              >
-                {updatingStatus.has(item.id) ? (
-                  <ActivityIndicator size="small" color={colors.status.error} />
-                ) : (
-                  <Ionicons name="close-circle" size={20} color={colors.status.error} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.compactAcceptButton, updatingStatus.has(item.id) && styles.compactAcceptButtonDisabled]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (updatingStatus.has(item.id)) return;
-                  showAlert({
-                    title: 'Accept Commission',
-                    message: 'Accept this commission request?',
-                    type: 'info',
-                    buttons: [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Accept',
-                        style: 'default',
-                        onPress: () => {
-                          handleUpdateStatus(item.id, 'accepted');
-                        }
-                      }
-                    ]
-                  });
-                }}
-                activeOpacity={0.7}
-                disabled={updatingStatus.has(item.id)}
-              >
-                {updatingStatus.has(item.id) ? (
-                  <ActivityIndicator size="small" color={colors.text.primary} />
-                ) : (
-                <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -986,7 +922,6 @@ export default function CommissionDashboard() {
       <TouchableOpacity
         style={[
           styles.commissionCard,
-          { borderWidth: 1.5, borderColor: statusColor + '60' },
           item.status === 'pending' && styles.pendingCommissionCard,
           isSelected && styles.selectedCommissionCard,
         ]}
@@ -1061,75 +996,7 @@ export default function CommissionDashboard() {
             ) : null}
           </View>
 
-          {item.details && (
-            <Text style={styles.pinterestCardDetails} numberOfLines={2}>
-              {item.details}
-            </Text>
-          )}
-          {item.status === 'pending' && isArtist && !batchMode && (
-            <View style={styles.compactActions}>
-              <TouchableOpacity
-                style={[styles.compactDeclineButton, updatingStatus.has(item.id) && styles.compactDeclineButtonDisabled]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (updatingStatus.has(item.id)) return;
-                  showAlert({
-                    title: 'Decline Commission',
-                    message: 'Are you sure you want to decline this commission? This action cannot be undone.',
-                    type: 'warning',
-                    buttons: [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Decline',
-                        style: 'destructive',
-                        onPress: () => {
-                          handleUpdateStatus(item.id, 'declined');
-                        }
-                      }
-                    ]
-                  });
-                }}
-                activeOpacity={0.7}
-                disabled={updatingStatus.has(item.id)}
-              >
-                {updatingStatus.has(item.id) ? (
-                  <ActivityIndicator size="small" color={colors.status.error} />
-                ) : (
-                  <Ionicons name="close-circle" size={20} color={colors.status.error} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.compactAcceptButton, updatingStatus.has(item.id) && styles.compactAcceptButtonDisabled]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (updatingStatus.has(item.id)) return;
-                  showAlert({
-                    title: 'Accept Commission',
-                    message: 'Accept this commission request?',
-                    type: 'info',
-                    buttons: [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Accept',
-                        style: 'default',
-                        onPress: () => {
-                          handleUpdateStatus(item.id, 'accepted');
-                        }
-                      }
-                    ]
-                  });
-                }}
-                activeOpacity={0.7}
-                disabled={updatingStatus.has(item.id)}
-              >
-                {updatingStatus.has(item.id) ? (
-                  <ActivityIndicator size="small" color={colors.text.primary} />
-                ) : (
-                  <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* Buttons removed - use modal to accept/decline */}
         </View>
       </TouchableOpacity>
     );
@@ -2745,9 +2612,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full, // Full pill shape like Pinterest
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   acceptBatchButton: {
     backgroundColor: colors.status.success,
@@ -2759,6 +2631,7 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 14,
+    fontWeight: '600', // Pinterest-style
   },
   // Kanban Styles
   kanbanContainer: {
@@ -2897,13 +2770,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   avatarFrame: {
-    padding: spacing.xs / 2,
+    padding: 0, // Remove padding
     borderRadius: borderRadius.full,
-    borderWidth: 2,
+    borderWidth: 0, // Remove border
   },
   commissionAvatar: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     borderRadius: borderRadius.full,
   },
   headerTextBlock: {
@@ -2913,14 +2786,15 @@ const styles = StyleSheet.create({
   commissionUsername: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600', // Pinterest-style
     marginBottom: spacing.xs / 2,
   },
   subMeta: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '400', // Pinterest-style
   },
   statusPill: {
     flexDirection: 'row',
@@ -2942,6 +2816,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 14,
+    fontWeight: '400', // Pinterest-style
     lineHeight: 20,
     marginBottom: spacing.sm,
   },
@@ -3029,22 +2904,25 @@ const styles = StyleSheet.create({
   },
   detailTabBar: {
     backgroundColor: colors.background,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '15', // Soft Pinterest border
   },
   detailTabContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
+    gap: spacing.xl,
   },
   detailTab: {
-    marginRight: spacing.lg,
-    paddingVertical: spacing.xs - 2,
+    paddingVertical: spacing.xs,
     position: 'relative',
   },
   detailTabText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: -0.2,
   },
   detailTabTextActive: {
     color: colors.text.primary,
@@ -3052,12 +2930,12 @@ const styles = StyleSheet.create({
   },
   detailTabUnderline: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -spacing.md, // Position below tab bar
     left: 0,
     right: 0,
-    height: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 1,
+    height: 3,
+    backgroundColor: colors.text.primary, // Changed from primary to match design
+    borderRadius: 2,
   },
   detailModalHeader: {
     flexDirection: 'row',
@@ -3480,11 +3358,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500', // Lighter for Pinterest
   },
   pinterestFilterTextActive: {
     color: colors.text.primary,
-    fontWeight: '700',
+    fontWeight: '600', // Slightly less bold
   },
   pinterestFilterUnderline: {
     position: 'absolute',
@@ -3576,9 +3454,10 @@ const styles = StyleSheet.create({
   headerDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 12 : 13,
-    marginTop: spacing.xs / 2,
-    lineHeight: IS_SMALL_SCREEN ? 16 : 18,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    marginTop: spacing.xs,
+    lineHeight: IS_SMALL_SCREEN ? 18 : 20,
+    fontWeight: '400', // Pinterest-style lighter weight
   },
   statsSection: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
@@ -3656,28 +3535,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    backgroundColor: colors.background, // Borderless Pinterest style
+    borderRadius: borderRadius.full, // Full pill shape
     minWidth: IS_SMALL_SCREEN ? 90 : 110,
-    ...shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, // Very subtle shadow
+    shadowRadius: 4,
+    elevation: 1,
   },
   actionButtonText: {
     ...typography.body,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 13 : 14,
-    fontWeight: '600',
+    fontWeight: '500', // Lighter for Pinterest
   },
   compactTitle: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 28 : 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 26 : 30,
+    fontWeight: '700', // Pinterest uses 700, not 800
+    letterSpacing: -0.4,
+    marginBottom: spacing.xs / 2,
   },
   compactHeaderActions: {
     flexDirection: 'row',
@@ -3760,34 +3641,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
-  },
-  compactActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: spacing.xs,
-    gap: spacing.xs,
-  },
-  compactAcceptButton: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compactAcceptButtonDisabled: {
-    opacity: 0.5,
-  },
-  compactDeclineButton: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.status.error + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compactDeclineButtonDisabled: {
-    opacity: 0.5,
   },
   // Stats Modal Styles
   statsModal: {
@@ -4207,14 +4060,19 @@ const styles = StyleSheet.create({
   // Pinterest-Style Modal Styles
   pinterestModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)', // Softer dimming like Pinterest
   },
   pinterestModalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xxl,
-    borderTopRightRadius: borderRadius.xxl,
+    borderTopLeftRadius: 24, // Pinterest-style soft rounding
+    borderTopRightRadius: 24,
     height: '92%',
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
+    shadowColor: colors.text.primary,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
   },
   pinterestHeader: {
     flexDirection: 'row',
@@ -4223,7 +4081,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '30',
+    borderBottomColor: colors.border + '20', // Softer border
   },
   pinterestTitle: {
     ...typography.h3,
@@ -4317,13 +4175,16 @@ const styles = StyleSheet.create({
   },
   pinterestStatCard: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    backgroundColor: colors.background,
+    borderRadius: 16, // Pinterest-style soft rounding
     padding: spacing.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border + '20',
-    ...shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, // Very soft shadow
+    shadowRadius: 8,
+    elevation: 2,
   },
   pinterestStatIconCircle: {
     width: 40,
@@ -4336,25 +4197,24 @@ const styles = StyleSheet.create({
   pinterestStatValue: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 2,
-    letterSpacing: -0.5,
+    fontSize: 24,
+    fontWeight: '700', // Pinterest-style
+    marginBottom: spacing.xs / 2,
+    letterSpacing: -0.3,
   },
   pinterestStatLabel: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: '500', // Lighter weight for Pinterest
+    textTransform: 'capitalize', // Less aggressive than uppercase
   },
 
   // Pinterest-Style Commission Cards
   pinterestCommissionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
+    backgroundColor: 'transparent', // No nested background
+    borderRadius: 0,
+    padding: 0,
     gap: spacing.sm,
   },
   pinterestCardHeader: {
@@ -4375,8 +4235,8 @@ const styles = StyleSheet.create({
   pinterestCardUsername: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600', // Pinterest-style
     marginBottom: 4,
   },
   pinterestCardMeta: {
@@ -4399,14 +4259,15 @@ const styles = StyleSheet.create({
   },
   pinterestStatusText: {
     ...typography.small,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600', // Pinterest-style
     textTransform: 'capitalize',
   },
   pinterestCardDate: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '400', // Pinterest-style
   },
   pinterestCardPriceContainer: {
     alignItems: 'flex-end',
@@ -4414,12 +4275,14 @@ const styles = StyleSheet.create({
   pinterestCardPrice: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.3,
   },
   pinterestCardPriceLabel: {
     ...typography.small,
     color: colors.text.disabled,
+    fontWeight: '400', // Pinterest-style
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',

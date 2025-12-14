@@ -643,6 +643,42 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         body: `Your commission from ${artistInfo?.username || 'an artist'} is done`,
         data: { type: 'commission', commissionId: req.params.id },
       });
+
+      // Send review prompts to both artist and client
+      await NotificationService.publish(commission.artist_id, {
+        type: 'review_prompt',
+        title: 'Leave a Review 🌟',
+        message: `How was working with ${clientInfo?.username || 'the client'}? Leave a review!`,
+        action: { type: 'review_commission', id: req.params.id, reviewType: 'artist_to_client' },
+        priority: 'normal',
+      });
+
+      await NotificationService.publish(commission.client_id, {
+        type: 'review_prompt',
+        title: 'Leave a Review 🌟',
+        message: `How was your experience with ${artistInfo?.username || 'the artist'}? Leave a review!`,
+        action: { type: 'review_commission', id: req.params.id, reviewType: 'client_to_artist' },
+        priority: 'normal',
+      });
+
+      // Create pending review records
+      try {
+        await supabaseAdmin.from('pending_reviews').insert([
+          {
+            commission_id: req.params.id,
+            user_id: commission.artist_id,
+            review_type: 'artist_to_client',
+          },
+          {
+            commission_id: req.params.id,
+            user_id: commission.client_id,
+            review_type: 'client_to_artist',
+          },
+        ]);
+      } catch (err) {
+        console.error('Error creating pending reviews:', err);
+        // Don't fail the request if pending reviews fail
+      }
     } else if (finalStatus === 'cancelled' && isClient) {
       // Commission cancelled - notify artist
       await NotificationService.publish(commission.artist_id, {

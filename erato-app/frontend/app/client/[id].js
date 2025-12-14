@@ -243,38 +243,41 @@ export default function ClientProfileScreen() {
             </Text>
           )}
 
-          {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Ionicons name="briefcase-outline" size={18} color={colors.primary} />
-              <Text style={styles.statValue}>{commissions.length || 0}</Text>
-              <Text style={styles.statLabel}>Total</Text>
+          {/* Stats - Pinterest-style Cards */}
+          <View style={styles.pinterestStatsGrid}>
+            <View style={styles.pinterestStatCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.pinterestStatValue}>{commissions.length || 0}</Text>
+              <Text style={styles.pinterestStatLabel}>Total</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="checkmark-circle-outline" size={18} color={colors.primary} />
-              <Text style={styles.statValue}>{completedCommissions}</Text>
-              <Text style={styles.statLabel}>Completed</Text>
+            <View style={styles.pinterestStatCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.pinterestStatValue}>{completedCommissions}</Text>
+              <Text style={styles.pinterestStatLabel}>Completed</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="hourglass-outline" size={18} color={colors.primary} />
-              <Text style={styles.statValue}>{inProgressCommissions + pendingCommissions}</Text>
-              <Text style={styles.statLabel}>Active</Text>
+            <View style={styles.pinterestStatCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="hourglass-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.pinterestStatValue}>{inProgressCommissions + pendingCommissions}</Text>
+              <Text style={styles.pinterestStatLabel}>Active</Text>
             </View>
             {reviewsReceived.length > 0 && (
-              <>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Ionicons name="star" size={18} color={colors.status.warning} />
-                  <Text style={styles.statValue}>
-                    {reviewsReceived.length > 0
-                      ? (reviewsReceived.reduce((sum, r) => sum + r.rating, 0) / reviewsReceived.length).toFixed(1)
-                      : '0.0'}
-                  </Text>
-                  <Text style={styles.statLabel}>Rating</Text>
+              <View style={styles.pinterestStatCard}>
+                <View style={styles.statIconContainer}>
+                  <Ionicons name="star" size={20} color={colors.status.warning} />
                 </View>
-              </>
+                <Text style={styles.pinterestStatValue}>
+                  {reviewsReceived.length > 0
+                    ? (reviewsReceived.reduce((sum, r) => sum + r.rating, 0) / reviewsReceived.length).toFixed(1)
+                    : '0.0'}
+                </Text>
+                <Text style={styles.pinterestStatLabel}>Rating</Text>
+              </View>
             )}
           </View>
 
@@ -421,10 +424,13 @@ export default function ClientProfileScreen() {
                     styles.statusBadge,
                     { backgroundColor: getStatusColor(commission.status) + '20' }
                   ]}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: getStatusColor(commission.status) }
-                    ]}>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: getStatusColor(commission.status) }
+                      ]}
+                      numberOfLines={1}
+                    >
                       {formatStatus(commission.status)}
                     </Text>
                   </View>
@@ -502,17 +508,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border + '20',
+    borderWidth: 0,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 20 : 22,
-    fontWeight: '800',
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   retryButton: {
     backgroundColor: colors.primary,
@@ -542,8 +548,7 @@ const styles = StyleSheet.create({
     width: IS_SMALL_SCREEN ? 110 : 120,
     height: IS_SMALL_SCREEN ? 110 : 120,
     borderRadius: IS_SMALL_SCREEN ? 55 : 60,
-    borderWidth: 4,
-    borderColor: colors.primary + '40',
+    borderWidth: 0, // Remove border
   },
   nameContainer: {
     alignItems: 'center',
@@ -558,7 +563,7 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 26 : 30,
-    fontWeight: '800',
+    fontWeight: '700', // Pinterest-style (was 800)
     textAlign: 'center',
     letterSpacing: -0.5,
   },
@@ -588,13 +593,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    backgroundColor: colors.background,
+    borderRadius: 16,
     paddingVertical: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
     gap: spacing.md,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statItem: {
     flex: 1,
@@ -606,17 +617,17 @@ const styles = StyleSheet.create({
   statValue: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 20 : 22,
-    fontWeight: '800',
+    fontSize: IS_SMALL_SCREEN ? 22 : 24,
+    fontWeight: '700', // Pinterest-style (was 800)
     textAlign: 'center',
   },
   statLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 11 : 12,
-    fontWeight: '600',
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
+    fontWeight: '500', // Pinterest-style
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   statDivider: {
     width: 1,
@@ -670,22 +681,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   commissionList: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    ...shadows.small,
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: spacing.lg,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   commissionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
   },
   commissionItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
+    borderBottomColor: colors.border + '20',
   },
   commissionInfo: {
     flex: 1,
@@ -706,6 +720,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs / 2,
     borderRadius: borderRadius.sm,
+    flexShrink: 0,
   },
   statusText: {
     ...typography.caption,
@@ -737,10 +752,12 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.background,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.xs,
-    gap: spacing.sm,
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    marginBottom: spacing.md,
+    gap: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '20',
   },
   tab: {
     flex: 1,
@@ -748,24 +765,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    paddingVertical: spacing.md,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   tabActive: {
-    backgroundColor: colors.primary + '15',
-    borderColor: colors.primary + '40',
+    backgroundColor: 'transparent',
+    borderBottomColor: colors.error,
   },
   tabText: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   tabTextActive: {
-    color: colors.primary,
+    color: colors.text.primary,
     fontWeight: '700',
+  },
+  // Pinterest-style Stats Grid
+  pinterestStatsGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  pinterestStatCard: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinterestStatValue: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: spacing.xs / 2,
+  },
+  pinterestStatLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

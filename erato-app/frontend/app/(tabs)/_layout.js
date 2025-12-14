@@ -99,7 +99,7 @@ function CommissionsTabIcon({ color }) {
 
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="document-text" size={22} color={color} />
+      <Ionicons name="document-text" size={26} color={color} />
       {pendingCount > 0 && (
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>{Math.min(pendingCount, 9)}{pendingCount > 9 ? '+' : ''}</Text>
@@ -113,7 +113,7 @@ function BoardsTabIcon({ color }) {
   // Boards tab should not show any notifications - it's just for saved boards
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="albums" size={22} color={color} />
+      <Ionicons name="albums" size={26} color={color} />
     </View>
   );
 }
@@ -142,24 +142,22 @@ export default function TabsLayout() {
             paddingBottom: Platform.OS === 'ios' 
               ? Math.max(28, insets.bottom) 
               : Math.max(8, insets.bottom),
-            paddingTop: 5,
+            paddingTop: 8,
             paddingHorizontal: 0,
           }
         ],
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.text.secondary,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarActiveTintColor: colors.text.primary,
+        tabBarInactiveTintColor: colors.text.disabled,
+        tabBarShowLabel: false, // Hide labels for minimal look
         tabBarItemStyle: {
-          paddingVertical: 2,
-          paddingHorizontal: 2,
+          paddingVertical: 0,
+          paddingHorizontal: 0,
         },
         tabBarBackground: () => (
           <View style={{ 
             flex: 1, 
-            backgroundColor: colors.surface + '73', // 0.45 opacity
-            borderTopWidth: 1,
-            borderTopColor: colors.border + '40', // 0.25 opacity
+            backgroundColor: colors.background,
+            borderTopWidth: 0, // No border for ultra-clean look
           }} />
         ),
       }}
@@ -168,8 +166,8 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid" size={22} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home" size={26} color={color} />
           ),
         }}
       />
@@ -185,16 +183,12 @@ export default function TabsLayout() {
         name="create"
         options={{
           title: '',
-          tabBarIcon: ({ focused }) => (
-            <View style={[styles.createWrapper, focused && styles.createWrapperFocused]}>
-              <View style={[styles.createButton, focused && styles.createButtonFocused]}>
-                <Ionicons 
-                  name={isArtist ? "add-circle" : "search"} 
-                  size={26} 
-                  color={colors.text.primary} 
-                />
-              </View>
-            </View>
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons 
+              name={isArtist ? "add" : "search"} 
+              size={28} 
+              color={color} 
+            />
           ),
           tabBarLabel: () => null,
         }}
@@ -229,81 +223,32 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: 'rgba(26, 26, 26, 0.45)',
-    borderTopColor: 'rgba(58, 58, 58, 0.25)',
-    borderTopWidth: 1,
+    backgroundColor: colors.background,
+    borderTopWidth: 0, // No border for ultra-minimal look
     height: Platform.OS === 'ios' ? 88 : 65,
     paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-    paddingTop: 5,
+    paddingTop: 8,
     paddingHorizontal: 0,
+    shadowOpacity: 0, // No shadow
     elevation: 0,
-    shadowOpacity: 0,
-  },
-  tabBarLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    marginTop: 1,
-    marginBottom: 0,
-  },
-  createButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  createWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: `${colors.surface}F2`,
-    borderWidth: 2,
-    borderColor: `${colors.primary}E6`,
-    marginTop: -20, // Pull button up to center it above the tab bar
-    shadowColor: colors.primary,
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  createWrapperFocused: {
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.25,
-    elevation: 8,
   },
   unreadBadge: {
     position: 'absolute',
-    top: -6,
-    right: -8,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
     backgroundColor: colors.primary,
-    borderWidth: 1.5,
-    borderColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
   },
   unreadBadgeText: {
     color: colors.text.primary,
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 9,
+    fontWeight: '700',
     textAlign: 'center',
   },
 });

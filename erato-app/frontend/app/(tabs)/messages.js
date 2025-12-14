@@ -510,7 +510,7 @@ export default function MessagesScreen() {
           contentContainerStyle={styles.tabsScrollContent}
         >
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+            style={styles.tab}
             onPress={() => setActiveTab('all')}
             activeOpacity={0.7}
           >
@@ -524,10 +524,11 @@ export default function MessagesScreen() {
                 </Text>
               </View>
             )}
+            {activeTab === 'all' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'unread' && styles.tabActive]}
+            style={styles.tab}
             onPress={() => setActiveTab('unread')}
             activeOpacity={0.7}
           >
@@ -541,10 +542,11 @@ export default function MessagesScreen() {
                 </Text>
               </View>
             )}
+            {activeTab === 'unread' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'commissions' && styles.tabActive]}
+            style={styles.tab}
             onPress={() => setActiveTab('commissions')}
             activeOpacity={0.7}
           >
@@ -558,6 +560,7 @@ export default function MessagesScreen() {
                 </Text>
               </View>
             )}
+            {activeTab === 'commissions' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -755,8 +758,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 26 : 28,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 26 : 30,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.4,
   },
   headerActions: {
     flexDirection: 'row',
@@ -769,38 +773,42 @@ const styles = StyleSheet.create({
   tabsContainer: {
     backgroundColor: colors.background,
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
+    paddingTop: spacing.md,
+    borderBottomWidth: 0, // Remove border for cleaner look
   },
   tabsScrollContent: {
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    marginRight: spacing.sm,
-  },
-  tabActive: {
-    backgroundColor: colors.primary + '20',
+    marginRight: spacing.lg,
+    paddingVertical: spacing.xs - 2,
+    position: 'relative',
   },
   tabText: {
-    ...typography.bodyBold,
+    ...typography.body,
     color: colors.text.secondary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500', // Pinterest-style lighter
   },
   tabTextActive: {
-    color: colors.primary,
-    fontWeight: '700',
+    color: colors.text.primary,
+    fontWeight: '600', // Pinterest-style slightly bolder
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
   },
   tabBadge: {
-    backgroundColor: colors.border,
+    backgroundColor: colors.text.secondary + '20', // Soft gray background
     borderRadius: borderRadius.full,
     minWidth: 20,
     height: 20,
@@ -809,13 +817,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabBadgeActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primary, // Primary color when active
   },
   tabBadgeText: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600', // Pinterest-style
   },
   tabBadgeTextActive: {
     color: colors.text.primary,
@@ -827,16 +835,17 @@ const styles = StyleSheet.create({
   conversationCard: {
     marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     marginBottom: IS_SMALL_SCREEN ? spacing.xs + 4 : spacing.sm + 4,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background, // Pinterest-style clean background
+    borderRadius: 16, // Pinterest soft rounding
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border + '30',
-    ...shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, // Very soft shadow
+    shadowRadius: 8,
+    elevation: 2,
   },
   conversationCardUnread: {
-    borderColor: colors.primary + '40',
-    backgroundColor: colors.surface + 'F0',
+    backgroundColor: colors.primary + '08', // Very subtle tint for unread
   },
   cardContent: {
     flexDirection: 'row',
@@ -905,11 +914,11 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 16 : 17,
-    fontWeight: '600',
+    fontWeight: '600', // Pinterest-style
     flex: 1,
   },
   nameUnread: {
-    fontWeight: '700',
+    fontWeight: '700', // Slightly bolder for unread
   },
   timeContainer: {
     flexDirection: 'row',
@@ -935,12 +944,13 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
     lineHeight: 20,
+    fontWeight: '400', // Pinterest-style lighter
     flex: 1,
     marginRight: spacing.sm,
   },
   messagePreviewUnread: {
     color: colors.text.primary,
-    fontWeight: '500',
+    fontWeight: '500', // Pinterest-style medium for unread
   },
   unreadBadge: {
     backgroundColor: colors.primary,

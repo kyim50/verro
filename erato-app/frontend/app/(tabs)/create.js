@@ -986,22 +986,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
   },
   headerSpacer: {
     width: 40,
   },
   headerTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
+    fontSize: 26,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.4,
   },
   moreButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 20, // Make it circular
   },
   cardContainer: {
     flex: 1,
@@ -1013,12 +1017,17 @@ const styles = StyleSheet.create({
   card: {
     width: width - spacing.xl * 2,
     height: height * 0.65,
-    borderRadius: borderRadius.lg,
+    borderRadius: 20, // Pinterest-style soft rounding
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     position: 'absolute',
     top: spacing.md, // Position card higher up
     zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, // Soft Pinterest-style shadow
+    shadowRadius: 16,
+    elevation: 4,
   },
   nextCard: {
     zIndex: 0,
@@ -1041,7 +1050,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer Pinterest-style overlay
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 5,
@@ -1094,13 +1103,13 @@ const styles = StyleSheet.create({
   nopeText: {
     ...typography.h1,
     color: colors.status.error,
-    fontWeight: '800',
+    fontWeight: '700', // Pinterest-style
   },
   artworkCounter: {
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Softer overlay
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
@@ -1109,7 +1118,8 @@ const styles = StyleSheet.create({
   counterText: {
     ...typography.caption,
     color: colors.text.primary,
-    fontWeight: '600',
+    fontWeight: '500', // Pinterest-style lighter
+    fontSize: 12,
   },
   gradient: {
     position: 'absolute',
@@ -1144,9 +1154,10 @@ const styles = StyleSheet.create({
   bio: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '400', // Pinterest-style
     marginBottom: spacing.sm,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1161,7 +1172,8 @@ const styles = StyleSheet.create({
   statText: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '500', // Pinterest-style
   },
   priceRow: {
     flexDirection: 'row',
@@ -1172,12 +1184,14 @@ const styles = StyleSheet.create({
   priceLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '400', // Pinterest-style
   },
   price: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '600', // Pinterest-style
   },
   viewPortfolioButton: {
     flexDirection: 'row',
@@ -1203,13 +1217,15 @@ const styles = StyleSheet.create({
   viewPortfolioText: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600', // Pinterest-style
     marginBottom: 2,
   },
   viewPortfolioSubtext: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '400', // Pinterest-style
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -1230,19 +1246,18 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    shadowColor: colors.shadow.color,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.08, // Softer Pinterest-style shadow
+    shadowRadius: 8,
+    elevation: 2,
   },
   undoButton: {
     width: 56,
     height: 56,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    backgroundColor: colors.background,
+    borderWidth: 0, // Remove border for cleaner look
     opacity: 1,
   },
   nopeButton: {
@@ -1282,7 +1297,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
+    borderBottomColor: colors.border + '15', // Softer border
   },
   modalCloseButton: {
     width: 40,
@@ -1365,24 +1380,27 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
+    borderTopColor: colors.border + '15', // Softer border
   },
   artistInfoCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '15',
+    padding: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: 16, // Pinterest-style soft rounding
+    borderWidth: 0, // Remove border for cleaner look
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, // Very soft shadow
+    shadowRadius: 8,
+    elevation: 2,
   },
   artistAvatarModal: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 0, // Remove border for cleaner look
   },
   artistDetailsModal: {
     flex: 1,
@@ -1390,7 +1408,8 @@ const styles = StyleSheet.create({
   artistNameModal: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '600', // Pinterest-style
     marginBottom: spacing.xs - 2,
   },
   tapToProfileRow: {
@@ -1414,9 +1433,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   instructionsContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24, // Pinterest-style soft rounding
+    borderTopRightRadius: 24,
     maxHeight: height * 0.85,
     width: '100%',
     flex: 1,
@@ -1439,11 +1458,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
+    borderBottomColor: colors.border + '15', // Softer border
   },
   instructionsTitle: {
     ...typography.h2,
     color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.4,
   },
   instructionsCloseButton: {
     width: 32,

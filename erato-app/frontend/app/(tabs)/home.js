@@ -32,6 +32,8 @@ import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } fr
 import SearchModal from '../../components/SearchModal';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 import ArtistFilters from '../../components/ArtistFilters';
+import CreateBoardModal from '../../components/CreateBoardModal';
+import ReviewPromptModal from '../../components/ReviewPromptModal';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -65,11 +67,15 @@ export default function HomeScreen() {
   const [selectedArtwork, setSelectedArtwork] = useState(null);
   const [showCreateBoard, setShowCreateBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
+  const [newBoardIsPublic, setNewBoardIsPublic] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showDiscoverArtists, setShowDiscoverArtists] = useState(false);
   const [discoverArtists, setDiscoverArtists] = useState([]);
+  const [pendingReviews, setPendingReviews] = useState([]);
+  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
+  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
   const [loadingArtists, setLoadingArtists] = useState(false);
   const [artistFilters, setArtistFilters] = useState({});
   const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
@@ -543,7 +549,7 @@ export default function HomeScreen() {
     }
   }, [userProfile?.avatar_url, currentUser?.avatar_url]);
 
-  
+
   // Also refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -552,6 +558,51 @@ export default function HomeScreen() {
       }
     }, [currentUser?.id, token])
   );
+
+  // Load pending reviews on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadPendingReviews = async () => {
+        if (!token) return;
+        try {
+          const response = await axios.get(
+            `${API_URL}/reviews/pending`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const reviews = response.data.pendingReviews || [];
+          setPendingReviews(reviews);
+          if (reviews.length > 0) {
+            setCurrentReviewIndex(0);
+            setShowReviewPrompt(true);
+          }
+        } catch (error) {
+          console.error('Error loading pending reviews:', error);
+        }
+      };
+
+      loadPendingReviews();
+    }, [token])
+  );
+
+  const handleReviewSubmitted = () => {
+    // Move to next review or close modal
+    if (currentReviewIndex < pendingReviews.length - 1) {
+      setCurrentReviewIndex(currentReviewIndex + 1);
+    } else {
+      setShowReviewPrompt(false);
+      setPendingReviews([]);
+      setCurrentReviewIndex(0);
+    }
+  };
+
+  const handleCloseReviewPrompt = () => {
+    // Move to next review or close modal
+    if (currentReviewIndex < pendingReviews.length - 1) {
+      setCurrentReviewIndex(currentReviewIndex + 1);
+    } else {
+      setShowReviewPrompt(false);
+    }
+  };
 
   // Organize artworks into balanced columns (Pinterest masonry style) with suggested artist cards
   useEffect(() => {
@@ -1172,15 +1223,7 @@ export default function HomeScreen() {
         </View>
         
         {/* Artist Profile Card */}
-        <View style={[
-          styles.tikTokProfileCard,
-          {
-            borderColor: artistCommissionStatus === 'open' 
-              ? colors.success + '60' 
-              : colors.error + '40',
-            borderWidth: 2,
-          }
-        ]}>
+        <View style={styles.tikTokProfileCard}>
           <TouchableOpacity
             onPress={() => router.push(`/artist/${item.artist_id}`)}
             style={styles.tikTokProfileCardContent}
@@ -1259,7 +1302,7 @@ export default function HomeScreen() {
 
         {/* Bottom gradient */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']}
+          colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.6)']}
           style={styles.tikTokInfoGradient}
         />
 
@@ -1281,9 +1324,6 @@ export default function HomeScreen() {
               color={isLiked ? colors.primary : '#FFFFFF'}
               style={{ opacity: isLiked ? 1 : 0.95 }}
             />
-            <Text style={styles.tikTokActionLabel}>
-              {isLiked ? 'Liked' : 'Like'}
-            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -1291,7 +1331,6 @@ export default function HomeScreen() {
             onPress={() => router.push(`/artwork/${item.id}`)}
           >
             <Ionicons name="eye-outline" size={32} color={colors.text.primary} />
-            <Text style={styles.tikTokActionLabel}>Details</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1303,7 +1342,6 @@ export default function HomeScreen() {
             }}
           >
             <Ionicons name="bookmark-outline" size={32} color={colors.text.primary} />
-            <Text style={styles.tikTokActionLabel}>Save</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1377,6 +1415,7 @@ export default function HomeScreen() {
             }}
           >
             <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]}>Explore</Text>
+            {activeTab === 'explore' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'foryou' && styles.tabActive]}
@@ -1417,6 +1456,7 @@ export default function HomeScreen() {
             }}
           >
             <Text style={[styles.tabText, activeTab === 'foryou' && styles.tabTextActive]}>For you</Text>
+            {activeTab === 'foryou' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
         </View>
 
@@ -1702,6 +1742,7 @@ export default function HomeScreen() {
           setShowSaveModal(false);
           setShowCreateBoard(false);
           setNewBoardName('');
+          setNewBoardIsPublic(false);
         }}
       >
         <View style={styles.saveBoardModalOverlay}>
@@ -1714,11 +1755,12 @@ export default function HomeScreen() {
                 setShowSaveModal(false);
                 setShowCreateBoard(false);
                 setNewBoardName('');
+                setNewBoardIsPublic(false);
               }
             }}>
               <View style={styles.saveBoardModalContent}>
-                {/* Header */}
-                <View style={styles.saveBoardHeader}>
+                {/* Header with Safe Area */}
+                <View style={[styles.saveBoardHeader, { paddingTop: insets.top + spacing.md }]}>
                   <TouchableOpacity
                     onPress={() => {
                       setShowSaveModal(false);
@@ -1729,17 +1771,14 @@ export default function HomeScreen() {
                   >
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                   </TouchableOpacity>
-                  <Text style={styles.saveBoardTitle}>
-                    {showCreateBoard ? 'Create board' : 'Save to board'}
-                  </Text>
+                  <Text style={styles.saveBoardTitle}>Save to board</Text>
                   <View style={{ width: 28 }} />
                 </View>
 
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                   <View style={{ flex: 1 }}>
-                    {!showCreateBoard ? (
-                      <>
-                        {/* Board List */}
+                    <>
+                      {/* Board List */}
                         <ScrollView
                           style={styles.saveBoardList}
                           contentContainerStyle={styles.saveBoardListContent}
@@ -1849,6 +1888,31 @@ export default function HomeScreen() {
                           />
                         </View>
 
+                        {/* Privacy Toggle */}
+                        <TouchableOpacity
+                          style={styles.createBoardPrivacyToggle}
+                          onPress={() => setNewBoardIsPublic(!newBoardIsPublic)}
+                        >
+                          <View style={styles.privacyToggleLeft}>
+                            <Ionicons
+                              name={newBoardIsPublic ? 'globe-outline' : 'lock-closed-outline'}
+                              size={20}
+                              color={colors.text.primary}
+                            />
+                            <View>
+                              <Text style={styles.privacyToggleLabel}>
+                                {newBoardIsPublic ? 'Public' : 'Private'}
+                              </Text>
+                              <Text style={styles.privacyToggleDescription}>
+                                {newBoardIsPublic ? 'Anyone can see this board' : 'Only you can see this board'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={[styles.privacySwitch, newBoardIsPublic && styles.privacySwitchActive]}>
+                            <View style={[styles.privacySwitchThumb, newBoardIsPublic && styles.privacySwitchThumbActive]} />
+                          </View>
+                        </TouchableOpacity>
+
                         {/* Spacer */}
                         <View style={{ flex: 1 }} />
 
@@ -1883,7 +1947,7 @@ export default function HomeScreen() {
         <View style={styles.pinterestModalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <View style={styles.pinterestModalContent}>
-              <View style={styles.pinterestHeader}>
+              <View style={[styles.pinterestHeader, { paddingTop: insets.top + spacing.md }]}>
                 <TouchableOpacity
                   onPress={() => setShowSortFilterModal(false)}
                 >
@@ -2024,7 +2088,18 @@ export default function HomeScreen() {
         visible={showSearchModal}
         onClose={() => setShowSearchModal(false)}
       />
-      
+
+      {/* Review Prompt Modal */}
+      {pendingReviews.length > 0 && (
+        <ReviewPromptModal
+          visible={showReviewPrompt}
+          onClose={handleCloseReviewPrompt}
+          pendingReview={pendingReviews[currentReviewIndex]}
+          token={token}
+          onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
+
       {!isArtist && (
         <>
           <StylePreferenceQuiz
@@ -2071,6 +2146,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, // Soft Pinterest-style shadow
+    shadowRadius: 8,
+    elevation: 2,
   },
   imageContainer: {
     position: 'relative',
@@ -2087,13 +2167,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface + 'E6',
+    backgroundColor: 'transparent', // No background
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
-    ...shadows.small,
+    borderWidth: 0,
   },
   likeIcon: {
     textShadowColor: colors.overlayLight,
@@ -2130,7 +2208,7 @@ const styles = StyleSheet.create({
     height: IS_SMALL_SCREEN ? 36 : 38,
     borderRadius: IS_SMALL_SCREEN ? 18 : 19,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent', // No background
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2154,9 +2232,14 @@ const styles = StyleSheet.create({
     right: 6,
     bottom: 125,
     overflow: 'hidden',
-    borderRadius: borderRadius.xl,
+    borderRadius: 20, // Pinterest-style soft rounding
     backgroundColor: colors.surface,
     zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1, // Soft shadow
+    shadowRadius: 12,
+    elevation: 3,
   },
   tikTokImageContainer: {
     width: '100%',
@@ -2193,10 +2276,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 6,
     right: 6,
-    height: 80,
+    height: 100, // Slightly taller for better gradient
     zIndex: 1,
-    borderBottomLeftRadius: borderRadius.xl,
-    borderBottomRightRadius: borderRadius.xl,
+    borderBottomLeftRadius: 20, // Match tikTokImageWrapper
+    borderBottomRightRadius: 20,
     overflow: 'hidden',
   },
   tikTokProfileCard: {
@@ -2223,16 +2306,14 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.primary + '60',
+    borderWidth: 0, // Remove border for cleaner look
   },
   tikTokAvatarPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    borderWidth: 2,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    borderWidth: 0, // Remove border for cleaner look
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2265,17 +2346,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   tikTokStatusBadgeOpen: {
-    borderColor: colors.success,
-    backgroundColor: colors.success + '18',
+    backgroundColor: colors.success + '20', // Softer tinted background
   },
   tikTokStatusBadgeClosed: {
-    borderColor: colors.error,
-    backgroundColor: colors.error + '18',
+    backgroundColor: colors.error + '20', // Softer tinted background
   },
   tikTokStatusBadgeText: {
     ...typography.caption,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600', // Pinterest-style
   },
   tikTokArtistStats: {
     flexDirection: 'row',
@@ -2296,9 +2375,9 @@ const styles = StyleSheet.create({
   },
   tikTokStatText: {
     ...typography.caption,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.text.secondary,
-    fontWeight: '600',
+    fontWeight: '500', // Pinterest-style
   },
   tikTokActions: {
     position: 'absolute',
@@ -2318,6 +2397,7 @@ const styles = StyleSheet.create({
     minWidth: 64,
     minHeight: 64,
     justifyContent: 'center',
+    backgroundColor: 'transparent', // No background
   },
   tikTokActionLabel: {
     ...typography.caption,
@@ -2342,43 +2422,41 @@ const styles = StyleSheet.create({
   viewCountText: {
     ...typography.caption,
     color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600', // Pinterest-style
   },
   commissionBadgeOpen: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs / 2,
     backgroundColor: colors.success,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 1,
     borderRadius: borderRadius.full,
     borderWidth: 0,
   },
   commissionBadgeText: {
     ...typography.caption,
     color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600', // Pinterest-style
   },
   textContainer: {
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.sm,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: spacing.xs - 2,
   },
   title: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '600', // Pinterest-style
     flex: 1,
     marginRight: spacing.xs,
   },
@@ -2386,14 +2464,16 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
+    fontWeight: '400', // Pinterest-style
   },
   menuButton: {
-    padding: spacing.xs - 1,
-    borderRadius: borderRadius.sm,
-    width: 26,
-    height: 26,
+    padding: spacing.xs,
+    borderRadius: borderRadius.full, // Circular button
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   loadingState: {
     flex: 1,
@@ -2404,6 +2484,8 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '400', // Pinterest-style
     marginTop: spacing.md,
   },
   emptyState: {
@@ -2416,7 +2498,9 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 22 : 24,
+    fontSize: IS_SMALL_SCREEN ? 24 : 26,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.4,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
@@ -2424,22 +2508,30 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontWeight: '400', // Pinterest-style
     textAlign: 'center',
+    lineHeight: 22,
     marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
   },
   exploreButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.full,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12, // Soft shadow
+    shadowRadius: 8,
+    elevation: 3,
   },
   exploreButtonText: {
     ...typography.button,
     color: colors.text.primary,
+    fontWeight: '600', // Pinterest-style
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer Pinterest-style overlay
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10000,
@@ -2460,24 +2552,35 @@ const styles = StyleSheet.create({
   sortSectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.3,
     marginBottom: spacing.md,
   },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: spacing.lg,
     marginBottom: spacing.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   sortOptionActive: {
+    borderWidth: 2,
     borderColor: colors.primary,
-    backgroundColor: `${colors.primary}15`,
+    backgroundColor: colors.primary + '08',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   sortOptionContent: {
     flexDirection: 'row',
@@ -2486,15 +2589,25 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sortOptionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   sortOptionIconActive: {
     backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sortOptionText: {
     flex: 1,
@@ -2503,15 +2616,18 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.secondary,
     fontSize: 16,
+    fontWeight: '500', // Pinterest-style
     marginBottom: 2,
   },
   sortOptionLabelActive: {
     color: colors.text.primary,
+    fontWeight: '600', // Pinterest-style
   },
   sortOptionDesc: {
     ...typography.caption,
     color: colors.text.disabled,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '400', // Pinterest-style
   },
   filterSection: {
     marginBottom: spacing.lg,
@@ -2522,33 +2638,44 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   styleFilterChip: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.md + 2,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   styleFilterChipActive: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderColor: 'transparent',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
   styleFilterChipCurated: {
-    borderColor: colors.primary + '60',
+    backgroundColor: colors.primary + '10',
     borderWidth: 1.5,
+    borderColor: colors.primary + '40',
   },
   styleFilterChipText: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '500', // Pinterest-style
   },
   styleFilterChipTextActive: {
-    color: colors.text.primary,
-    fontWeight: '600',
+    color: colors.background,
+    fontWeight: '600', // Pinterest-style
   },
   styleFilterChipTextCurated: {
     color: colors.primary,
+    fontWeight: '600', // Pinterest-style
   },
   filterBadge: {
     position: 'absolute',
@@ -2576,32 +2703,40 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.border,
+    padding: spacing.lg,
+    borderRadius: borderRadius.full, // Pill shape
+    backgroundColor: colors.background,
+    borderWidth: 0, // Remove border for cleaner look
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   cancelButtonText: {
     ...typography.button,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
-    fontWeight: '700',
+    fontWeight: '600', // Pinterest-style
   },
   createButton: {
     flex: 1,
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
-    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderRadius: borderRadius.full, // Pill shape
     backgroundColor: colors.primary,
     alignItems: 'center',
-    ...shadows.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   createButtonText: {
     ...typography.button,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
-    fontWeight: '700',
+    fontWeight: '600', // Pinterest-style
   },
   // Filter Sections
   // Modal Style Sections
@@ -2618,10 +2753,10 @@ const styles = StyleSheet.create({
   },
   modalSectionTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600', // Pinterest-style
     color: colors.text.secondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginRight: spacing.xs,
   },
   preferredBadge: {
@@ -2650,11 +2785,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500', // Pinterest-style
   },
   pinterestFilterTextActive: {
     color: colors.text.primary,
-    fontWeight: '700',
+    fontWeight: '600', // Pinterest-style
   },
   pinterestFilterTextCurated: {
     color: colors.primary,
@@ -2682,14 +2817,16 @@ const styles = StyleSheet.create({
   suggestedArtistTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 16 : 17,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 17 : 18,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.2,
     marginBottom: spacing.xs / 2,
   },
   suggestedArtistSubtitle: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '400', // Pinterest-style
   },
   suggestedArtistScrollContent: {
     gap: spacing.md,
@@ -2735,10 +2872,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   activeFiltersBar: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: spacing.sm,
+    borderBottomColor: colors.border + '15', // Softer border
+    paddingVertical: spacing.md,
   },
   filtersScroll: {
     paddingHorizontal: spacing.md,
@@ -2760,32 +2897,35 @@ const styles = StyleSheet.create({
   },
   clearAllFilters: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
     justifyContent: 'center',
   },
   clearAllText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '500', // Pinterest-style
   },
   // Discover Artists Section
   discoverSection: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: spacing.md,
+    borderBottomColor: colors.border + '15', // Softer border
+    paddingVertical: spacing.lg,
   },
   discoverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
   discoverTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.3,
   },
   discoverLoading: {
     paddingVertical: spacing.xl,
@@ -2852,36 +2992,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.xxl + spacing.md, // Extra padding for notch
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
     backgroundColor: colors.background,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    padding: spacing.xs - 1,
+    backgroundColor: 'transparent', // Clean Pinterest style - no background
+    borderRadius: 0,
+    padding: 0,
     alignItems: 'center',
+    gap: spacing.xl, // Space between tabs
   },
   tab: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 0,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
+    borderRadius: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative', // For underline
   },
   tabActive: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'transparent', // Clean Pinterest style - no background
   },
   tabText: {
-    ...typography.body,
-    color: colors.text.secondary,
-    fontSize: 15,
+    ...typography.h3,
+    color: colors.text.disabled,
+    fontSize: 20,
+    fontWeight: '600', // Pinterest-style
+    letterSpacing: -0.3,
   },
   tabTextActive: {
-    color: colors.text.primary,
-    fontWeight: '600',
+    color: colors.text.primary, // Dark text for active tab
+    fontWeight: '700', // Pinterest-style
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: colors.text.primary,
+    borderRadius: 2,
   },
   headerRight: {
     flexDirection: 'row',
@@ -2891,7 +3044,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent', // No background
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2918,11 +3071,15 @@ const styles = StyleSheet.create({
   // Save to Board Modal Styles
   modalContent: {
     backgroundColor: colors.background,
-    borderRadius: borderRadius.xl,
+    borderRadius: 24, // Pinterest-style soft rounding
     height: Dimensions.get('window').height * 0.6, // Fixed height that leaves room for keyboard
     width: '90%',
     maxWidth: 400,
-    ...shadows.large,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2931,13 +3088,15 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
+    borderBottomColor: colors.border + '15', // Softer border
     marginBottom: spacing.md,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '700', // Pinterest-style
+    letterSpacing: -0.3,
   },
   modalCloseButton: {
     width: 40,
@@ -2968,26 +3127,26 @@ const styles = StyleSheet.create({
   createBoardSection: {
     padding: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
+    borderTopColor: colors.border + '15', // Softer border
   },
   createBoardButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    backgroundColor: colors.background, // White background
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
+    padding: spacing.lg,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.full, // Pill shape
+    borderWidth: 0, // Remove border for cleaner look
     gap: spacing.sm,
   },
   createBoardButtonText: {
     ...typography.bodyBold,
     color: colors.primary,
+    fontWeight: '600', // Pinterest-style
   },
   createBoardText: {
     ...typography.bodyBold,
     color: colors.primary,
+    fontWeight: '600', // Pinterest-style
   },
   createBoardForm: {
     padding: spacing.lg,
@@ -3009,13 +3168,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   createBoardInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
+    borderRadius: 16, // Pinterest-style soft rounding
     padding: spacing.lg,
     color: colors.text.primary,
     ...typography.body,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40', // Softer border
     fontSize: 16,
     marginTop: spacing.sm,
   },
@@ -3025,44 +3184,55 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
+    borderTopColor: colors.border + '15', // Softer border
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    borderRadius: borderRadius.full, // Pill shape
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 0, // Remove border
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   cancelButtonText: {
     ...typography.bodyBold,
     color: colors.text.secondary,
+    fontWeight: '600', // Pinterest-style
   },
   createButton: {
     flex: 1,
     backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.full, // Pill shape
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   createButtonText: {
     ...typography.button,
     color: colors.text.primary,
+    fontWeight: '600', // Pinterest-style
   },
 
   // Pinterest-Style Save to Board Modal
   saveBoardModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer Pinterest overlay
   },
   saveBoardModalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xxl,
-    borderTopRightRadius: borderRadius.xxl,
+    borderTopLeftRadius: 24, // Pinterest-style soft rounding
+    borderTopRightRadius: 24,
     height: '92%',
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
   },
   saveBoardHeader: {
     flexDirection: 'row',
@@ -3070,12 +3240,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '15', // Soft border
   },
   saveBoardTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontWeight: '700',
-    fontSize: 18,
+    fontWeight: '700', // Pinterest-style
+    fontSize: 22,
+    letterSpacing: -0.3,
   },
   saveBoardList: {
     flex: 1,
@@ -3087,15 +3260,21 @@ const styles = StyleSheet.create({
   saveBoardOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: 16, // Pinterest-style soft rounding
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, // Soft shadow
+    shadowRadius: 6,
+    elevation: 2,
   },
   saveBoardThumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.md,
+    width: 64,
+    height: 64,
+    borderRadius: 12, // Softer rounding
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
@@ -3138,37 +3317,39 @@ const styles = StyleSheet.create({
   saveBoardName: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 16,
-    marginBottom: 2,
+    fontSize: 17,
+    fontWeight: '600', // Pinterest-style
+    marginBottom: 3,
   },
   saveBoardMeta: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '400', // Pinterest-style
   },
   createNewBoardOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: 16, // Pinterest-style soft rounding
+    backgroundColor: colors.primary + '10', // Soft tinted background
   },
   createNewBoardThumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
+    width: 64,
+    height: 64,
+    borderRadius: 12, // Softer rounding
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
+    borderWidth: 0, // Remove border for cleaner look
   },
   createNewBoardText: {
     ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 16,
+    color: colors.primary,
+    fontSize: 17,
+    fontWeight: '600', // Pinterest-style
   },
 
   // Create Board Form (Pinterest Style)
@@ -3219,6 +3400,71 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 18,
     fontWeight: '600',
+  },
+  createBoardPrivacyToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: spacing.md + 2,
+    borderRadius: 16,
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border + '30',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  privacyToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  privacyToggleLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  privacyToggleDescription: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: 2,
+  },
+  privacySwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border + '60',
+    padding: 2,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  privacySwitchActive: {
+    backgroundColor: colors.primary,
+  },
+  privacySwitchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  privacySwitchThumbActive: {
+    transform: [{ translateX: 20 }],
   },
   createBoardFooter: {
     paddingTop: spacing.lg,

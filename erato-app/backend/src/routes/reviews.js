@@ -114,6 +114,19 @@ router.post('/', authenticate, async (req, res) => {
 
     if (reviewError) throw reviewError;
 
+    // Remove from pending reviews
+    try {
+      await supabaseAdmin
+        .from('pending_reviews')
+        .delete()
+        .eq('commission_id', commission_id)
+        .eq('user_id', req.user.id)
+        .eq('review_type', type);
+    } catch (err) {
+      console.error('Error removing pending review:', err);
+      // Don't fail the request if this fails
+    }
+
     res.status(201).json(review);
   } catch (error) {
     console.error('Error creating review:', error);
@@ -386,6 +399,67 @@ router.delete('/:id', authenticate, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting review:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get pending reviews for the authenticated user
+router.get('/pending', authenticate, async (req, res) => {
+  try {
+    const { data: pendingReviews, error } = await supabaseAdmin
+      .from('pending_reviews')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!pendingReviews || pendingReviews.length === 0) {
+      return res.json({ pendingReviews: [] });
+    }
+
+    // Get commission details for each pending review
+    const commissionIds = pendingReviews.map(pr => pr.commission_id);
+    const { data: commissions, error: commError } = await supabaseAdmin
+      .from('commissions')
+      .select('id, details, client_note, artist_id, client_id')
+      .in('id', commissionIds);
+
+    if (commError) throw commError;
+
+    // Get user IDs to fetch
+    const userIds = [...new Set(commissions.map(c => [c.artist_id, c.client_id]).flat())];
+    const { data: users, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('id, username, full_name, avatar_url')
+      .in('id', userIds);
+
+    if (userError) throw userError;
+
+    const userMap = new Map(users?.map(u => [u.id, u]) || []);
+    const commissionMap = new Map(commissions?.map(c => [c.id, c]) || []);
+
+    // Enrich pending reviews with commission and user data
+    const enrichedPendingReviews = pendingReviews.map(pr => {
+      const commission = commissionMap.get(pr.commission_id);
+      const otherUserId = pr.review_type === 'artist_to_client'
+        ? commission?.client_id
+        : commission?.artist_id;
+      const otherUser = userMap.get(otherUserId);
+
+      return {
+        ...pr,
+        commission: commission ? {
+          id: commission.id,
+          title: commission.details || commission.client_note || 'Commission',
+        } : null,
+        otherUser: otherUser || null,
+      };
+    });
+
+    res.json({ pendingReviews: enrichedPendingReviews });
+  } catch (error) {
+    console.error('Error fetching pending reviews:', error);
     res.status(500).json({ error: error.message });
   }
 });

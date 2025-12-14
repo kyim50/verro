@@ -355,69 +355,98 @@ export default function CommissionRequestsScreen() {
   };
 
   const renderRequest = ({ item }) => {
-    // For clients: show their posted requests with bid info
+    // For clients: Pinterest-style cards with clean design
     if (!isArtist) {
       const pendingBidsCount = item.pending_bids_count || 0;
       const statusColor =
         item.status === 'open' ? colors.status.pending :
         item.status === 'awarded' ? colors.status.success :
         colors.text.secondary;
+      
+      const hasReferenceImages = item.reference_images && item.reference_images.length > 0;
 
       return (
         <TouchableOpacity
-          style={styles.requestCard}
+          style={styles.pinterestClientCard}
           onPress={() => {
             setSelectedRequest(item);
             setShowBidsModal(true);
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.9}
         >
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.requestTitle} numberOfLines={2}>{item.title}</Text>
-              <Text style={styles.timestamp}>
+          {/* Reference Images Preview (if available) */}
+          {hasReferenceImages && (
+            <View style={styles.clientImagePreview}>
+              {item.reference_images.slice(0, 3).map((imageUrl, index) => (
+                <ExpoImage
+                  key={index}
+                  source={{ uri: imageUrl }}
+                  style={[
+                    styles.clientPreviewImage,
+                    item.reference_images.length === 1 && styles.clientPreviewImageSingle,
+                    item.reference_images.length === 2 && styles.clientPreviewImageDouble,
+                  ]}
+                  contentFit="cover"
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Card Content */}
+          <View style={styles.pinterestClientCardContent}>
+            {/* Title & Status Row */}
+            <View style={styles.clientCardTop}>
+              <Text style={styles.cleanRequestTitle} numberOfLines={2}>{item.title}</Text>
+              <View style={[styles.cleanStatusBadge, { backgroundColor: statusColor + '10' }]}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.cleanStatusText, { color: statusColor }]}>
+                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Description */}
+            <Text style={styles.cleanRequestDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+
+            {/* Metadata Row */}
+            <View style={styles.cleanMetadataRow}>
+              {/* Bids count */}
+              <View style={styles.cleanBidsSummary}>
+                <View style={styles.cleanBidsIconContainer}>
+                  <Ionicons name="people" size={14} color="#fff" />
+                </View>
+                <Text style={styles.cleanBidsText}>
+                  {item.bid_count || 0}
+                </Text>
+                {pendingBidsCount > 0 && (
+                  <View style={styles.cleanPendingDot} />
+                )}
+              </View>
+
+              {/* Budget */}
+              {item.budget_min || item.budget_max ? (
+                <View style={styles.cleanBudgetContainer}>
+                  <Ionicons name="cash" size={14} color={colors.text.secondary} />
+                  <Text style={styles.cleanBudgetText}>
+                    {item.budget_min && item.budget_max
+                      ? `$${item.budget_min}-$${item.budget_max}`
+                      : item.budget_min
+                      ? `$${item.budget_min}+`
+                      : `Up to $${item.budget_max}`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Timestamp */}
+              <Text style={styles.cleanTimestamp}>
                 {new Date(item.created_at).toLocaleDateString('en-US', {
                   month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
+                  day: 'numeric'
                 })}
               </Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
-              <Text style={[styles.statusText, { color: statusColor }]}>
-                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.requestDescription} numberOfLines={3}>
-            {item.description}
-          </Text>
-
-          <View style={styles.clientRequestFooter}>
-            <View style={styles.bidsSummary}>
-              <Ionicons name="people" size={18} color={colors.primary} />
-              <Text style={styles.bidsSummaryText}>
-                {item.bid_count || 0} {item.bid_count === 1 ? 'bid' : 'bids'}
-              </Text>
-              {pendingBidsCount > 0 && (
-                <View style={styles.pendingBadge}>
-                  <Text style={styles.pendingBadgeText}>{pendingBidsCount} pending</Text>
-                </View>
-              )}
-            </View>
-            {item.budget_min || item.budget_max ? (
-              <View style={styles.budgetContainer}>
-                <Ionicons name="cash-outline" size={14} color={colors.primary} />
-                <Text style={styles.budgetText}>
-                  {item.budget_min && item.budget_max
-                    ? `$${item.budget_min}-$${item.budget_max}`
-                    : item.budget_min
-                    ? `$${item.budget_min}+`
-                    : `$${item.budget_max}`}
-                </Text>
-              </View>
-            ) : null}
           </View>
         </TouchableOpacity>
       );
@@ -558,35 +587,32 @@ export default function CommissionRequestsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isArtist ? 'Quest Board' : 'My Requests'}</Text>
-          <View style={styles.headerRight}>
-            {isArtist && (
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={() => setShowFiltersModal(true)}
-              >
-                <Ionicons name="options-outline" size={22} color={colors.text.primary} />
-                {(filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
-                  <View style={styles.filterIndicator} />
-                )}
-              </TouchableOpacity>
-            )}
-            {!isArtist && (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => setShowCreateModal(true)}
-              >
-                <Ionicons name="add" size={20} color={colors.text.primary} />
-                <Text style={styles.primaryButtonText}>Post</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+      {/* Header - Pinterest Minimal Style */}
+      <View style={[styles.pinterestPageHeader, { paddingTop: insets.top + spacing.xs }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.pinterestBackButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.pinterestHeaderTitle}>{isArtist ? 'Quest Board' : 'My Requests'}</Text>
+        <View style={styles.pinterestHeaderActions}>
+          {isArtist && (
+            <TouchableOpacity
+              style={styles.pinterestIconButton}
+              onPress={() => setShowFiltersModal(true)}
+            >
+              <Ionicons name="options-outline" size={24} color={colors.text.primary} />
+              {(filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
+                <View style={styles.pinterestFilterDot} />
+              )}
+            </TouchableOpacity>
+          )}
+          {!isArtist && (
+            <TouchableOpacity
+              style={styles.pinterestAddButton}
+              onPress={() => setShowCreateModal(true)}
+            >
+              <Ionicons name="add" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -673,8 +699,8 @@ export default function CommissionRequestsScreen() {
             style={{ flex: 1, justifyContent: 'flex-end' }}
           >
             <View style={styles.pinterestModalContent}>
-              {/* Header */}
-              <View style={styles.pinterestHeader}>
+              {/* Header with Safe Area */}
+              <View style={[styles.pinterestModalHeader, { paddingTop: insets.top + spacing.md }]}>
                 <TouchableOpacity
                   onPress={() => setShowCreateModal(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -831,7 +857,7 @@ export default function CommissionRequestsScreen() {
           >
             <View style={styles.pinterestModalContent}>
               {/* Header */}
-              <View style={styles.pinterestHeader}>
+              <View style={styles.pinterestModalHeader}>
                 <TouchableOpacity
                   onPress={() => setShowBidModal(false)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -969,8 +995,8 @@ export default function CommissionRequestsScreen() {
       >
         <View style={styles.pinterestModalOverlay}>
           <View style={styles.pinterestModalContent}>
-            {/* Header */}
-            <View style={styles.pinterestHeader}>
+            {/* Header with Safe Area */}
+            <View style={[styles.pinterestModalHeader, { paddingTop: insets.top + spacing.md }]}>
               <TouchableOpacity
                 onPress={() => setShowFiltersModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1136,8 +1162,8 @@ export default function CommissionRequestsScreen() {
       >
         <View style={styles.pinterestModalOverlay}>
           <View style={styles.pinterestModalContent}>
-            {/* Header */}
-            <View style={styles.pinterestHeader}>
+            {/* Header with Safe Area */}
+            <View style={[styles.pinterestHeader, { paddingTop: insets.top + spacing.md }]}>
               <TouchableOpacity
                 onPress={() => setShowBidsModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1160,59 +1186,72 @@ export default function CommissionRequestsScreen() {
             >
               {selectedRequest?.bids && selectedRequest.bids.length > 0 ? (
                 selectedRequest.bids.map((bid, index) => (
-                  <View key={bid.id} style={styles.bidCard}>
-                    <View style={styles.bidHeader}>
-                      <View style={styles.artistInfo}>
-                        <ExpoImage
-                          source={{ uri: bid.artist?.avatar_url || DEFAULT_AVATAR }}
-                          style={styles.bidAvatar}
-                          contentFit="cover"
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.artistName}>{bid.artist?.username || 'Artist'}</Text>
-                          <Text style={styles.bidTimestamp}>
-                            {new Date(bid.created_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit'
-                            })}
-                          </Text>
-                        </View>
+                  <View key={bid.id} style={styles.pinterestBidCard}>
+                    {/* Artist Header */}
+                    <TouchableOpacity
+                      style={styles.pinterestBidHeader}
+                      onPress={() => {
+                        setShowBidsModal(false);
+                        router.push(`/artist/${bid.artist_id}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <ExpoImage
+                        source={{ uri: bid.artist?.avatar_url || DEFAULT_AVATAR }}
+                        style={styles.pinterestBidAvatar}
+                        contentFit="cover"
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pinterestArtistName}>{bid.artist?.username || 'Artist'}</Text>
+                        <Text style={styles.pinterestBidTimestamp}>
+                          {new Date(bid.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit'
+                          })}
+                        </Text>
                       </View>
-                      <View style={[styles.bidStatusBadge, { backgroundColor: bid.status === 'pending' ? colors.status.pending + '15' : bid.status === 'accepted' ? colors.status.success + '15' : colors.text.secondary + '15' }]}>
+                      <View style={[styles.pinterestBidStatusBadge, { backgroundColor: bid.status === 'pending' ? colors.status.pending + '15' : bid.status === 'accepted' ? colors.status.success + '15' : colors.text.secondary + '15' }]}>
+                        <View style={[styles.statusDot, { backgroundColor: bid.status === 'pending' ? colors.status.pending : bid.status === 'accepted' ? colors.status.success : colors.text.secondary }]} />
                         <Text style={[styles.bidStatusText, { color: bid.status === 'pending' ? colors.status.pending : bid.status === 'accepted' ? colors.status.success : colors.text.secondary }]}>
                           {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
                         </Text>
                       </View>
-                    </View>
+                      <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                    </TouchableOpacity>
 
-                    <View style={styles.bidDetails}>
-                      <View style={styles.bidDetailRow}>
-                        <View style={styles.bidDetailItem}>
-                          <Ionicons name="cash-outline" size={16} color={colors.primary} />
-                          <Text style={styles.bidDetailLabel}>Offer</Text>
-                          <Text style={styles.bidDetailValue}>${bid.bid_amount}</Text>
+                    {/* Bid Details */}
+                    <View style={styles.pinterestBidDetails}>
+                      <View style={styles.pinterestBidDetailRow}>
+                        <View style={styles.pinterestBidDetailCard}>
+                          <View style={styles.bidDetailIconContainer}>
+                            <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                          </View>
+                          <Text style={styles.pinterestBidDetailLabel}>Offer</Text>
+                          <Text style={styles.pinterestBidDetailValue}>${bid.bid_amount}</Text>
                         </View>
                         {bid.estimated_delivery_days && (
-                          <View style={styles.bidDetailItem}>
-                            <Ionicons name="time-outline" size={16} color={colors.primary} />
-                            <Text style={styles.bidDetailLabel}>Delivery</Text>
-                            <Text style={styles.bidDetailValue}>{bid.estimated_delivery_days} days</Text>
+                          <View style={styles.pinterestBidDetailCard}>
+                            <View style={styles.bidDetailIconContainer}>
+                              <Ionicons name="time-outline" size={20} color={colors.primary} />
+                            </View>
+                            <Text style={styles.pinterestBidDetailLabel}>Delivery</Text>
+                            <Text style={styles.pinterestBidDetailValue}>{bid.estimated_delivery_days} days</Text>
                           </View>
                         )}
                       </View>
 
                       {bid.message && (
-                        <View style={styles.bidMessage}>
-                          <Text style={styles.bidMessageLabel}>Message</Text>
-                          <Text style={styles.bidMessageText}>{bid.message}</Text>
+                        <View style={styles.pinterestBidMessage}>
+                          <Text style={styles.pinterestBidMessageLabel}>Message</Text>
+                          <Text style={styles.pinterestBidMessageText}>{bid.message}</Text>
                         </View>
                       )}
 
                       {bid.status === 'pending' && selectedRequest.status === 'open' && (
                         <TouchableOpacity
-                          style={styles.acceptBidButton}
+                          style={styles.pinterestAcceptBidButton}
                           onPress={async () => {
                             try {
                               await axios.patch(
@@ -1235,18 +1274,22 @@ export default function CommissionRequestsScreen() {
                               });
                             }
                           }}
+                          activeOpacity={0.8}
                         >
-                          <Text style={styles.acceptBidButtonText}>Accept Bid</Text>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+                          <Text style={styles.pinterestAcceptBidButtonText}>Accept Bid</Text>
                         </TouchableOpacity>
                       )}
                     </View>
                   </View>
                 ))
               ) : (
-                <View style={styles.noBidsState}>
-                  <Ionicons name="people-outline" size={64} color={colors.text.disabled} />
-                  <Text style={styles.noBidsTitle}>No bids yet</Text>
-                  <Text style={styles.noBidsText}>Artists will see your request and can submit bids</Text>
+                <View style={styles.pinterestNoBidsState}>
+                  <View style={styles.noBidsIconContainer}>
+                    <Ionicons name="people-outline" size={48} color={colors.text.disabled} />
+                  </View>
+                  <Text style={styles.pinterestNoBidsTitle}>No bids yet</Text>
+                  <Text style={styles.pinterestNoBidsText}>Artists will see your request and can submit bids</Text>
                 </View>
               )}
             </ScrollView>
@@ -1267,31 +1310,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerRow: {
+  // Pinterest-Style Minimal Page Header
+  pinterestPageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background,
   },
-  backButton: {
-    padding: spacing.xs,
-    marginRight: spacing.sm,
+  pinterestBackButton: {
+    padding: spacing.sm,
+    marginLeft: -spacing.sm, // Align to edge
   },
-  headerTitle: {
-    ...typography.h3,
+  pinterestHeaderTitle: {
+    ...typography.h2,
     color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '700',
     flex: 1,
+    textAlign: 'center',
   },
-  headerRight: {
+  pinterestHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
+  },
+  pinterestIconButton: {
+    padding: spacing.sm,
+    marginRight: -spacing.sm, // Align to edge
+    position: 'relative',
+  },
+  pinterestAddButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: -spacing.sm,
+  },
+  pinterestFilterDot: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
   },
   iconButton: {
     padding: spacing.xs,
@@ -1357,12 +1423,180 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   requestCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    backgroundColor: colors.background, // Pinterest-style clean background
+    borderRadius: 16, // Soft Pinterest rounding
     padding: spacing.lg,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, // Very soft shadow
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  // Enhanced Pinterest-style client cards
+  pinterestClientCard: {
+    backgroundColor: colors.background,
+    borderRadius: 24,
+    marginBottom: spacing.lg,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  clientImagePreview: {
+    width: '100%',
+    height: 180,
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceLight,
+    gap: 3,
+  },
+  clientPreviewImage: {
+    flex: 1,
+    height: '100%',
+  },
+  clientPreviewImageSingle: {
+    flex: 1,
+    width: '100%',
+  },
+  clientPreviewImageDouble: {
+    width: '50%',
+  },
+  pinterestClientCardContent: {
+    padding: spacing.xl,
+  },
+  // Clean Pinterest-style client card elements
+  clientCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  cleanRequestTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    letterSpacing: -0.4,
+    flex: 1,
+  },
+  cleanStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 2,
+    borderRadius: borderRadius.full,
+  },
+  cleanStatusText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  cleanRequestDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    lineHeight: 21,
+    marginBottom: spacing.md,
+  },
+  cleanMetadataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '15',
+  },
+  cleanBidsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  cleanBidsIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cleanBidsText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cleanPendingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.error,
+    marginLeft: spacing.xs / 2,
+  },
+  cleanBudgetContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cleanBudgetText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cleanTimestamp: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 13,
+    marginLeft: 'auto',
+  },
+  pinterestStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  pinterestBidsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  bidsIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinterestPendingBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  pinterestBudgetContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1427,12 +1661,19 @@ const styles = StyleSheet.create({
   requestTitle: {
     ...typography.h4,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    fontSize: 17,
+    fontWeight: '700', // Pinterest-style
+    marginBottom: spacing.sm,
+    lineHeight: 24,
+    letterSpacing: -0.3,
   },
   requestDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    marginBottom: spacing.sm,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
+    marginBottom: spacing.md,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -1510,7 +1751,8 @@ const styles = StyleSheet.create({
   bidsSummaryText: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '600', // Pinterest-style
   },
   emptyState: {
     alignItems: 'center',
@@ -1577,21 +1819,30 @@ const styles = StyleSheet.create({
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: spacing.lg,
+    paddingVertical: spacing.md + 2,
     color: colors.text.primary,
     ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.border,
+    fontSize: 16,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   textArea: {
-    height: 100,
+    minHeight: 100,
     textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   row: {
     flexDirection: 'row',
@@ -1606,37 +1857,48 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   filterSection: {
-    marginBottom: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginBottom: spacing.xl,
+    paddingBottom: 0, // No border dividers
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   sectionTitle: {
-    ...typography.h4,
+    ...typography.h3,
     color: colors.text.primary,
+    fontSize: 17,
+    fontWeight: '700',
   },
   sortOptions: {
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    marginBottom: spacing.sm,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   sortOptionActive: {
+    backgroundColor: colors.primary + '08',
+    borderWidth: 2,
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   sortOptionLeft: {
     flexDirection: 'row',
@@ -1678,32 +1940,34 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   styleOption: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.md + 2,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface + '80',
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    marginBottom: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   styleOptionSelected: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
     elevation: 3,
   },
   styleOptionText: {
     ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 13,
+    color: colors.text.primary,
+    fontSize: 14,
     fontWeight: '500',
   },
   styleOptionTextSelected: {
     color: colors.text.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   requestPreview: {
     backgroundColor: colors.surface,
@@ -1785,6 +2049,155 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  // Enhanced Pinterest-style bid cards
+  pinterestBidCard: {
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    marginBottom: spacing.lg,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  pinterestBidHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '20',
+  },
+  pinterestBidAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  pinterestArtistName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  pinterestBidTimestamp: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  pinterestBidStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  pinterestBidDetails: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  pinterestBidDetailRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  pinterestBidDetailCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  bidDetailIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinterestBidDetailLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+  },
+  pinterestBidDetailValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  pinterestBidMessage: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+  },
+  pinterestBidMessageLabel: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 12,
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pinterestBidMessageText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  pinterestAcceptBidButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  pinterestAcceptBidButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  pinterestNoBidsState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl * 2,
+    paddingHorizontal: spacing.xl,
+  },
+  noBidsIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  pinterestNoBidsTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  pinterestNoBidsText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   bidHeader: {
     flexDirection: 'row',
@@ -1981,23 +2394,23 @@ const styles = StyleSheet.create({
   // Pinterest-Style Modal Styles
   pinterestModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer dimming like Pinterest
   },
   pinterestModalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xxl,
-    borderTopRightRadius: borderRadius.xxl,
+    borderTopLeftRadius: 24, // Pinterest-style soft rounding
+    borderTopRightRadius: 24,
     height: '92%',
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
-  pinterestHeader: {
+  pinterestModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '30',
+    borderBottomColor: colors.border + '20', // Softer border
   },
   pinterestTitle: {
     ...typography.h3,
@@ -2019,20 +2432,24 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   pinterestFooter: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    paddingBottom: spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: colors.border + '30',
+    borderTopColor: colors.border + '15', // Very subtle border
     backgroundColor: colors.background,
   },
   pinterestSubmitButton: {
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md + 2,
-    borderRadius: borderRadius.full,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.full, // Full pill shape
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, // Soft shadow
+    shadowRadius: 12,
+    elevation: 4,
   },
   pinterestSubmitButtonDisabled: {
     backgroundColor: colors.text.disabled,
@@ -2043,6 +2460,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: '700',
     fontSize: 16,
+    letterSpacing: 0.5,
   },
   pinterestFooterActions: {
     flexDirection: 'row',
@@ -2050,27 +2468,36 @@ const styles = StyleSheet.create({
   },
   pinterestSecondaryButton: {
     flex: 1,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   pinterestSecondaryButtonText: {
     ...typography.bodyBold,
     color: colors.text.secondary,
+    fontWeight: '600',
     fontSize: 15,
   },
   pinterestPrimaryButton: {
     flex: 1,
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.small,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 5,
   },
   pinterestPrimaryButtonText: {
     ...typography.button,
@@ -2081,18 +2508,20 @@ const styles = StyleSheet.create({
 
   // Pinterest-Style Quest Board Cards
   pinterestQuestCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 20, // Subtly rounded borders
+    backgroundColor: colors.background,
+    borderRadius: 20,
     overflow: 'hidden',
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.border + '20',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   questImagePreview: {
     flexDirection: 'row',
-    height: 200,
-    backgroundColor: colors.background,
+    height: 220,
+    backgroundColor: colors.surfaceLight,
     position: 'relative',
   },
   questImage: {
@@ -2131,7 +2560,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
+    padding: spacing.lg,
     paddingBottom: spacing.sm,
   },
   questAvatar: {
@@ -2179,37 +2608,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   questCardBody: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   questTitle: {
     ...typography.h4,
     color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: spacing.xs,
-    lineHeight: 22,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    lineHeight: 24,
+    letterSpacing: -0.3,
   },
   questDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
   },
   questInfoRow: {
     flexDirection: 'row',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   questBudgetPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary + '12', // Softer background
   },
   questBudgetText: {
     ...typography.small,
@@ -2237,29 +2668,27 @@ const styles = StyleSheet.create({
   questStylesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs / 2,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   questStyleTag: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background, // Borderless Pinterest style
   },
   questStyleText: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
   },
   questMoreStyles: {
     ...typography.small,
     color: colors.text.disabled,
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     alignSelf: 'center',
     paddingHorizontal: spacing.xs,
   },

@@ -1470,9 +1470,23 @@ export default function ConversationScreen() {
               if (otherUser?.id) {
                 // Navigate with a small delay to ensure smooth transition
                 setTimeout(() => {
-                  if (otherUser.artists) {
-                    router.push(`/artist/${otherUser.artists.id}`);
+                  console.log('Profile navigation - otherUser:', JSON.stringify(otherUser, null, 2));
+                  console.log('otherUser.artists:', otherUser.artists);
+                  
+                  // Check if user is an artist - backend returns artists as array
+                  const hasArtistProfile = otherUser.artists && (
+                    (Array.isArray(otherUser.artists) && otherUser.artists.length > 0) ||
+                    (typeof otherUser.artists === 'object' && !Array.isArray(otherUser.artists) && otherUser.artists.id)
+                  );
+
+                  console.log('Has artist profile?', hasArtistProfile);
+                  console.log('Navigating to:', hasArtistProfile ? `/artist/${otherUser.id}` : `/client/${otherUser.id}`);
+
+                  if (hasArtistProfile) {
+                    // Navigate to artist profile using the user's ID (which is the same as artist ID)
+                    router.push(`/artist/${otherUser.id}`);
                   } else {
+                    // Navigate to client profile
                     router.push(`/client/${otherUser.id}`);
                   }
                 }, 50);

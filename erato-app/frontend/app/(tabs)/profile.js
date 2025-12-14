@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { useAuthStore, useProfileStore, useFeedStore } from '../../store';
+import { useAuthStore, useProfileStore, useFeedStore, useBoardStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 import ReviewCard from '../../components/ReviewCard';
@@ -35,6 +35,9 @@ export default function ProfileScreen() {
   const { user, token, logout } = useAuthStore();
   const { profile, fetchProfile, isLoading, reset } = useProfileStore();
   const feedStore = useFeedStore();
+  const boardStore = useBoardStore();
+  const { fetchBoards } = boardStore;
+  const userBoards = boardStore.boards;
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [avatarKey, setAvatarKey] = useState(0);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
@@ -61,8 +64,10 @@ export default function ProfileScreen() {
           setIsInitialLoad(true);
         }
         loadProfile(true);
+        // Also load boards with artwork details
+        fetchBoards(null, { skipCache: true });
       }
-    }, [user?.id, loadProfile])
+    }, [user?.id, loadProfile, fetchBoards])
   );
 
   useEffect(() => {
@@ -83,12 +88,18 @@ export default function ProfileScreen() {
         if (currentAvatarUrl && !prevAvatarUrlRef.current) {
           prevAvatarUrlRef.current = currentAvatarUrl;
         }
+        // Load boards if we don't have them yet
+        if (!userBoards || userBoards.length === 0) {
+          fetchBoards(null, { skipCache: true });
+        }
         return;
       }
       // Only load if we don't have profile data yet
       if (!profile || profile.id !== user.id) {
         loadProfile();
       }
+      // Load boards on initial mount
+      fetchBoards(null, { skipCache: true });
     } else {
       // No user - ensure we're not showing loading
       setIsInitialLoad(false);
@@ -1011,21 +1022,76 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {profile?.boards && profile.boards.length > 0 ? (
-            <View style={styles.boardsList}>
-              {profile.boards.slice(0, 3).map((board) => (
-                <TouchableOpacity
-                  key={board.id}
-                  style={styles.boardItem}
-                  onPress={() => router.push(`/board/${board.id}`)}
-                >
-                  <Ionicons name="albums" size={20} color={colors.text.secondary} />
-                  <Text style={styles.boardName}>{board.name}</Text>
-                  {!board.is_public && (
-                    <Ionicons name="lock-closed" size={14} color={colors.text.disabled} />
-                  )}
-                </TouchableOpacity>
-              ))}
+          {userBoards && userBoards.length > 0 ? (
+            <View style={styles.boardsGrid}>
+              {userBoards.slice(0, 4).map((board) => {
+                const countFromArray = board.board_artworks?.length || 0;
+                const countFromBackend = board.artworks?.[0]?.count;
+                const artworkCount = (typeof countFromBackend === 'number' && countFromBackend > 0)
+                  ? countFromBackend
+                  : countFromArray;
+                const firstArtworks = board.board_artworks?.slice(0, 4) || [];
+                
+                return (
+                  <TouchableOpacity
+                    key={board.id}
+                    style={styles.boardCard}
+                    onPress={() => router.push(`/board/${board.id}`)}
+                    activeOpacity={0.9}
+                  >
+                    {/* Pinterest-style Collage */}
+                    <View style={styles.boardCoverGrid}>
+                      {firstArtworks.length > 0 ? (
+                        <>
+                          {/* Large image on left */}
+                          <View style={styles.boardGridItemLarge}>
+                            <Image
+                              source={{ uri: firstArtworks[0]?.artworks?.thumbnail_url || firstArtworks[0]?.artworks?.image_url }}
+                              style={styles.boardGridImage}
+                              contentFit="cover"
+                            />
+                          </View>
+                          
+                          {/* Smaller images on right */}
+                          <View style={styles.boardGridItemSmall}>
+                            {firstArtworks.slice(1, 4).map((ba, index) => (
+                              <View key={index} style={styles.boardSmallGridItem}>
+                                <Image
+                                  source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
+                                  style={styles.boardGridImage}
+                                  contentFit="cover"
+                                />
+                              </View>
+                            ))}
+                            {firstArtworks.length < 4 && (
+                              <View style={[styles.boardSmallGridItem, styles.boardEmptySmallGrid]} />
+                            )}
+                          </View>
+                        </>
+                      ) : (
+                        <View style={styles.boardEmptyGrid}>
+                          <Ionicons name="images-outline" size={32} color={colors.text.disabled} />
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Board Info */}
+                    <View style={styles.boardInfoCompact}>
+                      <View style={styles.boardTitleRow}>
+                        <Text style={styles.boardNameCompact} numberOfLines={1}>
+                          {board.name}
+                        </Text>
+                        {!board.is_public && (
+                          <Ionicons name="lock-closed" size={12} color={colors.text.secondary} />
+                        )}
+                      </View>
+                      <Text style={styles.boardMetaCompact}>
+                        {artworkCount} {artworkCount === 1 ? 'Pin' : 'Pins'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ) : (
             <Text style={styles.emptyText}>No boards yet</Text>
@@ -1212,7 +1278,8 @@ const styles = StyleSheet.create({
     width: IS_SMALL_SCREEN ? 90 : 100,
     height: IS_SMALL_SCREEN ? 90 : 100,
     borderRadius: IS_SMALL_SCREEN ? 45 : 50,
-    backgroundColor: colors.surface, // Show background while loading
+    backgroundColor: colors.surface,
+    borderWidth: 0, // Pinterest-style: no border
   },
   avatarPlaceholder: {
     width: IS_SMALL_SCREEN ? 90 : 100,
@@ -1232,6 +1299,8 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 22 : 24,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   verifiedBadge: {
     marginTop: 2,
@@ -1278,8 +1347,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 17 : 20,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   editIconButton: {
     padding: spacing.xs,
@@ -1466,8 +1536,13 @@ const styles = StyleSheet.create({
   artworkItem: {
     width: ARTWORK_SIZE,
     height: ARTWORK_SIZE,
-    borderRadius: borderRadius.md,
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   artworkImage: {
     width: '100%',
@@ -1481,12 +1556,13 @@ const styles = StyleSheet.create({
   ratingText: {
     ...typography.body,
     color: colors.text.primary,
+    fontWeight: '600',
   },
   ratingBadge: {
     backgroundColor: colors.status.warning + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
     marginLeft: spacing.xs,
   },
   ratingBadgeText: {
@@ -1549,6 +1625,8 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.text.secondary,
     marginTop: spacing.md,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   emptyReviewsSubtext: {
     ...typography.body,
@@ -1556,6 +1634,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
     paddingHorizontal: spacing.lg,
+    fontWeight: '400',
+    lineHeight: 20,
   },
   boardsList: {
     gap: spacing.xs,
@@ -1582,6 +1662,8 @@ const styles = StyleSheet.create({
   seeAllText: {
     ...typography.body,
     color: colors.primary,
+    fontWeight: '600',
+    fontSize: 15,
   },
   emptyText: {
     ...typography.body,
@@ -1589,6 +1671,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+    fontWeight: '400',
   },
   addPortfolioButton: {
     alignItems: 'center',
@@ -1652,30 +1735,33 @@ const styles = StyleSheet.create({
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   clientStatsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '80',
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    borderWidth: 0,
     overflow: 'hidden',
-    ...shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   clientStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
   clientStatDivider: {
-    height: 0,
-    backgroundColor: 'transparent',
+    height: 1,
+    backgroundColor: colors.border + '10',
     marginHorizontal: spacing.lg,
   },
   clientStatIconContainer: {
     width: IS_SMALL_SCREEN ? 48 : 52,
     height: IS_SMALL_SCREEN ? 48 : 52,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '20',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1687,12 +1773,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
+    letterSpacing: -0.3,
     marginBottom: spacing.xs / 2,
   },
   clientStatLabel: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '500',
   },
   quickActionsList: {
     marginTop: spacing.sm,
@@ -1701,19 +1789,23 @@ const styles = StyleSheet.create({
   quickActionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border + '80',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md + 2,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    gap: spacing.md,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   quickActionIcon: {
     width: IS_SMALL_SCREEN ? 40 : 44,
     height: IS_SMALL_SCREEN ? 40 : 44,
     borderRadius: borderRadius.full,
-    backgroundColor: `${colors.primary}20`,
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1724,10 +1816,13 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     marginBottom: 2,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   quickActionSubtitle: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontWeight: '400',
   },
   // Portfolio Modal Styles
   portfolioModalContainer: {
@@ -1829,5 +1924,85 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
+  },
+  // Board styles
+  boardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
+  boardCard: {
+    width: '48%',
+    marginBottom: spacing.md,
+  },
+  boardCoverGrid: {
+    width: '100%',
+    aspectRatio: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  boardGridItemLarge: {
+    width: '60%',
+    height: '100%',
+    position: 'relative',
+  },
+  boardGridItemSmall: {
+    width: '40%',
+    height: '100%',
+    flexDirection: 'column',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.background,
+  },
+  boardSmallGridItem: {
+    flex: 1,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.background,
+  },
+  boardEmptySmallGrid: {
+    backgroundColor: colors.surfaceLight,
+  },
+  boardGridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  boardEmptyGrid: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
+  },
+  boardInfoCompact: {
+    paddingHorizontal: spacing.xs / 2,
+    paddingVertical: spacing.xs / 2,
+  },
+  boardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs / 2,
+    gap: spacing.xs / 2,
+  },
+  boardNameCompact: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    flex: 1,
+  },
+  boardMetaCompact: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 11,
+    fontWeight: '400',
   },
 });
