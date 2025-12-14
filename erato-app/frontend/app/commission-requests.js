@@ -31,6 +31,7 @@ export default function CommissionRequestsScreen() {
   const insets = useSafeAreaInsets();
   const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
+
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,6 +69,62 @@ export default function CommissionRequestsScreen() {
     portfolio_samples: [],
   });
   const [submittingBid, setSubmittingBid] = useState(false);
+
+  // Categorize art styles
+  const categorizedStyles = React.useMemo(() => {
+    if (!artStyles.length) return {};
+
+    const categories = {
+      'Character Art': [
+        'Anime', 'Manga', 'Chibi', 'Kemono', 'Furry', 'Cartoon', 'Disney Style',
+        'Pixar Style', 'Western Cartoon', 'Anime Realistic', 'Kawaii', 'Moe'
+      ],
+      'Traditional Mediums': [
+        'Watercolor', 'Oil Painting', 'Acrylic', 'Gouache', 'Pastel', 'Charcoal',
+        'Pencil', 'Ink', 'Pen & Ink', 'Marker', 'Colored Pencil'
+      ],
+      'Digital Art': [
+        'Digital Painting', 'Digital Art', 'Vector', 'Pixel Art', 'Low Poly',
+        'Isometric', 'Flat Design', 'Gradient Art', 'Glitch Art', 'Vaporwave', 'Synthwave'
+      ],
+      '3D Art': [
+        '3D Modeling', '3D Rendering', '3D Character', 'Sculpture', 'Blender', 'ZBrush'
+      ],
+      'Illustration': [
+        'Illustration', 'Concept Art', 'Character Design', 'Portrait', 'Landscape',
+        'Still Life', 'Architectural', 'Technical Drawing', 'Medical Illustration', 'Botanical'
+      ],
+      'Genres & Themes': [
+        'Fantasy', 'Sci-Fi', 'Horror', 'Cyberpunk', 'Steampunk', 'Medieval',
+        'Victorian', 'Gothic', 'Dark Fantasy', 'Post-Apocalyptic', 'Space',
+        'Nature', 'Animal', 'Pet Portrait', 'Realism', 'Semi-Realistic'
+      ],
+      'Modern & Abstract': [
+        'Abstract', 'Minimalist', 'Surrealism', 'Impressionism', 'Expressionism',
+        'Pop Art', 'Art Deco', 'Art Nouveau', 'Cubism', 'Modern Art', 'Contemporary'
+      ],
+      'Specialized': [
+        'Logo Design', 'Typography', 'Calligraphy', 'Graffiti', 'Tattoo Design',
+        'Comic Book', 'Webtoon', 'Manhwa', 'Manhua', 'NSFW', 'SFW'
+      ],
+      'Techniques': [
+        'Cell Shading', 'Soft Shading', 'Hard Shading', 'Painterly', 'Sketch',
+        'Rendered', 'Monochrome', 'Full Color'
+      ],
+      'Cultural & Regional': [
+        'Japanese', 'Chinese', 'Korean', 'Western', 'European', 'American'
+      ]
+    };
+
+    const result = {};
+    Object.keys(categories).forEach(category => {
+      result[category] = artStyles.filter(style =>
+        categories[category].includes(style.name)
+      );
+    });
+
+    return result;
+  }, [artStyles]);
 
   useFocusEffect(
     useCallback(() => {
@@ -153,30 +210,72 @@ export default function CommissionRequestsScreen() {
   };
 
   const handleCreateRequest = async () => {
-    if (!formData.title.trim() || !formData.description.trim()) {
+    // Check if user is an artist
+    if (isArtist) {
+      Toast.show({
+        type: 'error',
+        text1: 'Not Allowed',
+        text2: 'Artists cannot create commission requests',
+      });
+      return;
+    }
+
+    // Validate title length
+    if (!formData.title.trim() || formData.title.trim().length < 5) {
+      setCreating(true); // Set loading state before showing error
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Please fill in title and description',
+        text2: 'Title must be at least 5 characters long',
       });
+      setCreating(false); // Reset loading state
+      return;
+    }
+
+    // Validate description length
+    if (!formData.description.trim() || formData.description.trim().length < 20) {
+      setCreating(true); // Set loading state before showing error
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Description must be at least 20 characters long',
+      });
+      setCreating(false); // Reset loading state
       return;
     }
 
     setCreating(true);
     try {
-      await axios.post(
+      // Build request payload, only including fields that have values
+      const payload = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        preferred_styles: formData.preferred_styles,
+        reference_images: formData.reference_images,
+      };
+
+      // Only add budget fields if they have valid values
+      if (formData.budget_min && formData.budget_min.trim()) {
+        payload.budget_min = parseFloat(formData.budget_min.trim());
+      }
+      if (formData.budget_max && formData.budget_max.trim()) {
+        payload.budget_max = parseFloat(formData.budget_max.trim());
+      }
+
+      // Only add deadline if it has a value
+      if (formData.deadline && formData.deadline.trim()) {
+        payload.deadline = formData.deadline.trim();
+      }
+
+      console.log('Sending payload:', payload);
+
+      const response = await axios.post(
         `${API_URL}/commission-requests`,
-        {
-          title: formData.title,
-          description: formData.description,
-          budget_min: formData.budget_min ? parseFloat(formData.budget_min) : undefined,
-          budget_max: formData.budget_max ? parseFloat(formData.budget_max) : undefined,
-          deadline: formData.deadline || undefined,
-          preferred_styles: formData.preferred_styles,
-          reference_images: formData.reference_images,
-        },
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      console.log('Success response:', response.data);
 
       Toast.show({
         type: 'success',
@@ -197,10 +296,13 @@ export default function CommissionRequestsScreen() {
       loadRequests();
     } catch (error) {
       console.error('Error creating request:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: error.response?.data?.error || 'Failed to create request',
+        text2: error.response?.data?.error || error.response?.data?.errors?.[0]?.msg || 'Failed to create request',
       });
     } finally {
       setCreating(false);
@@ -532,7 +634,7 @@ export default function CommissionRequestsScreen() {
           style={styles.modalOverlay}
           onPress={() => setShowCreateModal(false)}
         >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={styles.modalContent} onPress={() => {}}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Post Commission Request</Text>
               <TouchableOpacity onPress={() => setShowCreateModal(false)}>
@@ -542,10 +644,12 @@ export default function CommissionRequestsScreen() {
 
             <ScrollView
               style={styles.modalBody}
-              contentContainerStyle={[styles.modalBodyContent, { paddingBottom: insets.bottom + spacing.xl }]}
+              contentContainerStyle={styles.modalBodyContent}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.label}>Title *</Text>
+              {/* Title Section */}
+              <View style={styles.formSection}>
+                <Text style={styles.label}>Title *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.title}
@@ -554,7 +658,10 @@ export default function CommissionRequestsScreen() {
                 placeholderTextColor={colors.text.disabled}
                 maxLength={200}
               />
+              </View>
 
+              {/* Description Section */}
+              <View style={styles.formSection}>
               <Text style={styles.label}>Description *</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -565,8 +672,11 @@ export default function CommissionRequestsScreen() {
                 multiline
                 numberOfLines={4}
               />
+              </View>
 
-              <Text style={styles.label}>Budget Range</Text>
+              {/* Budget Section */}
+              <View style={styles.formSection}>
+              <Text style={styles.label}>Budget Range (optional)</Text>
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <TextInput
@@ -590,39 +700,62 @@ export default function CommissionRequestsScreen() {
                   />
                 </View>
               </View>
-
-              <Text style={styles.label}>Preferred Styles (optional)</Text>
-              <View style={styles.stylesList}>
-                {artStyles.map((style) => {
-                  const isSelected = formData.preferred_styles.includes(style.id);
-                  return (
-                    <TouchableOpacity
-                      key={style.id}
-                      style={[styles.styleOption, isSelected && styles.styleOptionSelected]}
-                      onPress={() => {
-                        if (isSelected) {
-                          setFormData({
-                            ...formData,
-                            preferred_styles: formData.preferred_styles.filter(id => id !== style.id)
-                          });
-                        } else {
-                          setFormData({
-                            ...formData,
-                            preferred_styles: [...formData.preferred_styles, style.id]
-                          });
-                        }
-                      }}
-                    >
-                      <Text style={[styles.styleOptionText, isSelected && styles.styleOptionTextSelected]}>
-                        {style.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
               </View>
 
-              <TouchableOpacity
-                style={styles.submitButton}
+              {/* Styles Section */}
+              <View style={styles.formSection}>
+              <Text style={styles.label}>Preferred Styles (optional)</Text>
+              <ScrollView
+                style={styles.stylesContainer}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.stylesContent}
+              >
+                {Object.keys(categorizedStyles).map((category) => {
+                  const categoryStyles = categorizedStyles[category];
+                  if (categoryStyles.length === 0) return null;
+
+                  return (
+                    <View key={category} style={styles.styleCategory}>
+                      <Text style={styles.categoryTitle}>{category}</Text>
+                      <View style={styles.categoryStylesList}>
+                        {categoryStyles.map((style) => {
+                          const isSelected = formData.preferred_styles.includes(style.id);
+                          return (
+                            <TouchableOpacity
+                              key={style.id}
+                              style={[styles.styleOption, isSelected && styles.styleOptionSelected]}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setFormData({
+                                    ...formData,
+                                    preferred_styles: formData.preferred_styles.filter(id => id !== style.id)
+                                  });
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    preferred_styles: [...formData.preferred_styles, style.id]
+                                  });
+                                }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.styleOptionText, isSelected && styles.styleOptionTextSelected]}>
+                                {style.name}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                style={[styles.submitButton, creating && styles.submitButtonDisabled]}
                 onPress={handleCreateRequest}
                 disabled={creating}
               >
@@ -631,8 +764,8 @@ export default function CommissionRequestsScreen() {
                 ) : (
                   <Text style={styles.submitButtonText}>Post Request</Text>
                 )}
-              </TouchableOpacity>
-            </ScrollView>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1152,32 +1285,48 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xl,
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
-    overflow: 'hidden',
+    borderRadius: borderRadius.xl,
+    maxHeight: '95%',
+    minHeight: '80%',
+    width: '100%',
+    ...shadows.large,
+    flexDirection: 'column',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
+    padding: spacing.xl,
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border + '40',
   },
   modalTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
+    fontWeight: '700',
   },
   modalBody: {
     flex: 1,
+    minHeight: 0, // Allow shrinking
   },
   modalBodyContent: {
-    padding: spacing.md,
+    padding: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  modalFooter: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '40',
+    backgroundColor: colors.background,
   },
   label: {
     ...typography.bodyBold,
@@ -1206,6 +1355,9 @@ const styles = StyleSheet.create({
   separator: {
     ...typography.body,
     color: colors.text.disabled,
+  },
+  formSection: {
+    marginBottom: spacing.md,
   },
   filterSection: {
     marginBottom: spacing.lg,
@@ -1253,26 +1405,55 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
+  stylesContainer: {
+    maxHeight: 280,
+  },
+  stylesContent: {
+    gap: spacing.sm,
+  },
+  styleCategory: {
+    marginBottom: spacing.sm,
+  },
+  categoryTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    marginBottom: spacing.sm,
+    fontWeight: '600',
+  },
+  categoryStylesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
   stylesList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
   },
   styleOption: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface + '80',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '60',
+    marginBottom: spacing.xs / 2,
   },
   styleOptionSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   styleOptionText: {
-    ...typography.small,
+    ...typography.caption,
     color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '500',
   },
   styleOptionTextSelected: {
     color: colors.text.primary,
@@ -1315,14 +1496,23 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   submitButton: {
-    flex: 1,
     backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    ...shadows.small,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: colors.text.disabled,
   },
   submitButtonText: {
-    ...typography.bodyBold,
+    ...typography.button,
     color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
   },
 });
+
