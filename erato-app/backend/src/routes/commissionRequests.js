@@ -133,6 +133,66 @@ router.get(
   }
 );
 
+// Get artist's own bids (MUST be before /:id route)
+router.get('/bids/my', authenticate, async (req, res, next) => {
+  try {
+    const { data: bids, error } = await supabaseAdmin
+      .from('commission_request_bids')
+      .select(`
+        *,
+        request:commission_requests!commission_request_bids_request_id_fkey(
+          id,
+          title,
+          description,
+          status,
+          budget_min,
+          budget_max,
+          deadline,
+          client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name)
+        )
+      `)
+      .eq('artist_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ bids: bids || [] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get client's own commission requests with bids (MUST be before /:id route)
+router.get('/my-requests', authenticate, async (req, res, next) => {
+  try {
+    const { data: requests, error } = await supabaseAdmin
+      .from('commission_requests')
+      .select(`
+        *,
+        client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
+        awarded_artist:users!commission_requests_awarded_to_fkey(id, username, avatar_url, full_name),
+        bids:commission_request_bids(
+          *,
+          artist:users!commission_request_bids_artist_id_fkey(id, username, avatar_url, full_name)
+        )
+      `)
+      .eq('client_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Enrich with bid statistics
+    const enrichedRequests = (requests || []).map(request => ({
+      ...request,
+      pending_bids_count: request.bids?.filter(b => b.status === 'pending').length || 0,
+      total_bids_count: request.bids?.length || 0
+    }));
+
+    res.json({ requests: enrichedRequests });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get single commission request with bids
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
@@ -534,77 +594,6 @@ router.patch(
     }
   }
 );
-
-// Get artist's bids
-router.get('/bids/my', authenticate, async (req, res, next) => {
-  try {
-    // Verify user is an artist
-    const { data: artist } = await supabaseAdmin
-      .from('artists')
-      .select('id')
-      .eq('id', req.user.id)
-      .maybeSingle();
-
-    if (!artist) {
-      return res.status(403).json({ error: 'Only artists can view bids' });
-    }
-
-    const { data: bids, error } = await supabaseAdmin
-      .from('commission_request_bids')
-      .select(`
-        *,
-        request:commission_requests!commission_request_bids_request_id_fkey(
-          id,
-          title,
-          description,
-          status,
-          budget_min,
-          budget_max,
-          deadline,
-          client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name)
-        )
-      `)
-      .eq('artist_id', req.user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    res.json({ bids: bids || [] });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Get client's own commission requests with bids
-router.get('/my-requests', authenticate, async (req, res, next) => {
-  try {
-    const { data: requests, error } = await supabaseAdmin
-      .from('commission_requests')
-      .select(`
-        *,
-        client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
-        awarded_artist:users!commission_requests_awarded_to_fkey(id, username, avatar_url, full_name),
-        bids:commission_request_bids(
-          *,
-          artist:users!commission_request_bids_artist_id_fkey(id, username, avatar_url, full_name)
-        )
-      `)
-      .eq('client_id', req.user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Enrich with bid statistics
-    const enrichedRequests = (requests || []).map(request => ({
-      ...request,
-      pending_bids_count: request.bids?.filter(b => b.status === 'pending').length || 0,
-      total_bids_count: request.bids?.length || 0
-    }));
-
-    res.json({ requests: enrichedRequests });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // Cancel a commission request (clients only)
 router.patch('/:id/cancel', authenticate, async (req, res, next) => {
