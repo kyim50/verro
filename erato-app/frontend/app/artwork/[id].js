@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
   },
   artistCard: {
     backgroundColor: colors.background,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginTop: spacing.md,
     borderRadius: 16, // Pinterest-style soft rounding
     padding: spacing.lg,

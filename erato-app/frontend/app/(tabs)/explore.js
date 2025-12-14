@@ -172,6 +172,8 @@ export default function CommissionDashboard() {
   const [artistCache, setArtistCache] = useState({});
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null);
+  const [pendingReviews, setPendingReviews] = useState([]);
+  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode] = useState('list'); // Always use list view
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -204,6 +206,7 @@ export default function CommissionDashboard() {
     useCallback(() => {
       if (token) {
         loadCommissions();
+        loadPendingReviews(); // Load pending reviews when screen focuses
         if (isArtist) {
           loadTemplates();
         } else {
@@ -233,6 +236,33 @@ export default function CommissionDashboard() {
       }
     }
   }, [params.commissionId, commissions, showCommissionModal]);
+
+  const loadPendingReviews = async () => {
+    if (!token) return;
+    try {
+      const response = await axios.get(`${API_URL}/reviews/pending`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const reviews = response.data.pendingReviews || [];
+      setPendingReviews(reviews);
+
+      // Show review modal if there are pending reviews
+      if (reviews.length > 0 && !showReviewModal) {
+        setCurrentReviewIndex(0);
+        const firstReview = reviews[0];
+        setReviewTarget({
+          commissionId: firstReview.commission_id,
+          type: firstReview.review_type,
+          userName: firstReview.otherUser?.full_name || firstReview.otherUser?.username || 'User',
+          userAvatar: firstReview.otherUser?.avatar_url,
+          reviewType: firstReview.review_type,
+        });
+        setShowReviewModal(true);
+      }
+    } catch (error) {
+      console.error('Error loading pending reviews:', error);
+    }
+  };
 
   const loadCommissions = async () => {
     if (!token) return;
@@ -2396,8 +2426,24 @@ export default function CommissionDashboard() {
       <ReviewModal
         visible={showReviewModal}
         onClose={() => {
-          setShowReviewModal(false);
-          setReviewTarget(null);
+          // When closing, check if there are more pending reviews
+          if (currentReviewIndex < pendingReviews.length - 1) {
+            const nextIndex = currentReviewIndex + 1;
+            setCurrentReviewIndex(nextIndex);
+            const nextReview = pendingReviews[nextIndex];
+            setReviewTarget({
+              commissionId: nextReview.commission_id,
+              type: nextReview.review_type,
+              userName: nextReview.otherUser?.full_name || nextReview.otherUser?.username || 'User',
+              userAvatar: nextReview.otherUser?.avatar_url,
+              reviewType: nextReview.review_type,
+            });
+          } else {
+            setShowReviewModal(false);
+            setReviewTarget(null);
+            setPendingReviews([]);
+            setCurrentReviewIndex(0);
+          }
         }}
         onSubmit={async (rating, comment) => {
           if (!reviewTarget || !token) return;
@@ -2409,19 +2455,36 @@ export default function CommissionDashboard() {
                 commission_id: reviewTarget.commissionId,
                 rating,
                 comment,
-                review_type: reviewTarget.reviewType
+                review_type: reviewTarget.type
               },
               { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            setShowReviewModal(false);
-            setReviewTarget(null);
             Toast.show({
               type: 'success',
               text1: 'Success',
               text2: 'Review submitted!',
               visibilityTime: 2000,
             });
+
+            // Check if there are more pending reviews to show
+            if (currentReviewIndex < pendingReviews.length - 1) {
+              const nextIndex = currentReviewIndex + 1;
+              setCurrentReviewIndex(nextIndex);
+              const nextReview = pendingReviews[nextIndex];
+              setReviewTarget({
+                commissionId: nextReview.commission_id,
+                type: nextReview.review_type,
+                userName: nextReview.otherUser?.full_name || nextReview.otherUser?.username || 'User',
+                userAvatar: nextReview.otherUser?.avatar_url,
+                reviewType: nextReview.review_type,
+              });
+            } else {
+              setShowReviewModal(false);
+              setReviewTarget(null);
+              setPendingReviews([]);
+              setCurrentReviewIndex(0);
+            }
           } catch (error) {
             console.error('Error submitting review:', error);
             throw new Error(error.response?.data?.error || 'Failed to submit review');

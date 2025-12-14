@@ -721,11 +721,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs / 2,
     borderRadius: borderRadius.sm,
     flexShrink: 0,
+    minWidth: 80,
   },
   statusText: {
     ...typography.caption,
     fontSize: IS_SMALL_SCREEN ? 11 : 12,
     fontWeight: '600',
+    textAlign: 'center',
   },
   reviewsList: {
     paddingHorizontal: spacing.md,

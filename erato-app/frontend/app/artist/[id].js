@@ -843,7 +843,7 @@ export default function ArtistProfileScreen() {
                 <View style={styles.statIconContainer}>
                   <Ionicons name="cash-outline" size={20} color={colors.primary} />
                 </View>
-                <Text style={styles.pinterestStatValue} numberOfLines={1}>
+                <Text style={styles.pinterestStatValue} numberOfLines={2}>
                   ${artist.min_price} - ${artist.max_price}
                 </Text>
                 <Text style={styles.pinterestStatLabel}>Price Range</Text>
@@ -2880,6 +2880,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     marginTop: spacing.xs / 2,
+    textAlign: 'center',
   },
   pinterestStatLabel: {
     ...typography.caption,
@@ -2964,7 +2965,7 @@ const styles = StyleSheet.create({
   // Pinterest-style Action Buttons
   pinterestActionButtons: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     marginTop: spacing.md,
   },
   pinterestPrimaryBtn: {
@@ -2977,10 +2978,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.full,
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   pinterestPrimaryBtnDisabled: {
     backgroundColor: colors.surface,
