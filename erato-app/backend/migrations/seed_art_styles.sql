@@ -143,3 +143,4 @@ SELECT COUNT(*) as total_styles FROM art_styles;
 SELECT name, slug, description FROM art_styles ORDER BY name;
 
 
+

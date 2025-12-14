@@ -26,9 +26,10 @@ function patchToastToAlert() {
       duration: visibilityTime || 2500,
     });
     // Keep the original behavior in dev if needed
-    if (__DEV__ && originalShow) {
-      originalShow(options);
-    }
+    // Temporarily disabled to test StyledAlert
+    // if (__DEV__ && originalShow) {
+    //   originalShow(options);
+    // }
   };
   toastPatched = true;
 }
