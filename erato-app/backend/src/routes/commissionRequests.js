@@ -40,8 +40,7 @@ router.get(
         .from('commission_requests')
         .select(`
           *,
-          client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
-          awarded_artist:users!commission_requests_awarded_to_fkey(id, username, avatar_url)
+          client:users(id, username, avatar_url, full_name)
         `, { count: 'exact' })
         .eq('status', status);
 
@@ -140,7 +139,7 @@ router.get('/bids/my', authenticate, async (req, res, next) => {
       .from('commission_request_bids')
       .select(`
         *,
-        request:commission_requests!commission_request_bids_request_id_fkey(
+        request:commission_requests(
           id,
           title,
           description,
@@ -148,7 +147,7 @@ router.get('/bids/my', authenticate, async (req, res, next) => {
           budget_min,
           budget_max,
           deadline,
-          client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name)
+          client:users(id, username, avatar_url, full_name)
         )
       `)
       .eq('artist_id', req.user.id)
@@ -168,11 +167,9 @@ router.get('/my-requests', authenticate, async (req, res, next) => {
       .from('commission_requests')
       .select(`
         *,
-        client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
-        awarded_artist:users!commission_requests_awarded_to_fkey(id, username, avatar_url, full_name),
         bids:commission_request_bids(
           *,
-          artist:users!commission_request_bids_artist_id_fkey(id, username, avatar_url, full_name)
+          artist:users(id, username, avatar_url, full_name)
         )
       `)
       .eq('client_id', req.user.id)
@@ -180,7 +177,7 @@ router.get('/my-requests', authenticate, async (req, res, next) => {
 
     if (error) throw error;
 
-    // Enrich with bid statistics
+    // Enrich with bid statistics and add client info manually
     const enrichedRequests = (requests || []).map(request => ({
       ...request,
       pending_bids_count: request.bids?.filter(b => b.status === 'pending').length || 0,
@@ -200,14 +197,10 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
       .from('commission_requests')
       .select(`
         *,
-        client:users!commission_requests_client_id_fkey(id, username, avatar_url, full_name),
-        awarded_artist:artists!commission_requests_awarded_to_fkey(id, users:users!artists_id_fkey(id, username, avatar_url)),
+        client:users(id, username, avatar_url, full_name),
         bids:commission_request_bids(
           *,
-          artist:artists!commission_request_bids_artist_id_fkey(
-            id,
-            users:users!artists_id_fkey(id, username, avatar_url, full_name)
-          )
+          artist:users(id, username, avatar_url, full_name)
         )
       `)
       .eq('id', req.params.id)
