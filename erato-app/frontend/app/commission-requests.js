@@ -10,9 +10,6 @@ import {
   Modal,
   ScrollView,
   TextInput,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -26,7 +23,6 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../constants/theme';
 import { uploadImage } from '../utils/imageUpload';
-import { showAlert } from '../components/StyledAlert';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -34,7 +30,7 @@ export default function CommissionRequestsScreen() {
   const { token, user } = useAuthStore();
   const insets = useSafeAreaInsets();
   const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
-  
+
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,7 +47,7 @@ export default function CommissionRequestsScreen() {
     sort_by: 'recent',
     styles: []
   });
-  
+
   // Create request form
   const [formData, setFormData] = useState({
     title: '',
@@ -63,8 +59,7 @@ export default function CommissionRequestsScreen() {
     reference_images: [],
   });
   const [creating, setCreating] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
-  
+
   // Bid form
   const [bidData, setBidData] = useState({
     bid_amount: '',
@@ -85,24 +80,35 @@ export default function CommissionRequestsScreen() {
 
   const loadRequests = async () => {
     try {
-      // Build query string with filters
-      const params = new URLSearchParams({
-        status: 'open',
-        limit: '50',
-        sort_by: filters.sort_by || 'recent'
-      });
+      let response;
 
-      if (filters.budget_min) params.append('budget_min', filters.budget_min);
-      if (filters.budget_max) params.append('budget_max', filters.budget_max);
-      if (filters.styles && filters.styles.length > 0) {
-        params.append('styles', filters.styles.join(','));
+      if (isArtist) {
+        // Artists see the quest board (all open requests)
+        const params = new URLSearchParams({
+          status: 'open',
+          limit: '50',
+          sort_by: filters.sort_by || 'recent'
+        });
+
+        if (filters.budget_min) params.append('budget_min', filters.budget_min);
+        if (filters.budget_max) params.append('budget_max', filters.budget_max);
+        if (filters.styles && filters.styles.length > 0) {
+          params.append('styles', filters.styles.join(','));
+        }
+
+        response = await axios.get(
+          `${API_URL}/commission-requests?${params.toString()}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setRequests(response.data.requests || []);
+      } else {
+        // Clients see their own posted requests
+        response = await axios.get(
+          `${API_URL}/commission-requests/my-requests`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setRequests(response.data.requests || []);
       }
-
-      const response = await axios.get(
-        `${API_URL}/commission-requests?${params.toString()}`,
-        token ? { headers: { Authorization: `Bearer ${token}` } } : {}
-      );
-      setRequests(response.data.requests || []);
     } catch (error) {
       console.error('Error loading requests:', error);
       Toast.show({
@@ -125,12 +131,33 @@ export default function CommissionRequestsScreen() {
     }
   };
 
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets) {
+      const uploadedUrls = [];
+      for (const asset of result.assets) {
+        try {
+          const url = await uploadImage(asset.uri, token);
+          uploadedUrls.push(url);
+        } catch (error) {
+          console.error('Error uploading image:', error);
+        }
+      }
+      setFormData({ ...formData, reference_images: [...formData.reference_images, ...uploadedUrls] });
+    }
+  };
+
   const handleCreateRequest = async () => {
     if (!formData.title.trim() || !formData.description.trim()) {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Please fill in all required fields',
+        text2: 'Please fill in title and description',
       });
       return;
     }
@@ -153,8 +180,8 @@ export default function CommissionRequestsScreen() {
 
       Toast.show({
         type: 'success',
-        text1: 'Request posted!',
-        text2: 'Artists will be notified',
+        text1: 'Success',
+        text2: 'Commission request posted',
       });
 
       setShowCreateModal(false);
@@ -180,48 +207,8 @@ export default function CommissionRequestsScreen() {
     }
   };
 
-  const handleAddReferenceImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Toast.show({
-        type: 'info',
-        text1: 'Permission needed',
-        text2: 'Please allow access to your photos',
-      });
-      return;
-    }
-
-    setUploadingImages(true);
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const imageUrl = await uploadImage(result.assets[0].uri, 'commission-requests', '', token);
-        if (imageUrl) {
-          setFormData({
-            ...formData,
-            reference_images: [...formData.reference_images, imageUrl]
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to upload image',
-      });
-    } finally {
-      setUploadingImages(false);
-    }
-  };
-
   const handleSubmitBid = async () => {
-    if (!bidData.bid_amount || !selectedRequest) {
+    if (!bidData.bid_amount) {
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -245,8 +232,8 @@ export default function CommissionRequestsScreen() {
 
       Toast.show({
         type: 'success',
-        text1: 'Bid submitted!',
-        text2: 'The client will be notified',
+        text1: 'Success',
+        text2: 'Bid submitted successfully',
       });
 
       setShowBidModal(false);
@@ -269,174 +256,240 @@ export default function CommissionRequestsScreen() {
     }
   };
 
-  const toggleStyle = (styleId) => {
-    const current = formData.preferred_styles || [];
-    if (current.includes(styleId)) {
-      setFormData({
-        ...formData,
-        preferred_styles: current.filter(id => id !== styleId)
-      });
-    } else {
-      setFormData({
-        ...formData,
-        preferred_styles: [...current, styleId]
-      });
-    }
-  };
+  const renderRequest = ({ item }) => {
+    // For clients: show their posted requests with bid info
+    if (!isArtist) {
+      const pendingBidsCount = item.pending_bids_count || 0;
+      const statusColor =
+        item.status === 'open' ? colors.status.pending :
+        item.status === 'awarded' ? colors.status.success :
+        colors.text.secondary;
 
-  const renderRequest = ({ item }) => (
-    <TouchableOpacity
-      style={styles.requestCard}
-      onPress={() => {
-        setSelectedRequest(item);
-        if (isArtist && !item.has_applied) {
-          setShowBidModal(true);
-        }
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.requestHeader}>
-        <View style={styles.requestClientInfo}>
-          <ExpoImage
-            source={{ uri: item.client?.avatar_url || DEFAULT_AVATAR }}
-            style={styles.clientAvatar}
-            contentFit="cover"
-          />
-          <View>
-            <Text style={styles.clientName}>{item.client?.username || 'Anonymous'}</Text>
-            <Text style={styles.requestDate}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-          {item.has_applied && (
-            <View style={[styles.bidBadge, { backgroundColor: colors.status.success + '20' }]}>
-              <Ionicons name="checkmark-circle" size={14} color={colors.status.success} />
-              <Text style={[styles.bidCount, { color: colors.status.success }]}>Applied</Text>
+      return (
+        <View style={styles.requestCard}>
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={styles.requestTitle} numberOfLines={2}>{item.title}</Text>
+              <Text style={styles.timestamp}>
+                {new Date(item.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </Text>
             </View>
-          )}
-          <View style={styles.bidBadge}>
-            <Ionicons name="people-outline" size={14} color={colors.primary} />
-            <Text style={styles.bidCount}>{item.bid_count || 0} bids</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.requestDescription} numberOfLines={2}>
+            {item.description}
+          </Text>
+
+          <View style={styles.clientRequestFooter}>
+            <View style={styles.bidsSummary}>
+              <Ionicons name="people" size={16} color={colors.primary} />
+              <Text style={styles.bidsSummaryText}>
+                {item.bid_count || 0} {item.bid_count === 1 ? 'bid' : 'bids'}
+                {pendingBidsCount > 0 && ` (${pendingBidsCount} pending)`}
+              </Text>
+            </View>
+            {item.budget_min || item.budget_max ? (
+              <View style={styles.budgetContainer}>
+                <Ionicons name="cash-outline" size={14} color={colors.text.secondary} />
+                <Text style={styles.budgetText}>
+                  {item.budget_min && item.budget_max
+                    ? `$${item.budget_min} - $${item.budget_max}`
+                    : item.budget_min
+                    ? `From $${item.budget_min}`
+                    : `Up to $${item.budget_max}`}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
-      </View>
+      );
+    }
 
-      <Text style={styles.requestTitle}>{item.title}</Text>
-      <Text style={styles.requestDescription} numberOfLines={3}>
-        {item.description}
-      </Text>
-
-      <View style={styles.requestMeta}>
-        {item.budget_min && item.budget_max && (
-          <View style={styles.metaItem}>
-            <Ionicons name="cash-outline" size={14} color={colors.text.secondary} />
-            <Text style={styles.metaText}>
-              ${item.budget_min} - ${item.budget_max}
-            </Text>
-          </View>
-        )}
-        {item.deadline && (
-          <View style={styles.metaItem}>
-            <Ionicons name="calendar-outline" size={14} color={colors.text.secondary} />
-            <Text style={styles.metaText}>
-              {new Date(item.deadline).toLocaleDateString()}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {item.reference_images?.length > 0 && (
-        <View style={styles.referenceImages}>
-          {item.reference_images.slice(0, 3).map((url, idx) => (
+    // For artists: show quest board with apply functionality
+    return (
+      <TouchableOpacity
+        style={styles.requestCard}
+        onPress={() => {
+          setSelectedRequest(item);
+          if (!item.has_applied) {
+            setShowBidModal(true);
+          }
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.clientInfo}>
             <ExpoImage
-              key={idx}
-              source={{ uri: url }}
-              style={styles.referenceImage}
+              source={{ uri: item.client?.avatar_url || DEFAULT_AVATAR }}
+              style={styles.clientAvatar}
               contentFit="cover"
             />
-          ))}
+            <View>
+              <Text style={styles.clientName}>{item.client?.username || 'Anonymous'}</Text>
+              <Text style={styles.timestamp}>
+                {new Date(item.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric'
+                })}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.badges}>
+            {item.has_applied && (
+              <View style={styles.appliedBadge}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.status.success} />
+                <Text style={styles.appliedText}>Applied</Text>
+              </View>
+            )}
+            <View style={styles.bidsBadge}>
+              <Ionicons name="people" size={12} color={colors.text.secondary} />
+              <Text style={styles.bidsText}>{item.bid_count || 0}</Text>
+            </View>
+          </View>
         </View>
-      )}
-    </TouchableOpacity>
-  );
+
+        <Text style={styles.requestTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.requestDescription} numberOfLines={2}>
+          {item.description}
+        </Text>
+
+        <View style={styles.cardFooter}>
+          {item.budget_min || item.budget_max ? (
+            <View style={styles.budgetContainer}>
+              <Ionicons name="cash-outline" size={14} color={colors.primary} />
+              <Text style={styles.budgetText}>
+                {item.budget_min && item.budget_max
+                  ? `$${item.budget_min} - $${item.budget_max}`
+                  : item.budget_min
+                  ? `From $${item.budget_min}`
+                  : `Up to $${item.budget_max}`}
+              </Text>
+            </View>
+          ) : null}
+          {item.deadline && (
+            <View style={styles.deadlineContainer}>
+              <Ionicons name="time-outline" size={14} color={colors.text.secondary} />
+              <Text style={styles.deadlineText}>
+                {new Date(item.deadline).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric'
+                })}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {item.preferred_styles && item.preferred_styles.length > 0 && (
+          <View style={styles.stylesRow}>
+            {artStyles
+              .filter(s => item.preferred_styles.includes(s.id))
+              .slice(0, 3)
+              .map(style => (
+                <View key={style.id} style={styles.styleTag}>
+                  <Text style={styles.styleTagText}>{style.name}</Text>
+                </View>
+              ))}
+            {item.preferred_styles.length > 3 && (
+              <Text style={styles.moreStyles}>+{item.preferred_styles.length - 3}</Text>
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Commission Requests</Text>
-        <View style={styles.headerActions}>
-          {isArtist && (
-            <TouchableOpacity
-              style={styles.filterButton}
-              onPress={() => setShowFiltersModal(true)}
-            >
-              <Ionicons name="filter" size={22} color={colors.primary} />
-              {(filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
-                <View style={styles.filterBadge} />
-              )}
-            </TouchableOpacity>
-          )}
-          {!isArtist && (
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={() => setShowCreateModal(true)}
-            >
-              <Ionicons name="add" size={24} color={colors.primary} />
-            </TouchableOpacity>
-          )}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{isArtist ? 'Quest Board' : 'My Requests'}</Text>
+          <View style={styles.headerRight}>
+            {isArtist && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => setShowFiltersModal(true)}
+              >
+                <Ionicons name="options-outline" size={22} color={colors.text.primary} />
+                {(filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
+                  <View style={styles.filterIndicator} />
+                )}
+              </TouchableOpacity>
+            )}
+            {!isArtist && (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => setShowCreateModal(true)}
+              >
+                <Ionicons name="add" size={20} color={colors.text.primary} />
+                <Text style={styles.primaryButtonText}>Post</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
-      {/* Active Filters Display */}
+      {/* Active Filters */}
       {isArtist && (filters.budget_min || filters.budget_max || filters.styles.length > 0) && (
-        <View style={styles.activeFilters}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChips}>
-            {filters.budget_min && (
-              <View style={styles.filterChip}>
-                <Text style={styles.filterChipText}>Min: ${filters.budget_min}</Text>
-                <TouchableOpacity onPress={() => setFilters({ ...filters, budget_min: '' })}>
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            {filters.budget_max && (
-              <View style={styles.filterChip}>
-                <Text style={styles.filterChipText}>Max: ${filters.budget_max}</Text>
-                <TouchableOpacity onPress={() => setFilters({ ...filters, budget_max: '' })}>
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            {filters.styles.length > 0 && (
-              <View style={styles.filterChip}>
-                <Text style={styles.filterChipText}>{filters.styles.length} styles</Text>
-                <TouchableOpacity onPress={() => setFilters({ ...filters, styles: [] })}>
-                  <Ionicons name="close-circle" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.clearFiltersButton}
-              onPress={() => setFilters({ budget_min: '', budget_max: '', sort_by: 'recent', styles: [] })}
-            >
-              <Text style={styles.clearFiltersText}>Clear All</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersScroll}
+          contentContainerStyle={styles.filtersContent}
+        >
+          {filters.budget_min && (
+            <View style={styles.activeFilter}>
+              <Text style={styles.activeFilterText}>Min: ${filters.budget_min}</Text>
+              <TouchableOpacity onPress={() => setFilters({ ...filters, budget_min: '' })}>
+                <Ionicons name="close-circle" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+          {filters.budget_max && (
+            <View style={styles.activeFilter}>
+              <Text style={styles.activeFilterText}>Max: ${filters.budget_max}</Text>
+              <TouchableOpacity onPress={() => setFilters({ ...filters, budget_max: '' })}>
+                <Ionicons name="close-circle" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+          {filters.styles.length > 0 && (
+            <View style={styles.activeFilter}>
+              <Text style={styles.activeFilterText}>{filters.styles.length} styles</Text>
+              <TouchableOpacity onPress={() => setFilters({ ...filters, styles: [] })}>
+                <Ionicons name="close-circle" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.clearFilters}
+            onPress={() => setFilters({ budget_min: '', budget_max: '', sort_by: 'recent', styles: [] })}
+          >
+            <Text style={styles.clearFiltersText}>Clear All</Text>
+          </TouchableOpacity>
+        </ScrollView>
       )}
 
       {/* Requests List */}
@@ -458,28 +511,28 @@ export default function CommissionRequestsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="document-text-outline" size={64} color={colors.text.disabled} />
-            <Text style={styles.emptyText}>No requests yet</Text>
-            {!isArtist && (
-              <TouchableOpacity
-                style={styles.emptyButton}
-                onPress={() => setShowCreateModal(true)}
-              >
-                <Text style={styles.emptyButtonText}>Post First Request</Text>
-              </TouchableOpacity>
-            )}
+            <Text style={styles.emptyTitle}>No Requests Found</Text>
+            <Text style={styles.emptyText}>
+              {isArtist
+                ? 'Check back later for new commission opportunities'
+                : 'Post your first commission request to find artists'}
+            </Text>
           </View>
         }
       />
 
-      {/* Create Request Modal */}
+      {/* Create Request Modal (Clients) */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setShowCreateModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowCreateModal(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Post Commission Request</Text>
               <TouchableOpacity onPress={() => setShowCreateModal(false)}>
@@ -487,17 +540,22 @@ export default function CommissionRequestsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Title *</Text>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={[styles.modalBodyContent, { paddingBottom: insets.bottom + spacing.xl }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.label}>Title *</Text>
               <TextInput
                 style={styles.input}
                 value={formData.title}
                 onChangeText={(text) => setFormData({ ...formData, title: text })}
-                placeholder="e.g., Character design for game"
+                placeholder="e.g., Character design for my game"
                 placeholderTextColor={colors.text.disabled}
+                maxLength={200}
               />
 
-              <Text style={styles.inputLabel}>Description *</Text>
+              <Text style={styles.label}>Description *</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={formData.description}
@@ -505,53 +563,57 @@ export default function CommissionRequestsScreen() {
                 placeholder="Describe what you're looking for..."
                 placeholderTextColor={colors.text.disabled}
                 multiline
-                numberOfLines={6}
+                numberOfLines={4}
               />
 
-              <View style={styles.priceRow}>
-                <View style={styles.priceInputGroup}>
-                  <Text style={styles.inputLabel}>Min Budget ($)</Text>
+              <Text style={styles.label}>Budget Range</Text>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
                   <TextInput
                     style={styles.input}
                     value={formData.budget_min}
                     onChangeText={(text) => setFormData({ ...formData, budget_min: text })}
-                    placeholder="0"
+                    placeholder="Min ($)"
                     placeholderTextColor={colors.text.disabled}
                     keyboardType="numeric"
                   />
                 </View>
-                <View style={styles.priceInputGroup}>
-                  <Text style={styles.inputLabel}>Max Budget ($)</Text>
+                <Text style={styles.separator}>—</Text>
+                <View style={{ flex: 1 }}>
                   <TextInput
                     style={styles.input}
                     value={formData.budget_max}
                     onChangeText={(text) => setFormData({ ...formData, budget_max: text })}
-                    placeholder="1000"
+                    placeholder="Max ($)"
                     placeholderTextColor={colors.text.disabled}
                     keyboardType="numeric"
                   />
                 </View>
               </View>
 
-              <Text style={styles.inputLabel}>Preferred Styles</Text>
-              <View style={styles.stylesContainer}>
+              <Text style={styles.label}>Preferred Styles (optional)</Text>
+              <View style={styles.stylesList}>
                 {artStyles.map((style) => {
-                  const isSelected = formData.preferred_styles?.includes(style.id);
+                  const isSelected = formData.preferred_styles.includes(style.id);
                   return (
                     <TouchableOpacity
                       key={style.id}
-                      style={[
-                        styles.styleChip,
-                        isSelected && styles.styleChipSelected
-                      ]}
-                      onPress={() => toggleStyle(style.id)}
+                      style={[styles.styleOption, isSelected && styles.styleOptionSelected]}
+                      onPress={() => {
+                        if (isSelected) {
+                          setFormData({
+                            ...formData,
+                            preferred_styles: formData.preferred_styles.filter(id => id !== style.id)
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            preferred_styles: [...formData.preferred_styles, style.id]
+                          });
+                        }
+                      }}
                     >
-                      <Text
-                        style={[
-                          styles.styleChipText,
-                          isSelected && styles.styleChipTextSelected
-                        ]}
-                      >
+                      <Text style={[styles.styleOptionText, isSelected && styles.styleOptionTextSelected]}>
                         {style.name}
                       </Text>
                     </TouchableOpacity>
@@ -559,94 +621,66 @@ export default function CommissionRequestsScreen() {
                 })}
               </View>
 
-              <Text style={styles.inputLabel}>Reference Images</Text>
               <TouchableOpacity
-                style={styles.addImageButton}
-                onPress={handleAddReferenceImage}
-                disabled={uploadingImages}
-              >
-                {uploadingImages ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <>
-                    <Ionicons name="image-outline" size={20} color={colors.primary} />
-                    <Text style={styles.addImageText}>Add Reference Image</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {formData.reference_images.length > 0 && (
-                <View style={styles.referenceImagesGrid}>
-                  {formData.reference_images.map((url, idx) => (
-                    <View key={idx} style={styles.referenceImageContainer}>
-                      <ExpoImage source={{ uri: url }} style={styles.referenceImagePreview} contentFit="cover" />
-                      <TouchableOpacity
-                        style={styles.removeImageButton}
-                        onPress={() => {
-                          setFormData({
-                            ...formData,
-                            reference_images: formData.reference_images.filter((_, i) => i !== idx)
-                          });
-                        }}
-                      >
-                        <Ionicons name="close-circle" size={20} color={colors.status.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[styles.submitButton, creating && styles.submitButtonDisabled]}
+                style={styles.submitButton}
                 onPress={handleCreateRequest}
                 disabled={creating}
               >
                 {creating ? (
-                  <ActivityIndicator size="small" color={colors.text.primary} />
+                  <ActivityIndicator color={colors.text.primary} />
                 ) : (
                   <Text style={styles.submitButtonText}>Post Request</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* Bid Modal */}
+      {/* Bid Modal (Artists) */}
       <Modal
         visible={showBidModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setShowBidModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowBidModal(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Submit Bid</Text>
+              <Text style={styles.modalTitle}>Submit Your Bid</Text>
               <TouchableOpacity onPress={() => setShowBidModal(false)}>
                 <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={[styles.modalBodyContent, { paddingBottom: insets.bottom + spacing.xl }]}
+              showsVerticalScrollIndicator={false}
+            >
               {selectedRequest && (
-                <>
+                <View style={styles.requestPreview}>
                   <Text style={styles.requestPreviewTitle}>{selectedRequest.title}</Text>
-                  <Text style={styles.requestPreviewDescription}>{selectedRequest.description}</Text>
-                </>
+                  <Text style={styles.requestPreviewBudget}>
+                    Budget: ${selectedRequest.budget_min} - ${selectedRequest.budget_max}
+                  </Text>
+                </View>
               )}
 
-              <Text style={styles.inputLabel}>Bid Amount ($) *</Text>
+              <Text style={styles.label}>Your Bid Amount *</Text>
               <TextInput
                 style={styles.input}
                 value={bidData.bid_amount}
                 onChangeText={(text) => setBidData({ ...bidData, bid_amount: text })}
-                placeholder="0.00"
+                placeholder="Enter amount ($)"
                 placeholderTextColor={colors.text.disabled}
                 keyboardType="numeric"
               />
 
-              <Text style={styles.inputLabel}>Estimated Delivery (days)</Text>
+              <Text style={styles.label}>Estimated Delivery (Days)</Text>
               <TextInput
                 style={styles.input}
                 value={bidData.estimated_delivery_days}
@@ -656,34 +690,35 @@ export default function CommissionRequestsScreen() {
                 keyboardType="numeric"
               />
 
-              <Text style={styles.inputLabel}>Message (optional)</Text>
+              <Text style={styles.label}>Message to Client (optional)</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={bidData.message}
                 onChangeText={(text) => setBidData({ ...bidData, message: text })}
-                placeholder="Add a message to the client..."
+                placeholder="Tell them why you're perfect for this project..."
                 placeholderTextColor={colors.text.disabled}
                 multiline
                 numberOfLines={4}
+                maxLength={1000}
               />
 
               <TouchableOpacity
-                style={[styles.submitButton, submittingBid && styles.submitButtonDisabled]}
+                style={styles.submitButton}
                 onPress={handleSubmitBid}
                 disabled={submittingBid}
               >
                 {submittingBid ? (
-                  <ActivityIndicator size="small" color={colors.text.primary} />
+                  <ActivityIndicator color={colors.text.primary} />
                 ) : (
                   <Text style={styles.submitButtonText}>Submit Bid</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* Filters Modal (Artists Only) */}
+      {/* Filters Modal (Artists) */}
       <Modal
         visible={showFiltersModal}
         animationType="slide"
@@ -696,7 +731,7 @@ export default function CommissionRequestsScreen() {
         >
           <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Requests</Text>
+              <Text style={styles.modalTitle}>Filter & Sort</Text>
               <TouchableOpacity onPress={() => setShowFiltersModal(false)}>
                 <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
@@ -704,121 +739,137 @@ export default function CommissionRequestsScreen() {
 
             <ScrollView
               style={styles.modalBody}
+              contentContainerStyle={[styles.modalBodyContent, { paddingBottom: insets.bottom + spacing.md }]}
               showsVerticalScrollIndicator={false}
-              bounces={false}
             >
-              <Text style={styles.inputLabel}>Sort By</Text>
-              <View style={styles.sortOptions}>
-                {[
-                  { value: 'recent', label: 'Most Recent' },
-                  { value: 'budget_high', label: 'Highest Budget' },
-                  { value: 'budget_low', label: 'Lowest Budget' },
-                  { value: 'bids_low', label: 'Fewest Bids' },
-                  { value: 'deadline_soon', label: 'Deadline Soon' },
-                ].map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.sortOption,
-                      filters.sort_by === option.value && styles.sortOptionSelected
-                    ]}
-                    onPress={() => setFilters({ ...filters, sort_by: option.value })}
-                  >
-                    <Text
-                      style={[
-                        styles.sortOptionText,
-                        filters.sort_by === option.value && styles.sortOptionTextSelected
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                    {filters.sort_by === option.value && (
-                      <Ionicons name="checkmark" size={20} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Budget Range</Text>
-              <View style={styles.priceRow}>
-                <View style={styles.priceInputGroup}>
-                  <Text style={styles.inputSubLabel}>Min Budget ($)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={filters.budget_min}
-                    onChangeText={(text) => setFilters({ ...filters, budget_min: text })}
-                    placeholder="0"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="numeric"
-                  />
+              {/* SORT SECTION */}
+              <View style={styles.filterSection}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="swap-vertical" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Sort By</Text>
                 </View>
-                <View style={styles.priceInputGroup}>
-                  <Text style={styles.inputSubLabel}>Max Budget ($)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={filters.budget_max}
-                    onChangeText={(text) => setFilters({ ...filters, budget_max: text })}
-                    placeholder="1000"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.inputLabel}>Preferred Styles</Text>
-              <View style={styles.stylesContainer}>
-                {artStyles.map((style) => {
-                  const isSelected = filters.styles?.includes(style.id);
-                  return (
+                <View style={styles.sortOptions}>
+                  {[
+                    { value: 'recent', label: 'Most Recent', icon: 'time-outline' },
+                    { value: 'budget_high', label: 'Highest Budget', icon: 'trending-up' },
+                    { value: 'budget_low', label: 'Lowest Budget', icon: 'trending-down' },
+                    { value: 'bids_low', label: 'Fewest Bids', icon: 'people-outline' },
+                    { value: 'deadline_soon', label: 'Deadline Soon', icon: 'alarm-outline' },
+                  ].map((option) => (
                     <TouchableOpacity
-                      key={style.id}
+                      key={option.value}
                       style={[
-                        styles.styleChip,
-                        isSelected && styles.styleChipSelected
+                        styles.sortOption,
+                        filters.sort_by === option.value && styles.sortOptionActive
                       ]}
-                      onPress={() => {
-                        const current = filters.styles || [];
-                        if (isSelected) {
-                          setFilters({
-                            ...filters,
-                            styles: current.filter(id => id !== style.id)
-                          });
-                        } else {
-                          setFilters({
-                            ...filters,
-                            styles: [...current, style.id]
-                          });
-                        }
-                      }}
+                      onPress={() => setFilters({ ...filters, sort_by: option.value })}
                     >
-                      <Text
-                        style={[
-                          styles.styleChipText,
-                          isSelected && styles.styleChipTextSelected
-                        ]}
-                      >
-                        {style.name}
-                      </Text>
+                      <View style={styles.sortOptionLeft}>
+                        <Ionicons
+                          name={option.icon}
+                          size={20}
+                          color={filters.sort_by === option.value ? colors.primary : colors.text.secondary}
+                        />
+                        <Text
+                          style={[
+                            styles.sortOptionText,
+                            filters.sort_by === option.value && styles.sortOptionTextActive
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </View>
+                      {filters.sort_by === option.value && (
+                        <Ionicons name="checkmark" size={20} color={colors.primary} />
+                      )}
                     </TouchableOpacity>
-                  );
-                })}
+                  ))}
+                </View>
               </View>
 
-              <View style={styles.filterModalButtons}>
+              {/* BUDGET SECTION */}
+              <View style={styles.filterSection}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Budget Range</Text>
+                </View>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={styles.input}
+                      value={filters.budget_min}
+                      onChangeText={(text) => setFilters({ ...filters, budget_min: text })}
+                      placeholder="Min ($)"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <Text style={styles.separator}>—</Text>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={styles.input}
+                      value={filters.budget_max}
+                      onChangeText={(text) => setFilters({ ...filters, budget_max: text })}
+                      placeholder="Max ($)"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* STYLES SECTION */}
+              <View style={styles.filterSection}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="brush-outline" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Art Styles</Text>
+                </View>
+                <View style={styles.stylesList}>
+                  {artStyles.map((style) => {
+                    const isSelected = filters.styles?.includes(style.id);
+                    return (
+                      <TouchableOpacity
+                        key={style.id}
+                        style={[styles.styleOption, isSelected && styles.styleOptionSelected]}
+                        onPress={() => {
+                          const current = filters.styles || [];
+                          if (isSelected) {
+                            setFilters({
+                              ...filters,
+                              styles: current.filter(id => id !== style.id)
+                            });
+                          } else {
+                            setFilters({
+                              ...filters,
+                              styles: [...current, style.id]
+                            });
+                          }
+                        }}
+                      >
+                        <Text style={[styles.styleOptionText, isSelected && styles.styleOptionTextSelected]}>
+                          {style.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={styles.clearButton}
+                  style={styles.secondaryButton}
                   onPress={() => setFilters({ budget_min: '', budget_max: '', sort_by: 'recent', styles: [] })}
                 >
-                  <Text style={styles.clearButtonText}>Clear All</Text>
+                  <Text style={styles.secondaryButtonText}>Clear All</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.applyButton}
+                  style={styles.submitButton}
                   onPress={() => {
                     setShowFiltersModal(false);
                     loadRequests();
                   }}
                 >
-                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                  <Text style={styles.submitButtonText}>Apply</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -838,198 +889,165 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
   backButton: {
-    marginRight: spacing.md,
+    padding: spacing.xs,
+    marginRight: spacing.sm,
   },
   headerTitle: {
     ...typography.h3,
     color: colors.text.primary,
     flex: 1,
   },
-  headerActions: {
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  createButton: {
-    padding: spacing.xs,
-  },
-  filterButton: {
+  iconButton: {
     padding: spacing.xs,
     position: 'relative',
   },
-  filterBadge: {
+  filterIndicator: {
     position: 'absolute',
     top: 4,
     right: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
   },
-  activeFilters: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  filterChips: {
-    flexDirection: 'row',
-  },
-  filterChip: {
+  primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.primary + '20',
-    borderRadius: borderRadius.full,
-    marginRight: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
   },
-  filterChipText: {
+  primaryButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+  },
+  filtersScroll: {
+    maxHeight: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filtersContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  activeFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 2,
+    borderRadius: borderRadius.full,
+  },
+  activeFilterText: {
     ...typography.small,
     color: colors.primary,
     fontWeight: '600',
   },
-  clearFiltersButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
+  clearFilters: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 2,
   },
   clearFiltersText: {
     ...typography.small,
     color: colors.text.secondary,
     fontWeight: '600',
   },
-  sortOptions: {
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  sortOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sortOptionSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
-  },
-  sortOptionText: {
-    ...typography.body,
-    color: colors.text.secondary,
-  },
-  sortOptionTextSelected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  inputSubLabel: {
-    ...typography.small,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
-  },
-  filterModalButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  clearButton: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  clearButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.secondary,
-  },
-  applyButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  applyButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-  },
   listContent: {
     padding: spacing.md,
+    gap: spacing.md,
   },
   requestCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
-    marginBottom: spacing.md,
     ...shadows.small,
   },
-  requestHeader: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  requestClientInfo: {
+  clientInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
   clientAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   clientName: {
     ...typography.bodyBold,
     color: colors.text.primary,
   },
-  requestDate: {
+  timestamp: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 11,
   },
-  bidBadge: {
+  badges: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  appliedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.primary + '20',
+    gap: 4,
+    backgroundColor: colors.status.success + '15',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  bidCount: {
+  appliedText: {
     ...typography.small,
-    color: colors.primary,
+    color: colors.status.success,
     fontWeight: '600',
+    fontSize: 11,
+  },
+  bidsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bidsText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontWeight: '600',
+    fontSize: 11,
   },
   requestTitle: {
-    ...typography.h3,
+    ...typography.h4,
     color: colors.text.primary,
-    fontSize: 18,
     marginBottom: spacing.xs,
   },
   requestDescription: {
@@ -1037,67 +1055,111 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: spacing.sm,
   },
-  requestMeta: {
+  cardFooter: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
-    marginBottom: spacing.sm,
   },
-  metaItem: {
+  budgetContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  budgetText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 14,
+  },
+  deadlineContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deadlineText: {
+    ...typography.small,
+    color: colors.text.secondary,
+  },
+  stylesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  styleTag: {
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  styleTagText: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontSize: 11,
+  },
+  moreStyles: {
+    ...typography.small,
+    color: colors.text.disabled,
+    fontSize: 11,
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 2,
+    borderRadius: borderRadius.sm,
+  },
+  statusText: {
+    ...typography.small,
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  clientRequestFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  bidsSummary: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  metaText: {
-    ...typography.small,
-    color: colors.text.secondary,
-  },
-  referenceImages: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  referenceImage: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.sm,
+  bidsSummaryText: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    fontSize: 13,
   },
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.xxl * 2,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    marginTop: spacing.md,
   },
   emptyText: {
     ...typography.body,
     color: colors.text.secondary,
-    marginTop: spacing.md,
-  },
-  emptyButton: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-  },
-  emptyButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xl,
   },
   modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    height: '75%',
-    width: '100%',
+    maxHeight: '90%',
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1110,127 +1172,157 @@ const styles = StyleSheet.create({
   modalTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 20,
   },
   modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
     padding: spacing.md,
   },
-  inputLabel: {
+  label: {
     ...typography.bodyBold,
     color: colors.text.primary,
     marginBottom: spacing.xs,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   input: {
-    ...typography.body,
-    color: colors.text.primary,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    color: colors.text.primary,
+    ...typography.body,
     borderWidth: 1,
     borderColor: colors.border,
   },
   textArea: {
-    minHeight: 100,
+    height: 100,
     textAlignVertical: 'top',
   },
-  priceRow: {
+  row: {
     flexDirection: 'row',
-    gap: spacing.md,
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  priceInputGroup: {
-    flex: 1,
+  separator: {
+    ...typography.body,
+    color: colors.text.disabled,
   },
-  stylesContainer: {
+  filterSection: {
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text.primary,
+  },
+  sortOptions: {
+    gap: spacing.xs,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortOptionActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  sortOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sortOptionText: {
+    ...typography.body,
+    color: colors.text.secondary,
+  },
+  sortOptionTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  stylesList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
-  styleChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+  styleOption: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  styleChipSelected: {
+  styleOptionSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  styleChipText: {
-    ...typography.body,
+  styleOptionText: {
+    ...typography.small,
     color: colors.text.secondary,
-    fontSize: 14,
   },
-  styleChipTextSelected: {
+  styleOptionTextSelected: {
     color: colors.text.primary,
+    fontWeight: '600',
   },
-  addImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
+  requestPreview: {
     backgroundColor: colors.surface,
+    padding: spacing.md,
     borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginTop: spacing.sm,
   },
-  addImageText: {
-    ...typography.body,
+  requestPreviewTitle: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  requestPreviewBudget: {
+    ...typography.small,
     color: colors.primary,
   },
-  referenceImagesGrid: {
+  modalActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
   },
-  referenceImageContainer: {
-    position: 'relative',
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  referenceImagePreview: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.sm,
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.full,
+  secondaryButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
   },
   submitButton: {
+    flex: 1,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
     padding: spacing.md,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
   },
   submitButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
   },
-  requestPreviewTitle: {
-    ...typography.h3,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  requestPreviewDescription: {
-    ...typography.body,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
-  },
 });
-
-
-
-
