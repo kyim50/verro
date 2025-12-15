@@ -203,7 +203,7 @@ export default function ClientProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Client Header */}
+        {/* Client Header - Pinterest-inspired clean layout */}
         <View style={styles.clientHeader}>
           {/* Avatar */}
           <View style={styles.avatarContainer}>
@@ -226,9 +226,9 @@ export default function ClientProfileScreen() {
                 @{client.username}
               </Text>
               {(client.is_verified || client.verified) && (
-                <Ionicons 
-                  name="checkmark-circle" 
-                  size={20} 
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
                   color={colors.error}
                   style={styles.verifiedBadge}
                 />
@@ -614,6 +614,23 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minWidth: 0,
   },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    padding: spacing.md,
+    marginHorizontal: spacing.xs,
+    minHeight: 80,
+    minWidth: 80,
+  },
   statValue: {
     ...typography.h2,
     color: colors.text.primary,
@@ -623,11 +640,22 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     ...typography.caption,
-    color: colors.text.secondary,
+    color: colors.gray600,
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
     fontWeight: '500', // Pinterest-style
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+  },
+  verifiedBadgeOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statDivider: {
     width: 1,

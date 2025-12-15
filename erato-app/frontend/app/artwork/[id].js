@@ -353,7 +353,7 @@ export default function ArtworkDetailScreen() {
           </View>
         </View>
 
-        {/* Artist Card */}
+        {/* Artist Card - Pinterest-style clean profile card */}
         <View style={styles.artistCard}>
           <TouchableOpacity
             style={styles.artistCardContent}
@@ -365,7 +365,7 @@ export default function ArtworkDetailScreen() {
             activeOpacity={isOwnArtwork ? 1 : 0.7}
           >
             <Image
-              source={{ uri: artwork.artists?.users?.avatar_url || 'https://via.placeholder.com/80' }}
+              source={{ uri: artwork.artists?.users?.avatar_url || DEFAULT_AVATAR }}
               style={styles.artistAvatar}
               contentFit="cover"
             />
@@ -378,7 +378,7 @@ export default function ArtworkDetailScreen() {
               </Text>
             </View>
             {!isOwnArtwork && (
-              <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
             )}
           </TouchableOpacity>
 
@@ -542,6 +542,18 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 4,
   },
+  imageCardContainer: {
+    marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    borderRadius: 20, // Pinterest-style soft rounding
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
+  },
   imageContainer: {
     width: '100%',
     height: IMAGE_HEIGHT,
@@ -585,7 +597,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.lg,
+    gap: spacing.md,
     marginTop: spacing.sm,
   },
   statChip: {
@@ -594,10 +606,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statChipText: {
-    ...typography.body,
+    ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 15,
-    fontWeight: '500', // Pinterest-style
+    fontSize: 14,
+    fontWeight: '500',
   },
   description: {
     ...typography.body,
