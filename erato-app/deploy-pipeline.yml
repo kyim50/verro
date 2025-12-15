@@ -1,0 +1,337 @@
+# GitHub Actions CI/CD Pipeline for Erato Backend
+# This workflow automates testing, building, and deployment
+
+name: Erato Backend CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/erato-backend
+
+jobs:
+  # Testing and Linting
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./backend/coverage
+          fail_ci_if_error: false
+
+  # Security scanning
+  security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security audit
+        run: npm audit --audit-level high
+
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=package.json
+
+  # Build and push Docker image
+  build:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Deploy to staging
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to staging
+        run: |
+          # Update staging environment variables
+          aws ssm put-parameter \
+            --name "/erato/staging/image-tag" \
+            --value "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop" \
+            --type "String" \
+            --overwrite
+
+          # Trigger deployment via AWS Systems Manager
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "tag:Environment=staging" \
+            --parameters 'commands=["cd /home/ec2-user/erato-app && docker-compose pull && docker-compose up -d"]'
+
+  # Deploy to production
+  deploy-production:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to production with blue-green strategy
+        run: |
+          # Get current live target group
+          CURRENT_TG=$(aws elbv2 describe-target-groups \
+            --names erato-backend-tg \
+            --query 'TargetGroups[0].TargetGroupArn' \
+            --output text)
+
+          # Create new target group for blue-green deployment
+          NEW_TG=$(aws elbv2 create-target-group \
+            --name erato-backend-tg-green \
+            --protocol HTTP \
+            --port 80 \
+            --vpc-id $VPC_ID \
+            --health-check-path "/health" \
+            --query 'TargetGroups[0].TargetGroupArn' \
+            --output text)
+
+          # Update auto scaling group to use new target group
+          aws autoscaling update-auto-scaling-group \
+            --auto-scaling-group-name erato-backend-asg \
+            --target-group-arns $NEW_TG
+
+          # Wait for new instances to be healthy
+          aws elbv2 wait target-in-service \
+            --target-group-arn $NEW_TG
+
+          # Switch load balancer to new target group
+          LISTENER_ARN=$(aws elbv2 describe-listeners \
+            --load-balancer-arn $LB_ARN \
+            --query 'Listeners[0].ListenerArn' \
+            --output text)
+
+          aws elbv2 modify-listener \
+            --listener-arn $LISTENER_ARN \
+            --default-actions Type=forward,TargetGroupArn=$NEW_TG
+
+          # Wait for traffic to switch
+          sleep 60
+
+          # Clean up old target group
+          aws autoscaling update-auto-scaling-group \
+            --auto-scaling-group-name erato-backend-asg \
+            --target-group-arns $NEW_TG
+
+          aws elbv2 delete-target-group \
+            --target-group-arn $CURRENT_TG
+
+  # Rollback job (manual trigger)
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Rollback deployment
+        run: |
+          # Get previous image tag from SSM Parameter Store
+          PREVIOUS_TAG=$(aws ssm get-parameter \
+            --name "/erato/production/previous-image-tag" \
+            --query 'Parameter.Value' \
+            --output text)
+
+          # Update parameter with current tag for future rollback
+          CURRENT_TAG=$(aws ssm get-parameter \
+            --name "/erato/production/image-tag" \
+            --query 'Parameter.Value' \
+            --output text)
+
+          aws ssm put-parameter \
+            --name "/erato/production/previous-image-tag" \
+            --value "$CURRENT_TAG" \
+            --type "String" \
+            --overwrite
+
+          # Deploy previous version
+          aws ssm put-parameter \
+            --name "/erato/production/image-tag" \
+            --value "$PREVIOUS_TAG" \
+            --type "String" \
+            --overwrite
+
+          # Trigger deployment
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "tag:Environment=production" \
+            --parameters 'commands=["cd /home/ec2-user/erato-app && docker-compose pull && docker-compose up -d"]'
+
+  # Post-deployment health checks
+  health-check:
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+
+    steps:
+      - name: Health check
+        run: |
+          # Wait for deployment to stabilize
+          sleep 120
+
+          # Check application health
+          if curl -f https://api.erato.yourdomain.com/health; then
+            echo "✅ Application is healthy"
+          else
+            echo "❌ Application health check failed"
+            exit 1
+          fi
+
+          # Check load balancer health
+          UNHEALTHY_COUNT=$(aws elbv2 describe-target-health \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --query 'TargetHealthDescriptions[?TargetHealth.State!=`healthy`].[Target.Id]' \
+            --output text | wc -l)
+
+          if [ "$UNHEALTHY_COUNT" -eq 0 ]; then
+            echo "✅ All instances are healthy"
+          else
+            echo "❌ $UNHEALTHY_COUNT unhealthy instances detected"
+            exit 1
+          fi
+
+  # Notification
+  notify:
+    needs: [test, security, build, deploy-staging, deploy-production, health-check]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()

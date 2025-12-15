@@ -720,6 +720,53 @@ export default function HomeScreen() {
     }
   };
 
+  // Handle create board from modal (used by CreateBoardModal)
+  const handleCreateBoard = async () => {
+    if (!newBoardName.trim()) {
+      showAlert({
+        title: 'Error',
+        message: 'Board name is required',
+        type: 'error',
+      });
+      return;
+    }
+
+    try {
+      // Create the board
+      const newBoard = await createBoard({
+        name: newBoardName.trim(),
+        is_public: newBoardIsPublic,
+        board_type: 'general',
+      });
+
+      // If we have a selected artwork (from save modal), save it to the new board
+      if (selectedArtwork) {
+        await saveArtworkToBoard(newBoard.id, selectedArtwork.id);
+      }
+
+      // Close modals and reset state
+      setShowCreateBoard(false);
+      setShowSaveModal(false);
+      setNewBoardName('');
+      setNewBoardIsPublic(false);
+
+      showAlert({
+        title: 'Success!',
+        message: selectedArtwork
+          ? `Created "${newBoardName}" and saved artwork`
+          : `Created "${newBoardName}"`,
+        type: 'success',
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to create board',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
   // Handle like artwork (optimistic update)
   const handleLikeArtwork = async (artwork) => {
     if (!token) {
@@ -1703,14 +1750,13 @@ export default function HomeScreen() {
             style={{ flex: 1, justifyContent: 'flex-end' }}
           >
             <TouchableWithoutFeedback onPress={() => {
-              if (!showCreateBoard) {
-                setShowSaveModal(false);
-                setShowCreateBoard(false);
-                setNewBoardName('');
-                setNewBoardIsPublic(false);
-              }
+              setShowSaveModal(false);
+              setShowCreateBoard(false);
+              setNewBoardName('');
+              setNewBoardIsPublic(false);
             }}>
               <View style={styles.saveBoardModalContent}>
+                {/* Modal content goes here */}
                 {/* Header with Safe Area */}
                 <View style={[styles.saveBoardHeader, { paddingTop: insets.top + spacing.md }]}>
                   <TouchableOpacity
@@ -1795,95 +1841,12 @@ export default function HomeScreen() {
                               </TouchableOpacity>
                             );
                           })}
-
-                          {/* Create New Board Button */}
-                          <TouchableOpacity
-                            style={styles.createNewBoardOption}
-                            onPress={() => setShowCreateBoard(true)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.createNewBoardThumbnail}>
-                              <Ionicons name="add" size={32} color={colors.text.secondary} />
-                            </View>
-                            <View style={styles.saveBoardInfo}>
-                              <Text style={styles.createNewBoardText}>Create board</Text>
-                            </View>
-                          </TouchableOpacity>
                         </ScrollView>
+
                       </>
-                    ) : (
-                      <ScrollView
-                        style={styles.createBoardFormContainer}
-                        contentContainerStyle={styles.createBoardFormContent}
-                        keyboardShouldPersistTaps="handled"
-                        showsVerticalScrollIndicator={false}
-                      >
-                        {/* Board Preview Thumbnail */}
-                        <View style={styles.createBoardPreview}>
-                          <View style={styles.createBoardPreviewGrid}>
-                            <View style={styles.previewGridItem} />
-                            <View style={styles.previewGridItem} />
-                            <View style={styles.previewGridItem} />
-                          </View>
-                        </View>
-
-                        {/* Board Name Input */}
-                        <View style={styles.createBoardInputSection}>
-                          <Text style={styles.createBoardLabel}>Board name</Text>
-                          <TextInput
-                            style={styles.createBoardNameInput}
-                            placeholder="Name your board"
-                            placeholderTextColor={colors.text.disabled}
-                            value={newBoardName}
-                            onChangeText={setNewBoardName}
-                            autoFocus
-                          />
-                        </View>
-
-                        {/* Privacy Toggle */}
-                        <TouchableOpacity
-                          style={styles.createBoardPrivacyToggle}
-                          onPress={() => setNewBoardIsPublic(!newBoardIsPublic)}
-                        >
-                          <View style={styles.privacyToggleLeft}>
-                            <Ionicons
-                              name={newBoardIsPublic ? 'globe-outline' : 'lock-closed-outline'}
-                              size={20}
-                              color={colors.text.primary}
-                            />
-                            <View>
-                              <Text style={styles.privacyToggleLabel}>
-                                {newBoardIsPublic ? 'Public' : 'Private'}
-                              </Text>
-                              <Text style={styles.privacyToggleDescription}>
-                                {newBoardIsPublic ? 'Anyone can see this board' : 'Only you can see this board'}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={[styles.privacySwitch, newBoardIsPublic && styles.privacySwitchActive]}>
-                            <View style={[styles.privacySwitchThumb, newBoardIsPublic && styles.privacySwitchThumbActive]} />
-                          </View>
-                        </TouchableOpacity>
-
-                        {/* Spacer */}
-                        <View style={{ flex: 1 }} />
-
-                        {/* Action Buttons */}
-                        <View style={styles.createBoardFooter}>
-                          <TouchableOpacity
-                            style={[styles.createBoardButton, !newBoardName.trim() && styles.createBoardButtonDisabled]}
-                            onPress={handleCreateAndSave}
-                            disabled={!newBoardName.trim()}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.createBoardButtonText}>Create</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </ScrollView>
-                    )}
                   </View>
                 </TouchableWithoutFeedback>
-              </View>
+                </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
         </View>
@@ -2060,6 +2023,21 @@ export default function HomeScreen() {
           />
         </>
       )}
+
+      {/* Create Board Modal */}
+      <CreateBoardModal
+        visible={showCreateBoard}
+        onClose={() => {
+          setShowCreateBoard(false);
+          setNewBoardName('');
+          setNewBoardIsPublic(false);
+        }}
+        onCreateBoard={handleCreateBoard}
+        boardName={newBoardName}
+        setBoardName={setNewBoardName}
+        isPublic={newBoardIsPublic}
+        setIsPublic={setNewBoardIsPublic}
+      />
     </View>
   );
 }
@@ -3273,7 +3251,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
     marginBottom: spacing.md,
+    marginHorizontal: spacing.md,
     borderRadius: 16, // Pinterest-style soft rounding
     backgroundColor: colors.primary + '10', // Soft tinted background
   },
@@ -3291,143 +3271,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 17,
     fontWeight: '600', // Pinterest-style
-  },
-
-  // Create Board Form (Pinterest Style)
-  createBoardFormContainer: {
-    flex: 1,
-  },
-  createBoardFormContent: {
-    flexGrow: 1,
-    padding: spacing.xl,
-    paddingTop: spacing.xxl,
-  },
-  createBoardPreview: {
-    alignSelf: 'center',
-    marginBottom: spacing.xxl,
-  },
-  createBoardPreviewGrid: {
-    width: 160,
-    height: 160,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.surface,
-    padding: spacing.sm,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    overflow: 'hidden',
-  },
-  previewGridItem: {
-    width: '48%',
-    height: '48%',
-    backgroundColor: colors.border + '40',
-    borderRadius: borderRadius.sm,
-  },
-  createBoardInputSection: {
-    marginBottom: spacing.lg,
-  },
-  createBoardLabel: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 16,
-    marginBottom: spacing.sm,
-  },
-  createBoardNameInput: {
-    backgroundColor: 'transparent',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingHorizontal: 0,
-    color: colors.text.primary,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  createBoardPrivacyToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    padding: spacing.md + 2,
-    borderRadius: 16,
-    marginTop: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  privacyToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  privacyToggleLabel: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  privacyToggleDescription: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 13,
-    fontWeight: '400',
-    marginTop: 2,
-  },
-  privacySwitch: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.border + '60',
-    padding: 2,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  privacySwitchActive: {
-    backgroundColor: colors.primary,
-  },
-  privacySwitchThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  privacySwitchThumbActive: {
-    transform: [{ translateX: 20 }],
-  },
-  createBoardFooter: {
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
-  createBoardButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md + 2,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
-  createBoardButtonDisabled: {
-    backgroundColor: colors.text.disabled,
-    opacity: 0.5,
-  },
-  createBoardButtonText: {
-    ...typography.button,
-    color: colors.text.primary,
-    fontWeight: '700',
-    fontSize: 16,
   },
 
   // Pinterest-Style Modal Styles

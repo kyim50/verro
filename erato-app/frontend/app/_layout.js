@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
@@ -154,54 +155,56 @@ export default function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
-            animation: 'fade',
-            gestureEnabled: true,
-            gestureDirection: 'horizontal',
-            animationDuration: 100, // Shorter transitions
-            fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
-          }}
-        >
-          <Stack.Screen 
-            name="auth/login" 
-            options={{ 
-              gestureEnabled: false, // Disable swipe back on login
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.background },
               animation: 'fade',
-              animationDuration: 100, // Shorter transition for logout
-            }} 
+              gestureEnabled: true,
+              gestureDirection: 'horizontal',
+              animationDuration: 100, // Shorter transitions
+              fullScreenGestureEnabled: false, // Prevent full screen swipe that can cause logout
+            }}
+          >
+            <Stack.Screen
+              name="auth/login"
+              options={{
+                gestureEnabled: false, // Disable swipe back on login
+                animation: 'fade',
+                animationDuration: 100, // Shorter transition for logout
+              }}
+            />
+            <Stack.Screen
+              name="auth/register"
+              options={{
+                gestureEnabled: false, // Disable swipe back on register
+              }}
+            />
+            <Stack.Screen
+              name="auth/profile-picture"
+              options={{
+                gestureEnabled: false, // Disable swipe back on profile picture
+              }}
+            />
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                gestureEnabled: false, // Disable swipe back from tabs to auth
+              }}
+            />
+          </Stack>
+          <Toast
+            config={toastConfig}
+            topOffset={60}
+            visibilityTime={3000}
           />
-          <Stack.Screen 
-            name="auth/register" 
-            options={{ 
-              gestureEnabled: false, // Disable swipe back on register
-            }} 
-          />
-          <Stack.Screen 
-            name="auth/profile-picture" 
-            options={{ 
-              gestureEnabled: false, // Disable swipe back on profile picture
-            }} 
-          />
-          <Stack.Screen 
-            name="(tabs)" 
-            options={{ 
-              gestureEnabled: false, // Disable swipe back from tabs to auth
-            }} 
-          />
-        </Stack>
-        <Toast 
-          config={toastConfig}
-          topOffset={60}
-          visibilityTime={3000}
-        />
-        <StyledAlert />
-      </GestureHandlerRootView>
-    </ErrorBoundary>
+          <StyledAlert />
+        </GestureHandlerRootView>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
