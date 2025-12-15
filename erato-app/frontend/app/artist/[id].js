@@ -764,8 +764,9 @@ export default function ArtistProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Artist Header */}
+        {/* Artist Header - Pinterest-inspired clean layout */}
         <View style={styles.artistHeader}>
+          {/* Avatar */}
           {/* Avatar */}
           <View style={styles.avatarContainer}>
             <Image
@@ -786,9 +787,9 @@ export default function ArtistProfileScreen() {
               <Text style={styles.artistUsername} numberOfLines={1}>
                 @{artist.users?.username}
               </Text>
-              <Ionicons 
-                name="checkmark-circle" 
-                size={20} 
+              <Ionicons
+                name="checkmark-circle"
+                size={20}
                 color={(artist.users?.is_verified || artist.users?.verified) ? colors.error : colors.text.disabled}
                 style={styles.verifiedBadge}
               />
