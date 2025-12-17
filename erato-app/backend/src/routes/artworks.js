@@ -748,21 +748,35 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    // Extract tags from artworks user has engaged with
-    const engagedTags = new Set();
+    // Extract tags from artworks user has engaged with AND track their weights
+    const engagedTags = new Map(); // tag -> count/weight
     const engagedArtworkIds = new Set();
 
     engagements?.forEach(eng => {
       engagedArtworkIds.add(eng.artwork_id);
-      eng.artworks?.tags?.forEach(tag => engagedTags.add(tag));
+      eng.artworks?.tags?.forEach(tag => {
+        // Weight: like=3, save=2, commission_inquiry=5
+        const weight = eng.engagement_type === 'commission_inquiry' ? 5 :
+                      eng.engagement_type === 'like' ? 3 : 2;
+        engagedTags.set(tag, (engagedTags.get(tag) || 0) + weight);
+      });
     });
 
-    // Combine preferred styles and engaged tags
-    const allPreferredTags = new Set([
-      ...(preferences?.preferred_styles || []),
-      ...(preferences?.interests || []),
-      ...Array.from(engagedTags)
-    ]);
+    // Combine preferred styles and engaged tags (engaged tags weighted higher)
+    const allPreferredTags = new Map();
+
+    // Add quiz preferences with lower weight (1 point each)
+    (preferences?.preferred_styles || []).forEach(tag => {
+      allPreferredTags.set(tag, (allPreferredTags.get(tag) || 0) + 1);
+    });
+    (preferences?.interests || []).forEach(tag => {
+      allPreferredTags.set(tag, (allPreferredTags.get(tag) || 0) + 1);
+    });
+
+    // Add engaged tags with their accumulated weights (much higher priority)
+    engagedTags.forEach((weight, tag) => {
+      allPreferredTags.set(tag, (allPreferredTags.get(tag) || 0) + weight);
+    });
 
     let query = supabaseAdmin
       .from('artworks_with_engagement')
@@ -828,20 +842,21 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
     // Filter by preferred tags if available (but don't be too restrictive)
     let artworks = allArtworks || [];
     if (allPreferredTags.size > 0) {
-      // Score all artworks, then filter to top matches
+      // Score all artworks based on weighted tag matches
       const scored = artworks.map(artwork => {
         const matchingTags = artwork.tags?.filter(tag => allPreferredTags.has(tag)) || [];
-        return { artwork, matchingTags: matchingTags.length };
+        const weightedScore = matchingTags.reduce((sum, tag) => sum + (allPreferredTags.get(tag) || 0), 0);
+        return { artwork, matchingTags: matchingTags.length, weightedScore };
       });
-      
-      // Sort by tag matches, but include some variety
-      scored.sort((a, b) => b.matchingTags - a.matchingTags);
-      
+
+      // Sort by weighted score (not just count)
+      scored.sort((a, b) => b.weightedScore - a.weightedScore);
+
       // Take top matches, but ensure we have enough results
       artworks = scored
         .slice(0, Math.max(parseInt(limit), scored.filter(s => s.matchingTags > 0).length))
         .map(s => s.artwork);
-      
+
       // If we don't have enough matches, fill with recent artworks
       if (artworks.length < parseInt(limit)) {
         const recentArtworks = allArtworks
@@ -849,21 +864,38 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
           .slice(0, parseInt(limit) - artworks.length);
         artworks = [...artworks, ...recentArtworks];
       }
-      
+
       // Limit to requested amount
       artworks = artworks.slice(0, parseInt(limit));
     }
 
     // Score artworks based on:
-    // 1. Tag match with user preferences (40% if preferences exist, else 0%)
-    // 2. Engagement score (30%)
-    // 3. Recency (30%)
+    // 1. Weighted tag match with user preferences (50% if preferences exist, else 0%)
+    // 2. Engagement score (25%)
+    // 3. Recency (25%)
     const scoredArtworks = artworks.map(artwork => {
-      // Tag match score
+      // Calculate weighted tag match score
       const matchingTags = artwork.tags?.filter(tag => allPreferredTags.has(tag)) || [];
-      const tagMatchScore = allPreferredTags.size > 0 && matchingTags.length > 0
-        ? Math.min(100, (matchingTags.length / Math.max(1, artwork.tags?.length || 1)) * 100)
-        : allPreferredTags.size > 0 ? 20 : 50; // Lower score if no match but preferences exist
+      let tagMatchScore = 0;
+
+      if (allPreferredTags.size > 0 && matchingTags.length > 0) {
+        // Calculate weighted score based on tag importance
+        const totalWeight = matchingTags.reduce((sum, tag) => sum + (allPreferredTags.get(tag) || 0), 0);
+        const maxPossibleWeight = Math.max(...Array.from(allPreferredTags.values())) * matchingTags.length;
+
+        // Normalize to 0-100, with bonus for multiple matching tags
+        tagMatchScore = Math.min(100, (totalWeight / maxPossibleWeight) * 100 * 1.2);
+
+        // Extra boost if artwork matches RECENTLY LIKED tags (weight > 2)
+        const hasRecentLikedTags = matchingTags.some(tag => allPreferredTags.get(tag) > 2);
+        if (hasRecentLikedTags) {
+          tagMatchScore = Math.min(100, tagMatchScore * 1.3); // 30% boost for recently liked content
+        }
+      } else if (allPreferredTags.size > 0) {
+        tagMatchScore = 15; // Lower score if no match but preferences exist
+      } else {
+        tagMatchScore = 50; // Neutral score if no preferences
+      }
 
       // Engagement score (normalized to 0-100)
       const engagementScore = Math.min(100, (artwork.engagement_score || 0) * 10);
@@ -872,10 +904,10 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
       const daysOld = (Date.now() - new Date(artwork.created_at).getTime()) / (1000 * 60 * 60 * 24);
       const recencyScore = Math.max(0, 100 - (daysOld * 2)); // 2 points off per day
 
-      // Calculate final score - adjust weights based on whether preferences exist
+      // Calculate final score - give MORE weight to tag matches
       const hasPreferences = allPreferredTags.size > 0;
       const finalScore = hasPreferences
-        ? (tagMatchScore * 0.4) + (engagementScore * 0.3) + (recencyScore * 0.3)
+        ? (tagMatchScore * 0.5) + (engagementScore * 0.25) + (recencyScore * 0.25)
         : (engagementScore * 0.5) + (recencyScore * 0.5); // More weight on engagement/recency if no preferences
 
       return {
@@ -883,7 +915,8 @@ router.get('/personalized/feed', authenticate, async (req, res, next) => {
         personalization_score: finalScore,
         match_reasons: {
           matching_tags: matchingTags,
-          tag_match_percentage: artwork.tags?.length > 0 
+          tag_weights: matchingTags.map(tag => ({ tag, weight: allPreferredTags.get(tag) || 0 })),
+          tag_match_percentage: artwork.tags?.length > 0
             ? Math.round((matchingTags.length / artwork.tags.length) * 100)
             : 0,
         }
