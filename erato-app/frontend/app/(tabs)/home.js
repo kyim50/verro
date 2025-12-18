@@ -196,17 +196,63 @@ export default function HomeScreen() {
         
         if (token) {
           try {
-            const prefsResponse = await axios.get(`${API_URL}/artists/preferences/quiz`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            
+            // Load both quiz preferences AND engagement-based preferences
+            const [prefsResponse, engagementStyles] = await Promise.all([
+              axios.get(`${API_URL}/artists/preferences/quiz`, {
+                headers: { Authorization: `Bearer ${token}` }
+              }).catch(() => ({ data: null })),
+              // Get personalized info to extract tag-based style preferences
+              axios.get(`${API_URL}/artworks/personalized/feed?limit=1`, {
+                headers: { Authorization: `Bearer ${token}` }
+              }).catch(() => ({ data: { personalization_info: {} } }))
+            ]);
+
+            // Start with quiz preferences (weight 1 each)
             if (prefsResponse.data && prefsResponse.data.preferred_styles?.length > 0) {
               preferredStyleIds = prefsResponse.data.preferred_styles.map(p => p.style_id || p);
               prefsResponse.data.preferred_styles.forEach(pref => {
                 const styleId = pref.style_id || pref;
-                preferredWeights[styleId] = pref.weight || 0;
+                preferredWeights[styleId] = pref.weight || 1;
               });
-              
+            }
+
+            // Extract styles from liked artwork tags (higher weight)
+            // Get tags from a sample of artworks to infer style preferences
+            const sampleArtworks = engagementStyles.data?.artworks || [];
+            const tagFrequency = {};
+
+            sampleArtworks.forEach(artwork => {
+              artwork.match_reasons?.matching_tags?.forEach(tag => {
+                tagFrequency[tag.toLowerCase()] = (tagFrequency[tag.toLowerCase()] || 0) + 1;
+              });
+            });
+
+            // Match frequent tags to style names
+            allStyles.forEach(style => {
+              const styleName = style.name.toLowerCase();
+              const styleWords = styleName.split(/[\s-]+/);
+
+              // Check if any tag matches style name or contains style keywords
+              let matchScore = 0;
+              Object.entries(tagFrequency).forEach(([tag, freq]) => {
+                if (tag === styleName || styleName.includes(tag)) {
+                  matchScore += freq * 3; // Exact match = 3x weight
+                } else if (styleWords.some(word => tag.includes(word) || word.includes(tag))) {
+                  matchScore += freq; // Partial match = 1x weight
+                }
+              });
+
+              if (matchScore > 0) {
+                if (!preferredStyleIds.includes(style.id)) {
+                  preferredStyleIds.push(style.id);
+                }
+                // Engagement-based styles get higher weight than quiz
+                const currentWeight = preferredWeights[style.id] || 0;
+                preferredWeights[style.id] = Math.max(currentWeight, matchScore);
+              }
+            });
+
+            if (preferredStyleIds.length > 0) {
               const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
               // Sort preferred styles by weight (highest first)
               preferredStyles.sort((a, b) => {
