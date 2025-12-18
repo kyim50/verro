@@ -1506,7 +1506,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     alignItems: 'center',
   },
   instructionsButton: {

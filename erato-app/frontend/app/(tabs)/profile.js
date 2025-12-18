@@ -528,7 +528,7 @@ export default function ProfileScreen() {
                       <Ionicons name="pricetag" size={20} color={colors.primary} />
                     </View>
                     <Text style={styles.infoGridLabel}>Pricing</Text>
-                    <Text style={styles.infoGridValue}>
+                    <Text style={styles.infoGridValue} numberOfLines={2}>
                       ${profile.artist.min_price} - ${profile.artist.max_price}
                     </Text>
                   </View>
@@ -674,19 +674,27 @@ export default function ProfileScreen() {
               )}
             </View>
 
+            {/* Rating Section */}
+            <View style={styles.section}>
+              <View style={styles.ratingCard}>
+                <View style={styles.ratingIconContainer}>
+                  <Ionicons name="star" size={32} color={colors.primary} />
+                </View>
+                <Text style={styles.ratingValue}>
+                  {profile.artist.average_rating?.toFixed(1) || '0.0'}
+                </Text>
+                <Text style={styles.ratingLabel}>
+                  {reviewsReceived.length} {reviewsReceived.length === 1 ? 'Review' : 'Reviews'}
+                </Text>
+              </View>
+            </View>
+
             {/* Reviews */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleContainer}>
                   <Ionicons name="star-outline" size={20} color={colors.primary} />
                   <Text style={styles.sectionTitle}>Reviews</Text>
-                  {activeReviewTab === 'received' && reviewsReceived.length > 0 && (
-                    <View style={styles.ratingBadge}>
-                      <Text style={styles.ratingBadgeText}>
-                        {profile.artist.average_rating?.toFixed(1) || '0.0'}
-                      </Text>
-                    </View>
-                  )}
                 </View>
               </View>
 
@@ -772,88 +780,6 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* Client Stats Section (only for non-artists) */}
-        {!isArtist && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleContainer}>
-                <Ionicons name="stats-chart" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Overview</Text>
-              </View>
-            </View>
-            <View style={styles.clientStatsCard}>
-              <TouchableOpacity
-                style={styles.clientStatItem}
-                onPress={() => router.push('/(tabs)/boards')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.clientStatIconContainer}>
-                  <Ionicons name="albums" size={22} color={colors.primary} />
-                </View>
-                <View style={styles.clientStatContent}>
-                  <Text style={styles.clientStatValue}>{profile?.boards?.length || 0}</Text>
-                  <Text style={styles.clientStatLabel}>Collections</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
-              </TouchableOpacity>
-
-              <View style={styles.clientStatDivider} />
-
-              <TouchableOpacity
-                style={styles.clientStatItem}
-                onPress={() => router.push('/(tabs)/explore')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.clientStatIconContainer}>
-                  <Ionicons name="briefcase" size={22} color={colors.primary} />
-                </View>
-                <View style={styles.clientStatContent}>
-                  <Text style={styles.clientStatValue}>
-                    {profile?.commissions_count || 0}
-                  </Text>
-                  <Text style={styles.clientStatLabel}>Commissions</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
-              </TouchableOpacity>
-
-              <View style={styles.clientStatDivider} />
-
-              <TouchableOpacity
-                style={styles.clientStatItem}
-                onPress={() => router.push('/commission-requests')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.clientStatIconContainer}>
-                  <Ionicons name="list" size={22} color={colors.primary} />
-                </View>
-                <View style={styles.clientStatContent}>
-                  <Text style={styles.clientStatValue}>Post Request</Text>
-                  <Text style={styles.clientStatLabel}>Commission Board</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.text.disabled} />
-              </TouchableOpacity>
-
-              <View style={styles.clientStatDivider} />
-
-              <View style={styles.clientStatItem}>
-                <View style={styles.clientStatIconContainer}>
-                  <Ionicons name="calendar" size={22} color={colors.text.secondary} />
-                </View>
-                <View style={styles.clientStatContent}>
-                  <Text style={styles.clientStatValue}>
-                    {profile?.created_at
-                      ? new Date(profile.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          year: 'numeric'
-                        })
-                      : 'N/A'}
-                  </Text>
-                  <Text style={styles.clientStatLabel}>Member Since</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
 
         {/* Quick Actions (for artists) */}
         {isArtist && (
@@ -1470,9 +1396,11 @@ const styles = StyleSheet.create({
   infoGridValue: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 16,
+    fontSize: IS_SMALL_SCREEN ? 13 : 15,
     fontWeight: '700',
     textAlign: 'center',
+    flexWrap: 'wrap',
+    width: '100%',
   },
   rowLeft: {
     flexDirection: 'row',
@@ -1557,6 +1485,42 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
     fontWeight: '600',
+  },
+  ratingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  ratingIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  ratingValue: {
+    ...typography.h1,
+    fontSize: 40,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    letterSpacing: -1,
+  },
+  ratingLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '500',
   },
   ratingBadge: {
     backgroundColor: colors.status.warning + '20',
@@ -1767,6 +1731,7 @@ const styles = StyleSheet.create({
   },
   clientStatContent: {
     flex: 1,
+    minWidth: 0,
   },
   clientStatValue: {
     ...typography.h3,
@@ -1775,12 +1740,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.3,
     marginBottom: spacing.xs / 2,
+    flexWrap: 'wrap',
   },
   clientStatLabel: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 13 : 14,
     fontWeight: '500',
+    flexWrap: 'nowrap',
   },
   quickActionsList: {
     marginTop: spacing.sm,

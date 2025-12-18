@@ -13,6 +13,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { uploadImage } from '../../utils/imageUpload';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -44,6 +46,8 @@ export default function CreateCommissionScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(!artistId);
   const [currentArtistId, setCurrentArtistId] = useState(artistId);
+  const [referenceImages, setReferenceImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const searchTimeoutRef = useRef(null);
 
@@ -128,6 +132,37 @@ export default function CreateCommissionScreen() {
     setSearchResults([]);
   };
 
+  const handlePickImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets) {
+      setUploadingImages(true);
+      const uploadedUrls = [];
+
+      for (const asset of result.assets) {
+        try {
+          const url = await uploadImage(asset.uri, 'commissions', '', token);
+          uploadedUrls.push(url);
+        } catch (error) {
+          Toast.show({
+            type: 'error',
+            text1: 'Upload Failed',
+            text2: 'Failed to upload image. Please try again.',
+          });
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        setReferenceImages([...referenceImages, ...uploadedUrls]);
+      }
+      setUploadingImages(false);
+    }
+  };
+
   const handleSubmit = async () => {
     // Check if current user is an artist
     if (user?.artists) {
@@ -184,6 +219,7 @@ export default function CreateCommissionScreen() {
           deadline: deadline.trim() || null,
           package_id: selectedPackageId || null,
           selected_addons: selectedAddons,
+          reference_images: referenceImages,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -521,6 +557,58 @@ export default function CreateCommissionScreen() {
           />
         </View>
 
+        {/* Reference Images */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Reference Images (Optional)</Text>
+          <Text style={styles.helperText}>
+            Share visual references to help the artist understand your vision
+          </Text>
+
+          {/* Image Preview Grid */}
+          {referenceImages.length > 0 && (
+            <View style={styles.referenceImagesGrid}>
+              {referenceImages.map((imageUrl, index) => (
+                <View key={index} style={styles.referenceImageItem}>
+                  <Image source={{ uri: imageUrl }} style={styles.referenceImagePreview} contentFit="cover" />
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={() => {
+                      setReferenceImages(referenceImages.filter((_, i) => i !== index));
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close-circle" size={24} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Add Image Button */}
+          <TouchableOpacity
+            style={styles.addImageButton}
+            onPress={handlePickImages}
+            disabled={uploadingImages}
+            activeOpacity={0.8}
+          >
+            {uploadingImages ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="images-outline" size={28} color={colors.primary} />
+                <Text style={styles.addImageButtonText}>
+                  {referenceImages.length === 0 ? 'Add Reference Images' : 'Add More Images'}
+                </Text>
+                {referenceImages.length > 0 && (
+                  <Text style={styles.addImageButtonSubtext}>
+                    {referenceImages.length} added
+                  </Text>
+                )}
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.helpBox}>
           <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
           <Text style={styles.helpText}>
@@ -803,6 +891,58 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     flex: 1,
     lineHeight: 20,
+  },
+  helperText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  referenceImagesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  referenceImageItem: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  referenceImagePreview: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.surface,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+  },
+  addImageButton: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    gap: spacing.xs,
+  },
+  addImageButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  addImageButtonSubtext: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
   },
   footer: {
     paddingHorizontal: spacing.lg,

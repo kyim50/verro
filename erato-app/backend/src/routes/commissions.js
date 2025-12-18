@@ -17,7 +17,8 @@ router.post('/request', authenticate, async (req, res) => {
       budget,
       deadline,
       package_id: packageId,
-      selected_addons: selectedAddons = []
+      selected_addons: selectedAddons = [],
+      reference_images: referenceImages = []
     } = req.body;
 
     if (!artist_id || !details) {
@@ -124,6 +125,25 @@ router.post('/request', authenticate, async (req, res) => {
       .single();
 
     if (commissionError) throw commissionError;
+
+    // Add reference images to commission files
+    if (referenceImages && referenceImages.length > 0) {
+      const fileInserts = referenceImages.map(imageUrl => ({
+        commission_id: commission.id,
+        uploader_id: req.user.id,
+        file_url: imageUrl,
+        file_name: `Reference - ${imageUrl.split('/').pop()}`,
+        file_type: 'image'
+      }));
+
+      const { error: filesError } = await supabaseAdmin
+        .from('commission_files')
+        .insert(fileInserts);
+
+      if (filesError) {
+        console.error('Error adding reference images to commission:', filesError);
+      }
+    }
 
     // Check if there's an existing conversation between client and artist
     // First, get all conversations the client is in
@@ -1164,6 +1184,43 @@ router.patch('/:id/progress/:progressId/approve', authenticate, async (req, res)
     res.json(updated);
   } catch (error) {
     console.error('Error updating approval status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get commission files (including reference images)
+router.get('/:id/files', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get the commission to verify access
+    const { data: commission, error: commissionError } = await supabaseAdmin
+      .from('commissions')
+      .select('id, client_id, artist_id')
+      .eq('id', id)
+      .single();
+
+    if (commissionError || !commission) {
+      return res.status(404).json({ error: 'Commission not found' });
+    }
+
+    // Verify user is either client or artist
+    if (commission.client_id !== req.user.id && commission.artist_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all files for this commission
+    const { data: files, error: filesError } = await supabaseAdmin
+      .from('commission_files')
+      .select('*')
+      .eq('commission_id', id)
+      .order('created_at', { ascending: true });
+
+    if (filesError) throw filesError;
+
+    res.json({ files: files || [] });
+  } catch (error) {
+    console.error('Error fetching commission files:', error);
     res.status(500).json({ error: error.message });
   }
 });
