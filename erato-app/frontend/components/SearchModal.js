@@ -417,8 +417,8 @@ export default function SearchModal({ visible, onClose }) {
             </View>
           )}
 
-          {/* Popular on Verro section - Pinterest style masonry */}
-          {popularArtworks.length > 0 && (
+          {/* Popular on Verro section - Pinterest style masonry - Only show on Artworks tab */}
+          {popularArtworks.length > 0 && activeTab === 'artworks' && (
             <View style={styles.discoverySection}>
               <Text style={[styles.discoverySectionTitle, styles.centeredSectionTitle]}>Popular on Verro</Text>
               <View style={styles.masonryContainer}>
