@@ -9,13 +9,13 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function LoginScreen() {
-  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function LoginScreen() {
   const login = useAuthStore((state) => state.login);
 
   const handleLogin = async () => {
-    if (!emailOrUsername || !password) {
+    if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
@@ -32,10 +32,9 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
 
-    const result = await login(emailOrUsername, password);
+    const result = await login(email, password);
 
     if (result.success) {
-      // Navigate directly to home (loading already shown in _layout)
       router.replace('/(tabs)/home');
     } else {
       setError(result.error || 'Login failed');
@@ -44,77 +43,141 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        {/* Logo/Title */}
+    <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>Verro</Text>
-          <Text style={styles.tagline}>Find Your Perfect Artist</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.push('/auth/welcome')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Log in</Text>
         </View>
 
-        {/* Form */}
-        <View style={styles.form}>
+        {/* Content */}
+        <View style={styles.content}>
+          <Text style={styles.title}>Welcome to Verro</Text>
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email or Username"
-            placeholderTextColor={colors.text.disabled}
-            value={emailOrUsername}
-            onChangeText={setEmailOrUsername}
-            autoCapitalize="none"
-            editable={!loading}
-          />
-
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Password"
-              placeholderTextColor={colors.text.disabled}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              editable={!loading}
-            />
-            <TouchableOpacity
-              style={styles.eyeButton}
-              onPress={() => setShowPassword(!showPassword)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={22}
-                color={colors.text.secondary}
-              />
-            </TouchableOpacity>
-          </View>
+          {/* OAuth Buttons */}
+          <TouchableOpacity
+            style={styles.oauthButton}
+            onPress={() => {
+              setError('Google login coming soon');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="logo-google" size={20} color={colors.text.primary} />
+            <Text style={styles.oauthButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={styles.oauthButton}
+            onPress={() => {
+              setError('Apple login coming soon');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="logo-apple" size={20} color={colors.text.primary} />
+            <Text style={styles.oauthButtonText}>Continue with Apple</Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Email Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.text.disabled}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!loading}
+            />
+          </View>
+
+          {/* Password Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password"
+                placeholderTextColor={colors.text.disabled}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Forgot Password */}
+          <TouchableOpacity
+            onPress={() => router.push('/auth/forgot-password')}
+            style={styles.forgotPasswordContainer}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
+          </TouchableOpacity>
+
+          {/* Login Button */}
+          <TouchableOpacity
+            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
             onPress={handleLogin}
             disabled={loading}
+            activeOpacity={0.9}
           >
             {loading ? (
-              <ActivityIndicator color={colors.text.primary} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>Log In</Text>
+              <Text style={styles.loginButtonText}>Log in</Text>
             )}
           </TouchableOpacity>
 
+          {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <Link href="/auth/register" asChild>
-              <TouchableOpacity>
-                <Text style={styles.link}>Sign Up</Text>
-              </TouchableOpacity>
-            </Link>
+            <Text style={styles.footerText}>Not on Verro yet? </Text>
+            <TouchableOpacity onPress={() => router.push('/auth/signup-flow')}>
+              <Text style={styles.footerLink}>Sign up</Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Terms */}
+          <Text style={styles.termsText}>
+            By continuing, you agree to Verro's{' '}
+            <Text style={styles.termsLink}>Terms of Service</Text> and acknowledge
+            you've read our{' '}
+            <Text style={styles.termsLink}>Privacy Policy</Text>
+          </Text>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -123,41 +186,100 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+  keyboardView: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xxl * 2,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
   },
-  logo: {
-    fontSize: 52,
-    fontWeight: '800',
-    color: colors.primary,
+  backButton: {
+    padding: spacing.sm,
+  },
+  headerTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    justifyContent: 'center',
+  },
+  title: {
+    ...typography.h1,
+    color: colors.text.primary,
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  error: {
+    color: colors.status.error,
     marginBottom: spacing.md,
-    letterSpacing: -1,
+    textAlign: 'center',
+    ...typography.body,
   },
-  tagline: {
+  oauthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  oauthButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.md,
+    gap: spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
-  form: {
-    width: '100%',
+  inputContainer: {
+    marginBottom: spacing.sm,
+  },
+  label: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
   },
   input: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    color: colors.text.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     fontSize: 16,
+    color: colors.text.primary,
     borderWidth: 1,
-    borderColor: colors.border + '40',
-    textAlignVertical: 'center',
+    borderColor: colors.border,
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -165,52 +287,71 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border + '40',
-    marginBottom: spacing.md,
+    borderColor: colors.border,
   },
   passwordInput: {
     flex: 1,
-    padding: spacing.md,
-    color: colors.text.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     fontSize: 16,
-    textAlignVertical: 'center',
+    color: colors.text.primary,
   },
   eyeButton: {
     padding: spacing.md,
-    paddingLeft: spacing.sm,
   },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  forgotPasswordText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loginButton: {
+    backgroundColor: '#E60023',
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md,
     alignItems: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
-  buttonDisabled: {
+  loginButtonDisabled: {
     opacity: 0.5,
   },
-  buttonText: {
+  loginButtonText: {
     ...typography.button,
-    color: colors.text.primary,
-  },
-  error: {
-    color: colors.status.error,
-    marginBottom: spacing.md,
-    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   footerText: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: 14,
   },
-  link: {
+  footerLink: {
     ...typography.body,
-    color: colors.primary,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  termsText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  termsLink: {
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
