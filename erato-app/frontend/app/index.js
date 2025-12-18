@@ -53,16 +53,12 @@ export default function Index() {
     );
   }
 
-  // Show intro on first launch (unless already authenticated)
-  if (isFirstLaunch && !isAuthenticated) {
-    return <Redirect href="/onboarding/intro" />;
-  }
-
+  // Show welcome screen for unauthenticated users
   if (isAuthenticated) {
     return <Redirect href="/(tabs)/home" />;
   }
 
-  return <Redirect href="/auth/login" />;
+  return <Redirect href="/auth/welcome" />;
 }
 
 const styles = StyleSheet.create({

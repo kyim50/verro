@@ -27,6 +27,7 @@ router.post(
     body('fullName').optional().trim(),
     body('userType').isIn(['artist', 'client', 'both']),
     body('avatar_url').optional().trim(), // Will be added on profile picture page
+    body('dob').optional().isISO8601().toDate(), // Date of birth for NSFW age verification
   ],
   async (req, res, next) => {
     try {
@@ -35,7 +36,7 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, username, password, fullName, userType, avatar_url } = req.body;
+      const { email, username, password, fullName, userType, avatar_url, dob } = req.body;
 
       console.log('Registration attempt:', { email, username, userType, hasPassword: !!password });
 
@@ -111,6 +112,7 @@ router.post(
           full_name: fullName,
           user_type: userType,
           avatar_url: avatar_url || '', // Optional - can be added on profile picture screen
+          date_of_birth: dob || null, // For NSFW age verification
         })
         .select()
         .single();
@@ -301,5 +303,70 @@ router.post('/logout', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+// Forgot Password - Request reset email
+router.post(
+  '/forgot-password',
+  authLimiter,
+  [body('email').isEmail().normalizeEmail()],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { email } = req.body;
+
+      // Use Supabase's built-in password reset
+      const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+        redirectTo: `${process.env.FRONTEND_URL || 'exp://192.168.1.1:8081'}/auth/reset-password`,
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        // Don't reveal if email exists or not for security
+      }
+
+      // Always return success to prevent email enumeration
+      res.json({
+        message: 'If an account with that email exists, we sent a password reset link',
+        success: true
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Reset Password with token
+router.post(
+  '/reset-password',
+  [
+    body('token').notEmpty(),
+    body('password').isLength({ min: 8 }),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { token, password } = req.body;
+
+      // Update password using the reset token
+      const { error } = await supabaseAdmin.auth.updateUser({
+        password,
+      });
+
+      if (error) throw error;
+
+      res.json({ message: 'Password reset successfully', success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default router;
