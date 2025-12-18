@@ -1042,43 +1042,55 @@ export default function CommissionDashboard() {
               {isArtist ? 'Commissions' : 'My Commissions'}
             </Text>
             <Text style={styles.headerDescription}>
-              {isArtist 
-                ? 'Manage your commission requests and track progress' 
-                : 'View and manage your commission requests'}
+              {isArtist
+                ? 'Track and manage your creative projects'
+                : 'Follow your commission journey'}
             </Text>
           </View>
         </View>
 
-        {/* Stats Section - Pinterest Style Cards */}
+        {/* Stats Section - Clean Pinterest Style Cards */}
         <View style={styles.pinterestStatsSection}>
           <View style={styles.pinterestStatsRow}>
-            <View style={[styles.pinterestStatCard, styles.pinterestStatCardPending]}>
+            <TouchableOpacity
+              style={styles.pinterestStatCard}
+              onPress={() => setSelectedFilter('pending')}
+              activeOpacity={0.7}
+            >
               <View style={[styles.pinterestStatIconCircle, { backgroundColor: colors.status.warning + '15' }]}>
-                <Ionicons name="time" size={20} color={colors.status.warning} />
+                <Ionicons name="time-outline" size={20} color={colors.status.warning} />
               </View>
               <Text style={styles.pinterestStatValue}>{commissionStats.pending}</Text>
               <Text style={styles.pinterestStatLabel}>Pending</Text>
-            </View>
+            </TouchableOpacity>
 
-            <View style={[styles.pinterestStatCard, styles.pinterestStatCardActive]}>
+            <TouchableOpacity
+              style={styles.pinterestStatCard}
+              onPress={() => setSelectedFilter('active')}
+              activeOpacity={0.7}
+            >
               <View style={[styles.pinterestStatIconCircle, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="flash" size={20} color={colors.primary} />
+                <Ionicons name="rocket-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.pinterestStatValue}>{commissionStats.in_progress}</Text>
               <Text style={styles.pinterestStatLabel}>Active</Text>
-            </View>
+            </TouchableOpacity>
 
-            <View style={[styles.pinterestStatCard, styles.pinterestStatCardCompleted]}>
+            <TouchableOpacity
+              style={styles.pinterestStatCard}
+              onPress={() => setSelectedFilter('completed')}
+              activeOpacity={0.7}
+            >
               <View style={[styles.pinterestStatIconCircle, { backgroundColor: colors.status.success + '15' }]}>
-                <Ionicons name="checkmark-circle" size={20} color={colors.status.success} />
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.status.success} />
               </View>
               <Text style={styles.pinterestStatValue}>{commissionStats.completed}</Text>
               <Text style={styles.pinterestStatLabel}>Done</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Action Buttons Section - Below stats */}
+        {/* Quick Actions Section */}
         <View style={styles.actionsSection}>
           <ScrollView
             horizontal
@@ -1089,7 +1101,7 @@ export default function CommissionDashboard() {
               style={styles.actionButton}
               onPress={() => setShowStatsModal(true)}
             >
-              <Ionicons name="stats-chart" size={20} color={colors.primary} />
+              <Ionicons name="stats-chart" size={18} color={colors.primary} />
               <Text style={styles.actionButtonText}>Stats</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1116,14 +1128,14 @@ export default function CommissionDashboard() {
                 }, 100);
               }}
             >
-              <Ionicons name="analytics-outline" size={20} color={colors.primary} />
+              <Ionicons name="analytics-outline" size={18} color={colors.primary} />
               <Text style={styles.actionButtonText}>Engagement</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/commission-requests')}
             >
-              <Ionicons name="list-outline" size={20} color={colors.primary} />
+              <Ionicons name="list-outline" size={18} color={colors.primary} />
               <Text style={styles.actionButtonText}>
                 {isArtist ? 'Quest Board' : 'Requests'}
               </Text>
@@ -1136,7 +1148,7 @@ export default function CommissionDashboard() {
                 loadAllTransactions();
               }}
             >
-              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+              <Ionicons name="receipt-outline" size={18} color={colors.primary} />
               <Text style={styles.actionButtonText}>Transactions</Text>
             </TouchableOpacity>
             {isArtist && (
@@ -1144,7 +1156,7 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => setShowTemplatesModal(true)}
               >
-                <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.primary} />
+                <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.primary} />
                 <Text style={styles.actionButtonText}>Templates</Text>
               </TouchableOpacity>
             )}
@@ -1153,7 +1165,7 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => router.push('/artist-settings')}
               >
-                <Ionicons name="settings-outline" size={20} color={colors.primary} />
+                <Ionicons name="settings-outline" size={18} color={colors.primary} />
                 <Text style={styles.actionButtonText}>Settings</Text>
               </TouchableOpacity>
             )}
@@ -1162,7 +1174,7 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => router.push('/commission/create')}
               >
-                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
                 <Text style={styles.actionButtonText}>New Request</Text>
               </TouchableOpacity>
             )}
@@ -3421,11 +3433,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 15,
-    fontWeight: '500', // Lighter for Pinterest
+    fontWeight: '500',
   },
   pinterestFilterTextActive: {
     color: colors.text.primary,
-    fontWeight: '600', // Slightly less bold
+    fontWeight: '600',
   },
   pinterestFilterUnderline: {
     position: 'absolute',
@@ -3517,10 +3529,11 @@ const styles = StyleSheet.create({
   headerDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
     marginTop: spacing.xs,
-    lineHeight: IS_SMALL_SCREEN ? 18 : 20,
+    lineHeight: IS_SMALL_SCREEN ? 20 : 22,
     fontWeight: '400', // Pinterest-style lighter weight
+    letterSpacing: -0.2,
   },
   statsSection: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
@@ -3598,30 +3611,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.background, // Borderless Pinterest style
-    borderRadius: borderRadius.full, // Full pill shape
-    minWidth: IS_SMALL_SCREEN ? 90 : 110,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.md + 2,
+    paddingVertical: spacing.sm - 2,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    minWidth: IS_SMALL_SCREEN ? 85 : 95,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, // Very subtle shadow
+    shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border + '20',
   },
   actionButtonText: {
     ...typography.body,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 13 : 14,
-    fontWeight: '500', // Lighter for Pinterest
+    fontWeight: '500',
   },
   compactTitle: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 26 : 30,
-    fontWeight: '700', // Pinterest uses 700, not 800
-    letterSpacing: -0.4,
-    marginBottom: spacing.xs / 2,
+    fontSize: IS_SMALL_SCREEN ? 28 : 32,
+    fontWeight: '700', // Pinterest-style bold
+    letterSpacing: -0.6,
+    marginBottom: spacing.xs,
+    lineHeight: IS_SMALL_SCREEN ? 34 : 38,
   },
   compactHeaderActions: {
     flexDirection: 'row',
@@ -4238,20 +4254,22 @@ const styles = StyleSheet.create({
   },
   pinterestStatCard: {
     flex: 1,
-    backgroundColor: colors.background,
-    borderRadius: 16, // Pinterest-style soft rounding
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     padding: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md + 4,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, // Very soft shadow
+    shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border + '30',
   },
   pinterestStatIconCircle: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4261,16 +4279,16 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontSize: 24,
-    fontWeight: '700', // Pinterest-style
-    marginBottom: spacing.xs / 2,
-    letterSpacing: -0.3,
+    fontWeight: '700',
+    marginBottom: 2,
+    letterSpacing: -0.4,
   },
   pinterestStatLabel: {
     ...typography.small,
     color: colors.text.secondary,
     fontSize: 12,
-    fontWeight: '500', // Lighter weight for Pinterest
-    textTransform: 'capitalize', // Less aggressive than uppercase
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
 
   // Pinterest-Style Commission Cards

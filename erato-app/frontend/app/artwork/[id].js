@@ -53,7 +53,6 @@ export default function ArtworkDetailScreen() {
   useEffect(() => {
     const loadData = async () => {
       await fetchArtworkDetails();
-      await fetchSimilarArtworks();
       if (token) {
         const fetchedBoards = await fetchBoards();
         // Load liked artworks from shared store using fetched boards
@@ -64,6 +63,13 @@ export default function ArtworkDetailScreen() {
     };
     loadData();
   }, [id]);
+
+  // Fetch similar artworks after artwork data is loaded
+  useEffect(() => {
+    if (artwork) {
+      fetchSimilarArtworks();
+    }
+  }, [artwork?.id, artwork?.tags, artwork?.style_id]);
 
   useEffect(() => {
     // Load liked artworks when boards are loaded, but don't reload during like operation
@@ -208,11 +214,32 @@ export default function ArtworkDetailScreen() {
   const fetchSimilarArtworks = async () => {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // Build query params to prioritize related content
+      const params = { limit: 20 };
+
+      // If artwork has tags, use them to find similar content
+      if (artwork?.tags && artwork.tags.length > 0) {
+        params.tags = artwork.tags.join(',');
+      }
+
+      // If artwork has a style, prioritize that style
+      if (artwork?.style_id) {
+        params.style = artwork.style_id;
+      }
+
+      // Fetch artworks similar to current one
       const response = await axios.get(`${API_URL}/artworks`, {
-        params: { limit: 6 },
+        params,
         headers
       });
-      setSimilarArtworks(response.data.artworks || []);
+
+      // Filter out the current artwork from results
+      const filteredArtworks = (response.data.artworks || []).filter(
+        item => item.id !== artwork?.id
+      );
+
+      setSimilarArtworks(filteredArtworks);
     } catch (error) {
       console.error('Error fetching similar artworks:', error);
     }
@@ -406,32 +433,89 @@ export default function ArtworkDetailScreen() {
           )}
         </View>
 
-        {/* Similar Artworks */}
+        {/* More Like This - Pinterest-style Masonry Grid */}
         {similarArtworks.length > 0 && (
-          <View style={styles.similarSection}>
-            <Text style={styles.sectionTitle}>More Like This</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.similarGrid}
-            >
-              {similarArtworks.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.similarItem}
-                  onPress={() => router.push(`/artwork/${item.id}`)}
-                >
-                  <Image
-                    source={{ uri: item.thumbnail_url || item.image_url }}
-                    style={styles.similarImage}
-                    contentFit="cover"
-                  />
-                  <Text style={styles.similarTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+          <View style={styles.moreSection}>
+            <Text style={styles.moreSectionTitle}>More like this</Text>
+            <View style={styles.masonryGrid}>
+              {/* Left Column */}
+              <View style={styles.masonryColumn}>
+                {similarArtworks.filter((_, idx) => idx % 2 === 0).map((item, index) => (
+                  <View key={item.id} style={styles.masonryItemWrapper}>
+                    <TouchableOpacity
+                      style={[
+                        styles.masonryItem,
+                        { height: index % 3 === 0 ? 220 : index % 3 === 1 ? 180 : 200 }
+                      ]}
+                      onPress={() => {
+                        router.push(`/artwork/${item.id}`);
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <Image
+                        source={{ uri: item.thumbnail_url || item.image_url }}
+                        style={styles.masonryImage}
+                        contentFit="cover"
+                      />
+                    </TouchableOpacity>
+                    {/* Title and Menu below image - like home screen */}
+                    <View style={styles.masonryItemFooter}>
+                      <Text style={styles.masonryItemTitle} numberOfLines={2}>
+                        {item.title}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.masonryMenuButton}
+                        onPress={() => {
+                          // Could add save/share options here
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={16} color={colors.text.secondary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {/* Right Column */}
+              <View style={styles.masonryColumn}>
+                {similarArtworks.filter((_, idx) => idx % 2 === 1).map((item, index) => (
+                  <View key={item.id} style={styles.masonryItemWrapper}>
+                    <TouchableOpacity
+                      style={[
+                        styles.masonryItem,
+                        { height: index % 3 === 0 ? 200 : index % 3 === 1 ? 220 : 180 }
+                      ]}
+                      onPress={() => {
+                        router.push(`/artwork/${item.id}`);
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <Image
+                        source={{ uri: item.thumbnail_url || item.image_url }}
+                        style={styles.masonryImage}
+                        contentFit="cover"
+                      />
+                    </TouchableOpacity>
+                    {/* Title and Menu below image - like home screen */}
+                    <View style={styles.masonryItemFooter}>
+                      <Text style={styles.masonryItemTitle} numberOfLines={2}>
+                        {item.title}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.masonryMenuButton}
+                        onPress={() => {
+                          // Could add save/share options here
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={16} color={colors.text.secondary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -730,35 +814,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  similarSection: {
+  // Pinterest-style "More like this" Section
+  moreSection: {
     marginTop: spacing.xl,
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
-  sectionTitle: {
+  moreSectionTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    marginBottom: spacing.md,
-    fontSize: width < 375 ? 20 : 22,
+    fontSize: 22,
     fontWeight: '700',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xs,
   },
-  similarGrid: {
+  masonryGrid: {
+    flexDirection: 'row',
     gap: spacing.sm,
-    paddingRight: spacing.md,
   },
-  similarItem: {
-    width: width < 375 ? width * 0.38 : width * 0.4,
+  masonryColumn: {
+    flex: 1,
+    gap: spacing.lg,
   },
-  similarImage: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: borderRadius.md,
+  masonryItemWrapper: {
+    marginBottom: spacing.xs,
+  },
+  masonryItem: {
+    borderRadius: 16,
+    overflow: 'hidden',
     backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  similarTitle: {
-    ...typography.caption,
+  masonryImage: {
+    width: '100%',
+    height: '100%',
+  },
+  masonryItemFooter: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xs,
+    gap: spacing.xs,
+  },
+  masonryItemTitle: {
+    ...typography.body,
     color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 18,
+  },
+  masonryMenuButton: {
+    padding: spacing.xs - 2,
+    marginTop: -2,
   },
   errorText: {
     ...typography.body,

@@ -13,7 +13,10 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
+
+const { width } = Dimensions.get('window');
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -201,13 +204,21 @@ export default function CommissionRequestsScreen() {
       const uploadedUrls = [];
       for (const asset of result.assets) {
         try {
-          const url = await uploadImage(asset.uri, token);
+          // Pass correct parameters: uri, bucket, folder, token
+          const url = await uploadImage(asset.uri, 'commission-requests', '', token);
           uploadedUrls.push(url);
         } catch (error) {
           console.error('Error uploading image:', error);
+          Toast.show({
+            type: 'error',
+            text1: 'Upload Failed',
+            text2: 'Failed to upload image. Please try again.',
+          });
         }
       }
-      setFormData({ ...formData, reference_images: [...formData.reference_images, ...uploadedUrls] });
+      if (uploadedUrls.length > 0) {
+        setFormData({ ...formData, reference_images: [...formData.reference_images, ...uploadedUrls] });
+      }
     }
   };
 
@@ -243,6 +254,16 @@ export default function CommissionRequestsScreen() {
         text2: 'Description must be at least 20 characters long',
       });
       setCreating(false); // Reset loading state
+      return;
+    }
+
+    // REQUIRED: Validate reference images
+    if (!formData.reference_images || formData.reference_images.length === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Reference Image Required',
+        text2: 'Please add at least one reference image to help artists understand your vision',
+      });
       return;
     }
 
@@ -355,40 +376,80 @@ export default function CommissionRequestsScreen() {
   };
 
   const renderRequest = ({ item }) => {
-    // For clients: Pinterest-style cards with clean design
+    // For clients: Pinterest content-first cards matching Quest Board
     if (!isArtist) {
       const pendingBidsCount = item.pending_bids_count || 0;
       const statusColor =
         item.status === 'open' ? colors.status.pending :
         item.status === 'awarded' ? colors.status.success :
         colors.text.secondary;
-      
+
       const hasReferenceImages = item.reference_images && item.reference_images.length > 0;
 
       return (
         <TouchableOpacity
-          style={styles.pinterestClientCard}
+          style={styles.questCard}
           onPress={() => {
             setSelectedRequest(item);
             setShowBidsModal(true);
           }}
           activeOpacity={0.9}
         >
-          {/* Reference Images Preview (if available) */}
+          {/* Pinterest Content-First: Image at Top (same as Quest Board) */}
           {hasReferenceImages && (
-            <View style={styles.clientImagePreview}>
-              {item.reference_images.slice(0, 3).map((imageUrl, index) => (
+            <View style={styles.pinterestImageContainer}>
+              {item.reference_images.length === 1 ? (
+                // Single large hero image
                 <ExpoImage
-                  key={index}
-                  source={{ uri: imageUrl }}
-                  style={[
-                    styles.clientPreviewImage,
-                    item.reference_images.length === 1 && styles.clientPreviewImageSingle,
-                    item.reference_images.length === 2 && styles.clientPreviewImageDouble,
-                  ]}
+                  source={{ uri: item.reference_images[0] }}
+                  style={styles.pinterestHeroImage}
                   contentFit="cover"
                 />
-              ))}
+              ) : item.reference_images.length === 2 ? (
+                // Two images side by side
+                <View style={styles.pinterestImageRow}>
+                  {item.reference_images.slice(0, 2).map((imageUrl, index) => (
+                    <ExpoImage
+                      key={index}
+                      source={{ uri: imageUrl }}
+                      style={styles.pinterestImageHalf}
+                      contentFit="cover"
+                    />
+                  ))}
+                </View>
+              ) : (
+                // Grid layout for 3+ images
+                <View style={styles.pinterestImageGrid}>
+                  <ExpoImage
+                    source={{ uri: item.reference_images[0] }}
+                    style={styles.pinterestImageMain}
+                    contentFit="cover"
+                  />
+                  <View style={styles.pinterestImageSide}>
+                    <ExpoImage
+                      source={{ uri: item.reference_images[1] }}
+                      style={styles.pinterestImageSmall}
+                      contentFit="cover"
+                    />
+                    {item.reference_images.length > 2 && (
+                      <View style={styles.pinterestImageSmallWrapper}>
+                        <ExpoImage
+                          source={{ uri: item.reference_images[2] }}
+                          style={styles.pinterestImageSmall}
+                          contentFit="cover"
+                        />
+                        {item.reference_images.length > 3 && (
+                          <View style={styles.pinterestImageOverlay}>
+                            <Text style={styles.pinterestImageOverlayText}>
+                              +{item.reference_images.length - 3}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
             </View>
           )}
 
@@ -466,31 +527,65 @@ export default function CommissionRequestsScreen() {
         }}
         activeOpacity={0.9}
       >
-        {/* Reference Images Preview - Pinterest Style */}
+        {/* Pinterest Content-First: Image at Top */}
         {hasReferenceImages && (
-          <View style={styles.questImagePreview}>
-            {item.reference_images.slice(0, 3).map((imageUrl, index) => (
+          <View style={styles.pinterestImageContainer}>
+            {item.reference_images.length === 1 ? (
+              // Single large hero image
               <ExpoImage
-                key={index}
-                source={{ uri: imageUrl }}
-                style={[
-                  styles.questImage,
-                  item.reference_images.length === 1 && styles.questImageSingle,
-                  item.reference_images.length === 2 && styles.questImageDouble,
-                  item.reference_images.length >= 3 && styles.questImageTriple,
-                ]}
+                source={{ uri: item.reference_images[0] }}
+                style={styles.pinterestHeroImage}
                 contentFit="cover"
               />
-            ))}
-            {item.reference_images.length > 3 && (
-              <View style={styles.questImageMore}>
-                <Text style={styles.questImageMoreText}>+{item.reference_images.length - 3}</Text>
+            ) : item.reference_images.length === 2 ? (
+              // Two images side by side
+              <View style={styles.pinterestImageRow}>
+                {item.reference_images.slice(0, 2).map((imageUrl, index) => (
+                  <ExpoImage
+                    key={index}
+                    source={{ uri: imageUrl }}
+                    style={styles.pinterestImageHalf}
+                    contentFit="cover"
+                  />
+                ))}
+              </View>
+            ) : (
+              // Grid layout for 3+ images
+              <View style={styles.pinterestImageGrid}>
+                <ExpoImage
+                  source={{ uri: item.reference_images[0] }}
+                  style={styles.pinterestImageMain}
+                  contentFit="cover"
+                />
+                <View style={styles.pinterestImageSide}>
+                  <ExpoImage
+                    source={{ uri: item.reference_images[1] }}
+                    style={styles.pinterestImageSmall}
+                    contentFit="cover"
+                  />
+                  {item.reference_images.length > 2 && (
+                    <View style={styles.pinterestImageSmallWrapper}>
+                      <ExpoImage
+                        source={{ uri: item.reference_images[2] }}
+                        style={styles.pinterestImageSmall}
+                        contentFit="cover"
+                      />
+                      {item.reference_images.length > 3 && (
+                        <View style={styles.pinterestImageOverlay}>
+                          <Text style={styles.pinterestImageOverlayText}>
+                            +{item.reference_images.length - 3}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
             )}
           </View>
         )}
 
-        {/* Client Info Header */}
+        {/* Client Info Header - Below Image */}
         <View style={styles.questCardHeader}>
           <ExpoImage
             source={{ uri: item.client?.avatar_url || DEFAULT_AVATAR }}
@@ -742,6 +837,56 @@ export default function CommissionRequestsScreen() {
                 multiline
                 numberOfLines={4}
               />
+              </View>
+
+              {/* Reference Images Section - REQUIRED */}
+              <View style={styles.formSection}>
+                <Text style={styles.label}>Reference Images *</Text>
+                <Text style={styles.helperText}>
+                  Help artists visualize your idea by adding reference images
+                </Text>
+
+                {/* Image Preview Grid */}
+                {formData.reference_images.length > 0 && (
+                  <View style={styles.referenceImagesGrid}>
+                    {formData.reference_images.map((imageUrl, index) => (
+                      <View key={index} style={styles.referenceImageItem}>
+                        <ExpoImage
+                          source={{ uri: imageUrl }}
+                          style={styles.referenceImagePreview}
+                          contentFit="cover"
+                        />
+                        <TouchableOpacity
+                          style={styles.removeImageButton}
+                          onPress={() => {
+                            setFormData({
+                              ...formData,
+                              reference_images: formData.reference_images.filter((_, i) => i !== index)
+                            });
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="close-circle" size={24} color={colors.error} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Add Image Button */}
+                <TouchableOpacity
+                  style={styles.addImageButton}
+                  onPress={handlePickImage}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="images-outline" size={28} color={colors.primary} />
+                  <Text style={styles.addImageButtonText}>
+                    {formData.reference_images.length === 0 ? 'Add Reference Images' : 'Add More Images'}
+                  </Text>
+                  <Text style={styles.addImageButtonSubtext}>
+                    {formData.reference_images.length === 0 ? 'Required' : `${formData.reference_images.length} added`}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* Budget Section */}
@@ -1824,6 +1969,67 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  helperText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  // Reference Images Styles
+  referenceImagesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  referenceImageItem: {
+    width: (width - spacing.xl * 2 - spacing.lg * 2 - spacing.sm * 2) / 3,
+    aspectRatio: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: colors.surface,
+  },
+  referenceImagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  addImageButton: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+    borderStyle: 'dashed',
+    gap: spacing.xs,
+  },
+  addImageButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  addImageButtonSubtext: {
+    ...typography.caption,
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
   input: {
     backgroundColor: colors.background,
     borderRadius: 16,
@@ -2554,6 +2760,64 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.text.primary,
     fontSize: 11,
+    fontWeight: '700',
+  },
+  // Pinterest Content-First Image Styles
+  pinterestImageContainer: {
+    marginBottom: spacing.md,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  pinterestHeroImage: {
+    width: '100%',
+    height: 280,
+    backgroundColor: colors.surface,
+  },
+  pinterestImageRow: {
+    flexDirection: 'row',
+    gap: 4,
+    height: 220,
+  },
+  pinterestImageHalf: {
+    flex: 1,
+    backgroundColor: colors.surface,
+  },
+  pinterestImageGrid: {
+    flexDirection: 'row',
+    gap: 4,
+    height: 240,
+  },
+  pinterestImageMain: {
+    flex: 2,
+    backgroundColor: colors.surface,
+  },
+  pinterestImageSide: {
+    flex: 1,
+    gap: 4,
+  },
+  pinterestImageSmall: {
+    width: '100%',
+    height: '48.5%',
+    backgroundColor: colors.surface,
+  },
+  pinterestImageSmallWrapper: {
+    position: 'relative',
+    height: '48.5%',
+  },
+  pinterestImageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinterestImageOverlayText: {
+    ...typography.h2,
+    color: '#FFFFFF',
+    fontSize: 24,
     fontWeight: '700',
   },
   questCardHeader: {

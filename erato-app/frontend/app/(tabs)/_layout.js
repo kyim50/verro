@@ -99,7 +99,7 @@ function CommissionsTabIcon({ color }) {
 
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="document-text" size={26} color={color} />
+      <Ionicons name="briefcase-outline" size={26} color={color} />
       {pendingCount > 0 && (
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>{Math.min(pendingCount, 9)}{pendingCount > 9 ? '+' : ''}</Text>
@@ -167,7 +167,7 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <Ionicons name="home" size={26} color={color} />
+            <Ionicons name="grid-outline" size={26} color={color} />
           ),
         }}
       />

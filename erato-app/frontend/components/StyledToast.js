@@ -4,22 +4,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, shadows } from '../constants/theme';
 
 /**
- * Clean, minimal Toast component styled to match the app theme
- * Simple approach: render text directly without complex wrapping
+ * Pinterest-style Toast component - Clean, rounded, with soft shadows
+ * Content-first design with subtle colors and clear hierarchy
  */
 const toastConfig = {
   success: (props) => {
     const text1 = String(props?.text1 || 'Success');
     const text2 = String(props?.text2 || '');
-    const fullText = text2 ? `${text1}: ${text2}` : text1;
-    
+
     return (
-      <View style={styles.toastContainer}>
-        <View style={styles.toastContent}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.status.success} />
+      <View style={styles.pinterestToastContainer}>
+        <View style={[styles.pinterestToast, styles.pinterestToastSuccess]}>
+          <View style={styles.pinterestIconBg}>
+            <Ionicons name="checkmark-circle" size={20} color="#00A36C" />
           </View>
-          <Text style={styles.toastText}>{fullText}</Text>
+          <View style={styles.pinterestTextContainer}>
+            <Text style={styles.pinterestToastTitle}>{text1}</Text>
+            {text2 ? <Text style={styles.pinterestToastMessage}>{text2}</Text> : null}
+          </View>
         </View>
       </View>
     );
@@ -28,15 +30,17 @@ const toastConfig = {
   error: (props) => {
     const text1 = String(props?.text1 || 'Error');
     const text2 = String(props?.text2 || '');
-    const fullText = text2 ? `${text1}: ${text2}` : text1;
-    
+
     return (
-      <View style={styles.toastContainer}>
-        <View style={styles.toastContent}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="close-circle" size={20} color={colors.status.error} />
+      <View style={styles.pinterestToastContainer}>
+        <View style={[styles.pinterestToast, styles.pinterestToastError]}>
+          <View style={styles.pinterestIconBg}>
+            <Ionicons name="close-circle" size={20} color="#E60023" />
           </View>
-          <Text style={styles.toastText}>{fullText}</Text>
+          <View style={styles.pinterestTextContainer}>
+            <Text style={styles.pinterestToastTitle}>{text1}</Text>
+            {text2 ? <Text style={styles.pinterestToastMessage}>{text2}</Text> : null}
+          </View>
         </View>
       </View>
     );
@@ -45,15 +49,17 @@ const toastConfig = {
   info: (props) => {
     const text1 = String(props?.text1 || 'Info');
     const text2 = String(props?.text2 || '');
-    const fullText = text2 ? `${text1}: ${text2}` : text1;
-    
+
     return (
-      <View style={styles.toastContainer}>
-        <View style={styles.toastContent}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="information-circle" size={20} color={colors.status.info} />
+      <View style={styles.pinterestToastContainer}>
+        <View style={[styles.pinterestToast, styles.pinterestToastInfo]}>
+          <View style={styles.pinterestIconBg}>
+            <Ionicons name="information-circle" size={20} color="#0095F6" />
           </View>
-          <Text style={styles.toastText}>{fullText}</Text>
+          <View style={styles.pinterestTextContainer}>
+            <Text style={styles.pinterestToastTitle}>{text1}</Text>
+            {text2 ? <Text style={styles.pinterestToastMessage}>{text2}</Text> : null}
+          </View>
         </View>
       </View>
     );
@@ -61,39 +67,64 @@ const toastConfig = {
 };
 
 const styles = StyleSheet.create({
-  toastContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+  // Pinterest-style Toast Styles
+  pinterestToastContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    width: '100%',
+    alignItems: 'center',
   },
-  toastContent: {
+  pinterestToast: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    minHeight: 40,
-    maxWidth: '100%',
-    ...shadows.small,
-    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    maxWidth: 380,
+    minWidth: 280,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  iconContainer: {
-    width: 24,
-    height: 24,
-    marginRight: spacing.sm,
+  pinterestToastSuccess: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#00A36C',
+  },
+  pinterestToastError: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#E60023',
+  },
+  pinterestToastInfo: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#0095F6',
+  },
+  pinterestIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    flexShrink: 0,
+    marginRight: spacing.md,
   },
-  toastText: {
+  pinterestTextContainer: {
     flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    gap: spacing.xs - 2,
+  },
+  pinterestToastTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111111',
+    lineHeight: 20,
+  },
+  pinterestToastMessage: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#5F5F5F',
     lineHeight: 18,
-    alignSelf: 'center',
   },
 });
 

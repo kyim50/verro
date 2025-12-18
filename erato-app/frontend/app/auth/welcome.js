@@ -130,6 +130,13 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.loginButtonText}>Log in</Text>
           </TouchableOpacity>
+
+          <Text style={styles.termsText}>
+            By continuing, you agree to Verro's{' '}
+            <Text style={styles.termsLink}>Terms of Service</Text>
+            {' '}and{' '}
+            <Text style={styles.termsLink}>Privacy Policy</Text>
+          </Text>
         </View>
       </Animated.View>
     </View>
@@ -207,5 +214,19 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 17,
     fontWeight: '700',
+  },
+  termsText: {
+    ...typography.caption,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    lineHeight: 18,
+    paddingHorizontal: spacing.md,
+  },
+  termsLink: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

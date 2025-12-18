@@ -62,6 +62,7 @@ export default function ConversationScreen() {
   const [progressUpdates, setProgressUpdates] = useState([]);
   const [showProgressActions, setShowProgressActions] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [commissionFiles, setCommissionFiles] = useState([]);
   const [revisionImage, setRevisionImage] = useState(null);
   const [revisionNotes, setRevisionNotes] = useState('');
   const [markupPaths, setMarkupPaths] = useState([]);
@@ -255,6 +256,17 @@ export default function ConversationScreen() {
           setProgressUpdates(progressResponse.data.progress_updates || []);
         } catch (err) {
           console.error('Error fetching progress updates:', err);
+        }
+
+        // Fetch commission files (including reference images)
+        try {
+          const filesResponse = await axios.get(
+            `${API_URL}/commissions/${response.data.commission_id}/files`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setCommissionFiles(filesResponse.data.files || []);
+        } catch (err) {
+          console.error('Error fetching commission files:', err);
         }
 
         // Check if commission is completed and if user needs to review
@@ -1095,6 +1107,41 @@ export default function ConversationScreen() {
                     <View style={styles.modalSection}>
                       <Text style={styles.modalLabel}>Deadline</Text>
                       <Text style={styles.modalValue}>{commission.deadline_text}</Text>
+                    </View>
+                  )}
+
+                  {/* Reference Images */}
+                  {commissionFiles.length > 0 && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalLabel}>Reference Images ({commissionFiles.length})</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.referenceFilesScroll}
+                      >
+                        {commissionFiles.map((file, index) => (
+                          <TouchableOpacity
+                            key={file.id}
+                            style={styles.referenceFileItem}
+                            onPress={() => {
+                              setSelectedImageForViewer(file.file_url);
+                              setShowImageViewer(true);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Image
+                              source={{ uri: file.file_url }}
+                              style={styles.referenceFileImage}
+                              contentFit="cover"
+                            />
+                            {file.file_name && file.file_name.startsWith('Reference') && (
+                              <View style={styles.referenceFileBadge}>
+                                <Text style={styles.referenceFileBadgeText}>REF</Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                     </View>
                   )}
 
@@ -2016,6 +2063,37 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  referenceFilesScroll: {
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  referenceFileItem: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    position: 'relative',
+  },
+  referenceFileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  referenceFileBadge: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  referenceFileBadgeText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    fontSize: 10,
+    fontWeight: '700',
   },
   progressList: {
     marginTop: spacing.sm,

@@ -498,7 +498,8 @@ router.patch(
         .insert({
           client_id: request.client_id,
           artist_id: bid.artist_id,
-          details: `Commission request: ${request.title}`,
+          title: request.title,
+          details: request.description,
           budget: bid.bid_amount,
           deadline_text: bid.estimated_delivery_days ? `${bid.estimated_delivery_days} days` : null,
           status: 'pending',
@@ -508,6 +509,25 @@ router.patch(
         .single();
 
       if (commissionError) throw commissionError;
+
+      // Add reference images from request to commission files
+      if (request.reference_images && request.reference_images.length > 0) {
+        const fileInserts = request.reference_images.map(imageUrl => ({
+          commission_id: commission.id,
+          uploader_id: request.client_id,
+          file_url: imageUrl,
+          file_name: `Reference - ${imageUrl.split('/').pop()}`,
+          file_type: 'image'
+        }));
+
+        const { error: filesError } = await supabaseAdmin
+          .from('commission_files')
+          .insert(fileInserts);
+
+        if (filesError) {
+          console.error('Error adding reference images to commission:', filesError);
+        }
+      }
 
       // Create or get conversation
       const { data: existingConv } = await supabaseAdmin

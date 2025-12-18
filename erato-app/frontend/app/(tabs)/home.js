@@ -2748,16 +2748,16 @@ const styles = StyleSheet.create({
   },
   pinterestFilterText: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '500', // Pinterest-style
   },
   pinterestFilterTextActive: {
-    color: colors.text.primary,
+    color: '#FFFFFF',
     fontWeight: '600', // Pinterest-style
   },
   pinterestFilterTextCurated: {
-    color: colors.primary,
+    color: '#FFFFFF',
   },
   pinterestFilterUnderline: {
     position: 'absolute',

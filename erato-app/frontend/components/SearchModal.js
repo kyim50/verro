@@ -345,10 +345,10 @@ export default function SearchModal({ visible, onClose }) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.discoveryContent}
         >
-          {/* Artists for you section - Pinterest style with image tiles */}
-          {!isArtist && recommendedArtists.length > 0 && (
+          {/* Artists for you section - Pinterest style with image tiles - Only show on Artists tab */}
+          {!isArtist && recommendedArtists.length > 0 && activeTab === 'artists' && (
             <View style={styles.discoverySection}>
-              <Text style={styles.discoverySectionTitle}>Artists for you</Text>
+              <Text style={[styles.discoverySectionTitle, styles.centeredSectionTitle]}>Artists for you</Text>
               <View style={styles.masonryContainer}>
                 {/* Left Column */}
                 <View style={styles.masonryColumn}>
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: Math.max(Constants.statusBarHeight - spacing.md, spacing.sm),
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
     gap: spacing.md,
   },
