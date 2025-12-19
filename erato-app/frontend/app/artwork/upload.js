@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   uploadTextDisabled: {
-    color: colors.text.disabled,
+    color: colors.text.primary,
   },
   content: {
     padding: spacing.lg,
