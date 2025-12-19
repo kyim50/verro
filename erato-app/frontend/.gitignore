@@ -28,3 +28,9 @@ npm-debug.log*
 .vscode/
 .idea/
 
+# Build outputs
+dist/
+build/
+.deploy.config
+deploy.config
+
