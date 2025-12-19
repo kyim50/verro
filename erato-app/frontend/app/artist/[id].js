@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { showAlert } from '../../components/StyledAlert';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -403,17 +404,14 @@ export default function ArtistProfileScreen() {
       console.error('Error creating conversation:', error);
       // Check if it's a permission error
       if (error.response?.status === 403) {
-        Alert.alert(
-          'Commission Required',
-          error.response?.data?.error || 'You must have an accepted commission with this artist before you can message them.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Request Commission',
-              onPress: () => router.push(`/commission/create?artistId=${id}`)
-            }
-          ]
-        );
+        showAlert({
+          title: 'Commission Required',
+          message: error.response?.data?.error || 'You must have an accepted commission with this artist before you can message them.',
+          type: 'warning',
+          showCancel: true,
+          confirmText: 'Request Commission',
+          onConfirm: () => router.push(`/commission/create?artistId=${id}`),
+        });
       } else {
         Toast.show({
           type: 'error',
@@ -797,25 +795,6 @@ export default function ArtistProfileScreen() {
           </View>
 
 
-          {/* Rating (if available) */}
-          {artist.average_rating && artist.average_rating > 0 && (
-            <View style={styles.ratingContainer}>
-              <View style={styles.ratingStars}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Ionicons
-                    key={star}
-                    name={star <= Math.round(artist.average_rating) ? "star" : "star-outline"}
-                    size={16}
-                    color={colors.status.warning}
-                  />
-                ))}
-              </View>
-              <Text style={styles.ratingText}>
-                {artist.average_rating.toFixed(1)} ({artist.review_count || 0} {artist.review_count === 1 ? 'review' : 'reviews'})
-              </Text>
-            </View>
-          )}
-
           {/* Bio */}
           {artist.users?.bio && (
             <Text style={styles.bio} numberOfLines={3}>
@@ -827,24 +806,17 @@ export default function ArtistProfileScreen() {
           <View style={styles.pinterestStatsGrid}>
             <View style={styles.pinterestStatCard}>
               <View style={styles.statIconContainer}>
-                <Ionicons name="star" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.pinterestStatValue}>{artist.rating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.pinterestStatLabel}>Rating</Text>
-            </View>
-            <View style={styles.pinterestStatCard}>
-              <View style={styles.statIconContainer}>
                 <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.pinterestStatValue}>{artist.total_commissions || 0}</Text>
               <Text style={styles.pinterestStatLabel}>Commissions</Text>
             </View>
             {artist.min_price && artist.max_price && (
-              <View style={[styles.pinterestStatCard, { flex: 2 }]}>
+              <View style={styles.pinterestStatCard}>
                 <View style={styles.statIconContainer}>
                   <Ionicons name="cash-outline" size={20} color={colors.primary} />
                 </View>
-                <Text style={styles.pinterestStatValue} numberOfLines={2}>
+                <Text style={styles.pinterestStatValue} numberOfLines={1}>
                   ${artist.min_price} - ${artist.max_price}
                 </Text>
                 <Text style={styles.pinterestStatLabel}>Price Range</Text>
@@ -922,19 +894,29 @@ export default function ArtistProfileScreen() {
           )}
         </View>
 
+        {/* Rating Section */}
+        {artist.average_rating && artist.average_rating > 0 && (
+          <View style={styles.section}>
+            <View style={styles.ratingCard}>
+              <View style={styles.ratingIconContainer}>
+                <Ionicons name="star" size={32} color={colors.primary} />
+              </View>
+              <Text style={styles.ratingValue}>
+                {artist.average_rating?.toFixed(1) || '0.0'}
+              </Text>
+              <Text style={styles.ratingLabel}>
+                {reviewsReceived.length} {reviewsReceived.length === 1 ? 'Review' : 'Reviews'}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Reviews Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleContainer}>
               <Ionicons name="star-outline" size={20} color={colors.primary} />
               <Text style={styles.sectionTitle}>Reviews</Text>
-              {activeReviewTab === 'received' && reviewsReceived.length > 0 && (
-                <View style={styles.ratingBadge}>
-                  <Text style={styles.ratingBadgeText}>
-                    {artist.average_rating?.toFixed(1) || '0.0'}
-                  </Text>
-                </View>
-              )}
             </View>
           </View>
 
@@ -2713,6 +2695,43 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  ratingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    marginHorizontal: spacing.md,
+  },
+  ratingIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  ratingValue: {
+    ...typography.h1,
+    fontSize: 40,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    letterSpacing: -1,
+  },
+  ratingLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '500',
+  },
   ratingBadge: {
     backgroundColor: colors.status.warning + '20',
     paddingHorizontal: spacing.sm,
@@ -2851,14 +2870,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.lg,
-    flexWrap: 'wrap',
   },
   pinterestStatCard: {
     flex: 1,
-    minWidth: '30%',
     backgroundColor: colors.background,
     borderRadius: 20,
-    padding: spacing.lg,
+    padding: spacing.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
     gap: spacing.xs,
     shadowColor: '#000',
@@ -2878,7 +2896,7 @@ const styles = StyleSheet.create({
   pinterestStatValue: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 24,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
     marginTop: spacing.xs / 2,
     textAlign: 'center',
