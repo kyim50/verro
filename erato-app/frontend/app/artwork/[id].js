@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { showAlert } from '../../components/StyledAlert';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -214,96 +215,131 @@ export default function ArtworkDetailScreen() {
   const fetchSimilarArtworks = async () => {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      let filteredArtworks = [];
 
-      // Build query params to prioritize related content
-      const params = { limit: 20 };
-
-      // If artwork has tags, use them to find similar content
-      if (artwork?.tags && artwork.tags.length > 0) {
-        params.tags = artwork.tags.join(',');
+      // Strategy 1: Try to fetch from the same artist first
+      if (artwork?.artist_id) {
+        try {
+          console.log('Fetching artworks from same artist:', artwork.artist_id);
+          const artistResponse = await axios.get(`${API_URL}/artists/${artwork.artist_id}/artworks`, {
+            params: { limit: 20 },
+            headers
+          });
+          const artistArtworks = artistResponse.data.artworks || artistResponse.data || [];
+          filteredArtworks = artistArtworks.filter(item => item.id !== artwork?.id);
+          console.log('Found artworks from same artist:', filteredArtworks.length);
+        } catch (artistError) {
+          console.log('Could not fetch from artist, trying general fetch');
+        }
       }
 
-      // If artwork has a style, prioritize that style
-      if (artwork?.style_id) {
-        params.style = artwork.style_id;
+      // Strategy 2: If we don't have enough artworks, try filtered search
+      if (filteredArtworks.length < 10) {
+        const params = { limit: 20 };
+
+        // If artwork has tags, use them to find similar content
+        if (artwork?.tags && artwork.tags.length > 0) {
+          params.tags = artwork.tags.join(',');
+        }
+
+        // If artwork has a style, prioritize that style
+        if (artwork?.style_id) {
+          params.style = artwork.style_id;
+        }
+
+        console.log('Fetching similar artworks with params:', params);
+
+        const response = await axios.get(`${API_URL}/artworks`, {
+          params,
+          headers
+        });
+
+        console.log('Similar artworks response:', response.data);
+
+        const allArtworks = response.data.artworks || response.data.data || [];
+        const moreArtworks = allArtworks.filter(
+          item => item.id !== artwork?.id && !filteredArtworks.find(a => a.id === item.id)
+        );
+
+        filteredArtworks = [...filteredArtworks, ...moreArtworks];
       }
 
-      // Fetch artworks similar to current one
-      const response = await axios.get(`${API_URL}/artworks`, {
-        params,
-        headers
-      });
+      // Strategy 3: If still not enough, fetch general artworks
+      if (filteredArtworks.length < 10) {
+        console.log('Not enough similar artworks, fetching general artworks');
+        const response = await axios.get(`${API_URL}/artworks`, {
+          params: { limit: 20 },
+          headers
+        });
+        const allArtworks = response.data.artworks || response.data.data || [];
+        const moreArtworks = allArtworks.filter(
+          item => item.id !== artwork?.id && !filteredArtworks.find(a => a.id === item.id)
+        );
+        filteredArtworks = [...filteredArtworks, ...moreArtworks];
+      }
 
-      // Filter out the current artwork from results
-      const filteredArtworks = (response.data.artworks || []).filter(
-        item => item.id !== artwork?.id
-      );
-
-      setSimilarArtworks(filteredArtworks);
+      console.log('Final filtered artworks count:', filteredArtworks.length);
+      setSimilarArtworks(filteredArtworks.slice(0, 20)); // Limit to 20 total
     } catch (error) {
       console.error('Error fetching similar artworks:', error);
+      console.error('Error details:', error.response?.data || error.message);
     }
   };
 
   const handleDeleteArtwork = () => {
     if (!token || !artwork || artwork.artist_id !== user?.id) return;
-    Alert.alert(
-      'Delete Artwork',
-      'Are you sure you want to delete this artwork? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(`${API_URL}/artworks/${artwork.id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
+    showAlert({
+      title: 'Delete Artwork',
+      message: 'Are you sure you want to delete this artwork? This cannot be undone.',
+      type: 'error',
+      showCancel: true,
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/artworks/${artwork.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-              // Optimistically remove from local feed
-              try {
-                feedStore.removeArtwork?.(artwork.id);
-              } catch (e) {
-                console.warn('Local feed removal failed:', e?.message || e);
-              }
+          // Optimistically remove from local feed
+          try {
+            feedStore.removeArtwork?.(artwork.id);
+          } catch (e) {
+            console.warn('Local feed removal failed:', e?.message || e);
+          }
 
-              // Force refetch feed to drop the deleted item everywhere
-              try {
-                feedStore.reset?.();
-                await feedStore.fetchArtworks?.(true);
-              } catch (e) {
-                console.warn('Feed refresh after delete failed:', e?.message || e);
-              }
+          // Force refetch feed to drop the deleted item everywhere
+          try {
+            feedStore.reset?.();
+            await feedStore.fetchArtworks?.(true);
+          } catch (e) {
+            console.warn('Feed refresh after delete failed:', e?.message || e);
+          }
 
-              // Refresh boards (e.g., Created board) to remove it there too
-              try {
-                await fetchBoards();
-              } catch (e) {
-                console.warn('Boards refresh after delete failed:', e?.message || e);
-              }
+          // Refresh boards (e.g., Created board) to remove it there too
+          try {
+            await fetchBoards();
+          } catch (e) {
+            console.warn('Boards refresh after delete failed:', e?.message || e);
+          }
 
-              Toast.show({
-                type: 'success',
-                text1: 'Deleted',
-                text2: 'Artwork removed',
-                visibilityTime: 2000,
-              });
-              router.back();
-            } catch (error) {
-              console.error('Error deleting artwork:', error?.response?.data || error.message || error);
-              const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: msg,
-                visibilityTime: 3000,
-              });
-            }
-          },
-        },
-      ]
-    );
+          Toast.show({
+            type: 'success',
+            text1: 'Deleted',
+            text2: 'Artwork removed',
+            visibilityTime: 2000,
+          });
+          router.back();
+        } catch (error) {
+          console.error('Error deleting artwork:', error?.response?.data || error.message || error);
+          const msg = error.response?.data?.error || 'Failed to delete artwork. Please try again.';
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: msg,
+            visibilityTime: 3000,
+          });
+        }
+      },
+    });
   };
 
   if (loading) {

@@ -88,7 +88,9 @@ export default function ClientProfileScreen() {
         `${API_URL}/commissions?client_id=${id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setCommissions(response.data.commissions || []);
+      const commissionsData = response.data.commissions || [];
+      console.log('Commissions data:', commissionsData[0]); // Debug log
+      setCommissions(commissionsData);
     } catch (error) {
       console.log('Error loading commissions:', error);
     }
@@ -225,14 +227,12 @@ export default function ClientProfileScreen() {
               <Text style={styles.clientUsername} numberOfLines={1}>
                 @{client.username}
               </Text>
-              {(client.is_verified || client.verified) && (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color={colors.error}
-                  style={styles.verifiedBadge}
-                />
-              )}
+              <Ionicons
+                name="checkmark-circle"
+                size={20}
+                color={(client.is_verified || client.verified) ? colors.error : colors.text.disabled}
+                style={styles.verifiedBadge}
+              />
             </View>
           </View>
 
@@ -254,31 +254,11 @@ export default function ClientProfileScreen() {
             </View>
             <View style={styles.pinterestStatCard}>
               <View style={styles.statIconContainer}>
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.pinterestStatValue}>{completedCommissions}</Text>
-              <Text style={styles.pinterestStatLabel}>Completed</Text>
-            </View>
-            <View style={styles.pinterestStatCard}>
-              <View style={styles.statIconContainer}>
                 <Ionicons name="hourglass-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.pinterestStatValue}>{inProgressCommissions + pendingCommissions}</Text>
               <Text style={styles.pinterestStatLabel}>Active</Text>
             </View>
-            {reviewsReceived.length > 0 && (
-              <View style={styles.pinterestStatCard}>
-                <View style={styles.statIconContainer}>
-                  <Ionicons name="star" size={20} color={colors.status.warning} />
-                </View>
-                <Text style={styles.pinterestStatValue}>
-                  {reviewsReceived.length > 0
-                    ? (reviewsReceived.reduce((sum, r) => sum + r.rating, 0) / reviewsReceived.length).toFixed(1)
-                    : '0.0'}
-                </Text>
-                <Text style={styles.pinterestStatLabel}>Rating</Text>
-              </View>
-            )}
           </View>
 
           {/* Member Since */}
@@ -292,6 +272,25 @@ export default function ClientProfileScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Rating Section */}
+        {reviewsReceived.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.ratingCard}>
+              <View style={styles.ratingIconContainer}>
+                <Ionicons name="star" size={32} color={colors.primary} />
+              </View>
+              <Text style={styles.ratingValue}>
+                {reviewsReceived.length > 0
+                  ? (reviewsReceived.reduce((sum, r) => sum + r.rating, 0) / reviewsReceived.length).toFixed(1)
+                  : '0.0'}
+              </Text>
+              <Text style={styles.ratingLabel}>
+                {reviewsReceived.length} {reviewsReceived.length === 1 ? 'Review' : 'Reviews'}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Reviews Section with Tabs */}
         <View style={styles.section}>
@@ -403,14 +402,38 @@ export default function ClientProfileScreen() {
                     index < commissions.slice(0, 10).length - 1 && styles.commissionItemBorder
                   ]}
                   onPress={() => {
-                    // Navigate to commission details if needed
-                    router.push(`/(tabs)/explore?commissionId=${commission.id}`);
+                    // Navigate to artist profile
+                    if (commission.artist_id) {
+                      router.push(`/artist/${commission.artist_id}`);
+                    }
                   }}
                   activeOpacity={0.7}
                 >
+                  {/* Artist Avatar */}
+                  <Image
+                    source={{
+                      uri: commission.artists?.users?.avatar_url ||
+                           commission.artists?.avatar_url ||
+                           commission.artist?.users?.avatar_url ||
+                           commission.artist?.avatar_url ||
+                           DEFAULT_AVATAR
+                    }}
+                    style={styles.commissionArtistAvatar}
+                    contentFit="cover"
+                  />
+
+                  {/* Commission Info */}
                   <View style={styles.commissionInfo}>
+                    <Text style={styles.commissionArtistName} numberOfLines={1}>
+                      @{commission.artists?.users?.username ||
+                         commission.artists?.username ||
+                         commission.artist?.users?.username ||
+                         commission.artist?.username ||
+                         commission.artist_username ||
+                         'Artist'}
+                    </Text>
                     <Text style={styles.commissionTitle} numberOfLines={1}>
-                      {commission.title || 'Commission Request'}
+                      {commission.title || commission.description || 'Commission Request'}
                     </Text>
                     <Text style={styles.commissionDate}>
                       {new Date(commission.created_at).toLocaleDateString('en-US', {
@@ -420,6 +443,8 @@ export default function ClientProfileScreen() {
                       })}
                     </Text>
                   </View>
+
+                  {/* Status Badge */}
                   <View style={[
                     styles.statusBadge,
                     { backgroundColor: getStatusColor(commission.status) + '20' }
@@ -499,10 +524,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: Constants.statusBarHeight + spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
+    borderBottomWidth: 0,
   },
   backButton: {
     width: 40,
@@ -511,14 +537,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0,
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 20 : 22,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   retryButton: {
     backgroundColor: colors.primary,
@@ -532,27 +557,26 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   content: {
-    paddingTop: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   clientHeader: {
     alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingTop: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.md,
   },
   avatarContainer: {
-    marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    marginBottom: spacing.xl,
   },
   avatar: {
     width: IS_SMALL_SCREEN ? 110 : 120,
     height: IS_SMALL_SCREEN ? 110 : 120,
     borderRadius: IS_SMALL_SCREEN ? 55 : 60,
-    borderWidth: 0, // Remove border
+    borderWidth: 0,
   },
   nameContainer: {
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 0,
   },
   nameRow: {
     flexDirection: 'row',
@@ -563,7 +587,7 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 26 : 30,
-    fontWeight: '700', // Pinterest-style (was 800)
+    fontWeight: '700',
     textAlign: 'center',
     letterSpacing: -0.5,
   },
@@ -576,16 +600,17 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
     fontSize: IS_SMALL_SCREEN ? 15 : 16,
+    fontWeight: '400',
   },
   verifiedBadge: {
-    marginLeft: spacing.xs / 2,
+    marginLeft: 0,
   },
   bio: {
     ...typography.body,
     color: colors.text.primary,
     textAlign: 'center',
     marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     lineHeight: 22,
     fontSize: IS_SMALL_SCREEN ? 14 : 15,
   },
@@ -675,14 +700,14 @@ const styles = StyleSheet.create({
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
   },
   section: {
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    marginTop: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    marginBottom: spacing.md,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
@@ -694,6 +719,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   ratingBadge: {
     backgroundColor: colors.status.warning + '20',
@@ -710,75 +736,91 @@ const styles = StyleSheet.create({
   },
   commissionList: {
     backgroundColor: colors.background,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: spacing.lg,
     borderWidth: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 3,
   },
   commissionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md + 2,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
   commissionItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
+    borderBottomColor: colors.border + '15',
+  },
+  commissionArtistAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.border,
   },
   commissionInfo: {
     flex: 1,
-    marginRight: spacing.md,
   },
-  commissionTitle: {
+  commissionArtistName: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '700',
+    marginBottom: spacing.xs / 4,
+  },
+  commissionTitle: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    fontWeight: '400',
     marginBottom: spacing.xs / 2,
   },
   commissionDate: {
     ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 12 : 13,
+    color: colors.text.disabled,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
   },
   statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
     flexShrink: 0,
-    minWidth: 80,
+    minWidth: 85,
   },
   statusText: {
     ...typography.caption,
     fontSize: IS_SMALL_SCREEN ? 11 : 12,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
   },
   reviewsList: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xl,
     gap: spacing.md,
   },
   emptyReviewsContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xxl * 1.5,
   },
   emptyReviewsText: {
     ...typography.h3,
     color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 16 : 18,
+    fontWeight: '600',
     marginTop: spacing.md,
   },
   emptyReviewsSubtext: {
     ...typography.body,
     color: colors.text.disabled,
-    marginTop: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    marginTop: spacing.sm,
     textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    lineHeight: 20,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -787,7 +829,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: 0,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
+    borderBottomColor: colors.border + '15',
   },
   tab: {
     flex: 1,
@@ -799,12 +841,12 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
   tabActive: {
     backgroundColor: 'transparent',
-    borderBottomColor: colors.error,
+    borderBottomColor: colors.primary,
   },
   tabText: {
     ...typography.body,
@@ -821,14 +863,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.lg,
-    flexWrap: 'wrap',
+    marginTop: spacing.lg,
   },
   pinterestStatCard: {
     flex: 1,
-    minWidth: '30%',
     backgroundColor: colors.background,
     borderRadius: 20,
-    padding: spacing.lg,
+    padding: spacing.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
     gap: spacing.xs,
     shadowColor: '#000',
@@ -848,7 +890,7 @@ const styles = StyleSheet.create({
   pinterestStatValue: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 24,
+    fontSize: IS_SMALL_SCREEN ? 18 : 20,
     fontWeight: '700',
     marginTop: spacing.xs / 2,
   },
@@ -859,5 +901,41 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  // Rating Card - Pinterest-style
+  ratingCard: {
+    backgroundColor: colors.background,
+    borderRadius: 24,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  ratingIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  ratingValue: {
+    ...typography.h1,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 36 : 40,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+  ratingLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontWeight: '500',
   },
 });

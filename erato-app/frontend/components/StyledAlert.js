@@ -12,9 +12,29 @@ import { colors, spacing, borderRadius, shadows } from '../constants/theme';
 
 let alertInstance = null;
 
-export const showAlert = ({ title, message, type = 'info', onPress, duration, buttons }) => {
+export const showAlert = ({
+  title,
+  message,
+  type = 'info',
+  onPress,
+  duration,
+  buttons,
+  showCancel = false,
+  onConfirm,
+  cancelText = 'Cancel',
+  confirmText = 'Confirm'
+}) => {
   if (alertInstance && alertInstance.show) {
-    alertInstance.show({ title, message, type, onPress, duration, buttons });
+    // If showCancel is true, automatically create buttons
+    let finalButtons = buttons;
+    if (showCancel && onConfirm && !buttons) {
+      finalButtons = [
+        { text: cancelText, style: 'cancel', onPress: () => {} },
+        { text: confirmText, style: type === 'error' ? 'destructive' : 'default', onPress: onConfirm },
+      ];
+    }
+
+    alertInstance.show({ title, message, type, onPress, duration, buttons: finalButtons });
   } else {
     // Fallback: log error if alert instance not ready
     console.warn('StyledAlert instance not ready. Title:', title, 'Message:', message);
@@ -167,7 +187,7 @@ export default StyledAlert;
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
@@ -178,17 +198,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   alertContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 24,
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.xl,
     width: '100%',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    elevation: 12,
+    ...shadows.large,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   icon: {
     marginBottom: spacing.md,
@@ -197,7 +215,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111111',
+    color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing.sm,
     letterSpacing: -0.3,
@@ -205,7 +223,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 15,
     fontWeight: '400',
-    color: '#5F5F5F',
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: spacing.lg,
     lineHeight: 22,
@@ -217,42 +235,32 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    backgroundColor: '#E60023',
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#E60023',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.medium,
   },
   singleButton: {
     width: '100%',
-    backgroundColor: '#E60023',
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#E60023',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.medium,
   },
   cancelButton: {
-    backgroundColor: '#F0F0F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.small,
   },
   destructiveButton: {
-    backgroundColor: '#E60023',
+    backgroundColor: colors.status.error,
   },
   buttonText: {
     fontSize: 16,
@@ -260,7 +268,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   cancelButtonText: {
-    color: '#111111',
+    color: colors.text.primary,
   },
   destructiveButtonText: {
     color: '#FFFFFF',

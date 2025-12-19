@@ -51,6 +51,8 @@ export default function ProfileScreen() {
   const [reviewsGiven, setReviewsGiven] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [activeReviewTab, setActiveReviewTab] = useState('received'); // 'received' or 'given'
+  const [clientStats, setClientStats] = useState(null);
+  const [clientCommissions, setClientCommissions] = useState([]);
   const insets = useSafeAreaInsets();
 
   // Auto-refresh when screen comes into focus - but only if needed
@@ -144,31 +146,57 @@ export default function ProfileScreen() {
   }, [profile?.avatar_url, user?.avatar_url]);
 
   const loadReviews = useCallback(async () => {
-    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
-    if (!user?.id || !isArtist || !profile?.artist?.id) return;
-    
-    setReviewsLoading(true);
-    try {
-      // Load reviews received (from clients)
-      const receivedResponse = await axios.get(
-        `${API_URL}/review-enhancements/artist/${profile.artist.id}/with-responses`,
-        {
-          params: { limit: 50 },
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        }
-      );
-      setReviewsReceived(receivedResponse.data.data?.reviews || []);
+    if (!user?.id) return;
 
-      // Load reviews given (to clients)
-      try {
-        const givenResponse = await axios.get(
-          `${API_URL}/reviews/user/${user.id}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
+    setReviewsLoading(true);
+
+    try {
+      if (isArtist && profile?.artist?.id) {
+        // Load reviews received (from clients) for artists
+        const receivedResponse = await axios.get(
+          `${API_URL}/review-enhancements/artist/${profile.artist.id}/with-responses`,
+          {
+            params: { limit: 50 },
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          }
         );
-        setReviewsGiven(givenResponse.data.reviews || []);
-      } catch (givenError) {
-        console.log('Error loading reviews given:', givenError);
-        setReviewsGiven([]);
+        setReviewsReceived(receivedResponse.data.data?.reviews || []);
+
+        // Load reviews given (to clients)
+        try {
+          const givenResponse = await axios.get(
+            `${API_URL}/reviews/user/${user.id}`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+          );
+          setReviewsGiven(givenResponse.data.reviews || []);
+        } catch (givenError) {
+          console.log('Error loading reviews given:', givenError);
+          setReviewsGiven([]);
+        }
+      } else {
+        // For clients: Load reviews received from artists and reviews given to artists
+        try {
+          const receivedResponse = await axios.get(
+            `${API_URL}/reviews/client/${user.id}`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+          );
+          setReviewsReceived(receivedResponse.data.reviews || []);
+        } catch (receivedError) {
+          console.log('Error loading client reviews received:', receivedError);
+          setReviewsReceived([]);
+        }
+
+        try {
+          const givenResponse = await axios.get(
+            `${API_URL}/reviews/user/${user.id}`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+          );
+          setReviewsGiven(givenResponse.data.reviews || []);
+        } catch (givenError) {
+          console.log('Error loading reviews given:', givenError);
+          setReviewsGiven([]);
+        }
       }
     } catch (error) {
       console.error('Error loading reviews:', error);
@@ -180,20 +208,57 @@ export default function ProfileScreen() {
   }, [user?.id, profile?.artist?.id, token, profile?.artist]);
 
   useEffect(() => {
-    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
-    if (isArtist && profile?.artist?.id) {
+    // Load reviews for both artists and clients
+    if (user?.id && profile?.id) {
       loadReviews();
     }
-  }, [profile?.artist?.id, loadReviews, profile?.artist]);
+  }, [profile?.artist?.id, profile?.id, user?.id, loadReviews, profile?.artist]);
+
+  // Load client stats and commissions for non-artist users
+  const loadClientData = useCallback(async () => {
+    if (!user?.id || !token) return;
+
+    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
+    if (isArtist) return; // Only load for clients
+
+    try {
+      // Load client stats
+      const statsResponse = await axios.get(
+        `${API_URL}/users/${user.id}/stats`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setClientStats(statsResponse.data);
+    } catch (error) {
+      console.log('Error loading client stats:', error);
+    }
+
+    try {
+      // Load client commissions
+      const commissionsResponse = await axios.get(
+        `${API_URL}/commissions?client_id=${user.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setClientCommissions(commissionsResponse.data.commissions || []);
+    } catch (error) {
+      console.log('Error loading client commissions:', error);
+    }
+  }, [user?.id, token, profile?.artist]);
+
+  useEffect(() => {
+    const isArtist = profile?.artist !== null && profile?.artist !== undefined;
+    if (!isArtist && user?.id && profile?.id) {
+      loadClientData();
+    }
+  }, [profile?.artist, profile?.id, user?.id, loadClientData]);
 
   const handleLogout = () => {
-    setDeleteAction({
+    showAlert({
       title: 'Logout',
       message: 'Are you sure you want to logout?',
-      buttonText: 'Log Out',
+      type: 'warning',
+      showCancel: true,
       onConfirm: async () => {
         try {
-          setShowDeleteModal(false);
           // Clear profile store immediately to prevent seeing old data
           useProfileStore.getState().reset();
           // Navigate immediately with a fast transition
@@ -207,7 +272,6 @@ export default function ProfileScreen() {
         }
       },
     });
-    setShowDeleteModal(true);
   };
 
   // Early return if no user (prevents flash during logout)
@@ -859,84 +923,226 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Quick Actions (for clients) */}
+        {/* Client Section - Stats, Quick Actions, Reviews */}
         {!isArtist && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <View style={styles.quickActionsList}>
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => router.push('/(tabs)/explore')}
-              >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="compass" size={24} color={colors.primary} />
+          <>
+            {/* Commission Stats */}
+            {clientStats && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleContainer}>
+                    <Ionicons name="stats-chart" size={20} color={colors.primary} />
+                    <Text style={styles.sectionTitle}>Commission Stats</Text>
+                  </View>
                 </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Discover Artists</Text>
-                  <Text style={styles.quickActionSubtitle}>
-                    Find artists that match your style
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconContainer}>
+                      <Ionicons name="folder-outline" size={IS_SMALL_SCREEN ? 20 : 22} color={colors.primary} />
+                    </View>
+                    <Text style={styles.statValue}>{clientStats.total_commissions || 0}</Text>
+                    <Text style={styles.statLabel}>Total</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconContainer}>
+                      <Ionicons name="time-outline" size={IS_SMALL_SCREEN ? 20 : 22} color={colors.primary} />
+                    </View>
+                    <Text style={styles.statValue}>{clientStats.active_commissions || 0}</Text>
+                    <Text style={styles.statLabel}>Active</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconContainer}>
+                      <Ionicons name="checkmark-circle-outline" size={IS_SMALL_SCREEN ? 20 : 22} color={colors.primary} />
+                    </View>
+                    <Text style={styles.statValue}>{clientStats.completed_commissions || 0}</Text>
+                    <Text style={styles.statLabel}>Completed</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Quick Actions for Clients */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <View style={styles.quickActionsList}>
+                <TouchableOpacity
+                  style={styles.quickActionItem}
+                  onPress={() => router.push('/(tabs)/home')}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <Ionicons name="compass-outline" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.quickActionText}>
+                    <Text style={styles.quickActionTitle}>Browse Artists</Text>
+                    <Text style={styles.quickActionSubtitle}>Discover talented artists for your next commission</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionItem}
+                  onPress={() => {
+                    // Navigate to liked board - find the "Liked Artworks" board
+                    const likedBoard = userBoards?.find(b => b.name === 'Liked Artworks' || b.is_default);
+                    if (likedBoard) {
+                      router.push(`/board/${likedBoard.id}`);
+                    } else {
+                      router.push('/(tabs)/boards');
+                    }
+                  }}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <Ionicons name="heart-outline" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.quickActionText}>
+                    <Text style={styles.quickActionTitle}>Saved Artworks</Text>
+                    <Text style={styles.quickActionSubtitle}>View your liked and saved artworks</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionItem}
+                  onPress={() => router.push('/(tabs)/boards')}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <Ionicons name="grid-outline" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.quickActionText}>
+                    <Text style={styles.quickActionTitle}>My Boards</Text>
+                    <Text style={styles.quickActionSubtitle}>Organize artworks into collections</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                </TouchableOpacity>
+
+                {clientCommissions.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.quickActionItem}
+                    onPress={() => router.push('/(tabs)/explore')}
+                  >
+                    <View style={styles.quickActionIcon}>
+                      <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
+                    </View>
+                    <View style={styles.quickActionText}>
+                      <Text style={styles.quickActionTitle}>My Commissions</Text>
+                      <Text style={styles.quickActionSubtitle}>View all your commissions</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Rating Card */}
+            {reviewsReceived.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.ratingCard}>
+                  <View style={styles.ratingIconContainer}>
+                    <Ionicons name="star" size={32} color={colors.primary} />
+                  </View>
+                  <Text style={styles.ratingValue}>
+                    {(() => {
+                      const totalRating = reviewsReceived.reduce((sum, r) => sum + (r.rating || 0), 0);
+                      const avgRating = totalRating / reviewsReceived.length;
+                      return avgRating.toFixed(1);
+                    })()}
+                  </Text>
+                  <Text style={styles.ratingLabel}>
+                    {reviewsReceived.length} {reviewsReceived.length === 1 ? 'Review' : 'Reviews'}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-              </TouchableOpacity>
+              </View>
+            )}
 
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => router.push('/(tabs)/explore')}
-              >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
+            {/* Reviews for Clients */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <Ionicons name="star-outline" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Reviews</Text>
                 </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>My Commissions</Text>
-                  <Text style={styles.quickActionSubtitle}>View your commission requests</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => router.push('/(tabs)/messages')}
-              >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
-                </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Messages</Text>
-                  <Text style={styles.quickActionSubtitle}>Chat with artists</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-              </TouchableOpacity>
+              {/* Tabs */}
+              <View style={styles.tabsContainer}>
+                <TouchableOpacity
+                  style={[styles.tab, activeReviewTab === 'received' && styles.tabActive]}
+                  onPress={() => setActiveReviewTab('received')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="star"
+                    size={18}
+                    color={activeReviewTab === 'received' ? colors.primary : colors.text.secondary}
+                  />
+                  <Text style={[styles.tabText, activeReviewTab === 'received' && styles.tabTextActive]}>
+                    Received ({reviewsReceived.length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeReviewTab === 'given' && styles.tabActive]}
+                  onPress={() => setActiveReviewTab('given')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="star-outline"
+                    size={18}
+                    color={activeReviewTab === 'given' ? colors.primary : colors.text.secondary}
+                  />
+                  <Text style={[styles.tabText, activeReviewTab === 'given' && styles.tabTextActive]}>
+                    Given ({reviewsGiven.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => setShowStyleQuiz(true)}
-              >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="color-palette-outline" size={24} color={colors.primary} />
+              {/* Tab Content */}
+              {reviewsLoading ? (
+                <View style={styles.reviewsLoadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
                 </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Style Preference Quiz</Text>
-                  <Text style={styles.quickActionSubtitle}>Get personalized artist matches</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => router.push('/commission-requests')}
-              >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="document-text-outline" size={24} color={colors.primary} />
-                </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Commission Requests</Text>
-                  <Text style={styles.quickActionSubtitle}>Post requests & get bids</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-              </TouchableOpacity>
+              ) : activeReviewTab === 'received' ? (
+                reviewsReceived.length > 0 ? (
+                  <View style={styles.reviewsList}>
+                    {reviewsReceived.map((review) => (
+                      <ReviewCard
+                        key={review.id}
+                        review={review}
+                        isArtist={false}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyReviewsContainer}>
+                    <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
+                    <Text style={styles.emptyReviewsText}>No reviews received yet</Text>
+                    <Text style={styles.emptyReviewsSubtext}>
+                      Artists will leave reviews after completing your commissions
+                    </Text>
+                  </View>
+                )
+              ) : (
+                reviewsGiven.length > 0 ? (
+                  <View style={styles.reviewsList}>
+                    {reviewsGiven.map((review) => (
+                      <ReviewCard
+                        key={review.id}
+                        review={review}
+                        isArtist={false}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyReviewsContainer}>
+                    <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
+                    <Text style={styles.emptyReviewsText}>No reviews given yet</Text>
+                    <Text style={styles.emptyReviewsSubtext}>
+                      Leave reviews for artists after they complete your commissions
+                    </Text>
+                  </View>
+                )
+              )}
             </View>
-          </View>
+          </>
         )}
 
         {/* Boards */}

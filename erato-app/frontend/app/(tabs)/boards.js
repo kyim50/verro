@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   RefreshControl,
-  Alert,
   Modal,
   ScrollView,
   Dimensions,
@@ -155,67 +154,65 @@ export default function BoardsScreen() {
     const commission = commissions.find(c => c.id === commissionId);
     if (!commission) return;
 
-    Alert.alert(
-      'Complete Commission',
-      'Mark this commission as completed?',
-      [
-        { text: 'Not Yet', style: 'cancel' },
-        {
-          text: 'Complete',
-          onPress: async () => {
-            try {
-              await axios.patch(
-                `${API_URL}/commissions/${commissionId}/status`,
-                { status: 'completed' },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              
-              setShowCommissionModal(false);
-              await loadCommissions();
-              
-              // Use the existing commission object since we know the IDs
-              const updatedCommission = commission;
-              
-              // Determine review target based on user type - use updated commission
-              if (isArtistUser) {
-                // Artist completed - they review the client
-                const client = updatedCommission.client || commission.client;
-                if (client) {
-                  setReviewTarget({
-                    userId: client.id,
-                    userName: client.username || client.full_name,
-                    userAvatar: client.avatar_url,
-                    commissionId: commissionId,
-                    reviewType: 'artist_to_client'
-                  });
-                  setShowReviewModal(true);
-                }
-              } else {
-                // Client completed - they review the artist
-                const artist = updatedCommission.artist?.users || commission.artist?.users;
-                if (artist) {
-                  setReviewTarget({
-                    userId: artist.id,
-                    userName: artist.username || artist.full_name,
-                    userAvatar: artist.avatar_url,
-                    commissionId: commissionId,
-                    reviewType: 'client_to_artist'
-                  });
-                  setShowReviewModal(true);
-                }
-              }
-            } catch (error) {
-              console.error('Error completing commission:', error);
-              showAlert({
-                title: 'Error',
-                message: 'Failed to complete commission. Please try again.',
-                type: 'error',
+    showAlert({
+      title: 'Complete Commission',
+      message: 'Mark this commission as completed?',
+      type: 'success',
+      showCancel: true,
+      cancelText: 'Not Yet',
+      confirmText: 'Complete',
+      onConfirm: async () => {
+        try {
+          await axios.patch(
+            `${API_URL}/commissions/${commissionId}/status`,
+            { status: 'completed' },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          setShowCommissionModal(false);
+          await loadCommissions();
+
+          // Use the existing commission object since we know the IDs
+          const updatedCommission = commission;
+
+          // Determine review target based on user type - use updated commission
+          if (isArtistUser) {
+            // Artist completed - they review the client
+            const client = updatedCommission.client || commission.client;
+            if (client) {
+              setReviewTarget({
+                userId: client.id,
+                userName: client.username || client.full_name,
+                userAvatar: client.avatar_url,
+                commissionId: commissionId,
+                reviewType: 'artist_to_client'
               });
+              setShowReviewModal(true);
+            }
+          } else {
+            // Client completed - they review the artist
+            const artist = updatedCommission.artist?.users || commission.artist?.users;
+            if (artist) {
+              setReviewTarget({
+                userId: artist.id,
+                userName: artist.username || artist.full_name,
+                userAvatar: artist.avatar_url,
+                commissionId: commissionId,
+                reviewType: 'client_to_artist'
+              });
+              setShowReviewModal(true);
             }
           }
+        } catch (error) {
+          console.error('Error completing commission:', error);
+          showAlert({
+            title: 'Error',
+            message: 'Failed to complete commission. Please try again.',
+            type: 'error',
+          });
         }
-      ]
-    );
+      },
+    });
   };
 
   const handleSubmitReview = async (rating, comment) => {
@@ -336,36 +333,32 @@ export default function BoardsScreen() {
   };
 
   const handleDeleteBoard = (board) => {
-    Alert.alert(
-      'Delete Board',
-      `Are you sure you want to delete "${board.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteBoard(board.id);
-              // Refresh boards list after deletion
-              await loadBoards();
-              showAlert({
-                title: 'Success',
-                message: 'Board deleted!',
-                type: 'success',
-              });
-            } catch (error) {
-              const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
-              showAlert({
-                title: 'Error',
-                message: errorMessage,
-                type: 'error',
-              });
-            }
-          },
-        },
-      ]
-    );
+    showAlert({
+      title: 'Delete Board',
+      message: `Are you sure you want to delete "${board.name}"?`,
+      type: 'error',
+      showCancel: true,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await deleteBoard(board.id);
+          // Refresh boards list after deletion
+          await loadBoards();
+          showAlert({
+            title: 'Success',
+            message: 'Board deleted!',
+            type: 'success',
+          });
+        } catch (error) {
+          const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
+          showAlert({
+            title: 'Error',
+            message: errorMessage,
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   const getStatusColor = (status) => {
@@ -893,40 +886,37 @@ export default function BoardsScreen() {
                     <TouchableOpacity
                       style={styles.detailCancelButton}
                       onPress={() => {
-                        Alert.alert(
-                          'Cancel Commission',
-                          'Are you sure you want to cancel this commission?',
-                          [
-                            { text: 'No', style: 'cancel' },
-                            {
-                              text: 'Yes, Cancel',
-                              style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  await axios.patch(
-                                    `${API_URL}/commissions/${selectedCommission.id}/status`,
-                                    { status: 'cancelled' },
-                                    { headers: { Authorization: `Bearer ${token}` } }
-                                  );
-                                  setShowCommissionModal(false);
-                                  await loadCommissions();
-                                  showAlert({
-                                    title: 'Success',
-                                    message: 'Commission has been cancelled',
-                                    type: 'success',
-                                  });
-                                } catch (error) {
-                                  console.error('Error cancelling commission:', error);
-                                  showAlert({
-                                    title: 'Error',
-                                    message: 'Failed to cancel commission. Please try again.',
-                                    type: 'error',
-                                  });
-                                }
-                              }
+                        showAlert({
+                          title: 'Cancel Commission',
+                          message: 'Are you sure you want to cancel this commission?',
+                          type: 'warning',
+                          showCancel: true,
+                          cancelText: 'No',
+                          confirmText: 'Yes, Cancel',
+                          onConfirm: async () => {
+                            try {
+                              await axios.patch(
+                                `${API_URL}/commissions/${selectedCommission.id}/status`,
+                                { status: 'cancelled' },
+                                { headers: { Authorization: `Bearer ${token}` } }
+                              );
+                              setShowCommissionModal(false);
+                              await loadCommissions();
+                              showAlert({
+                                title: 'Success',
+                                message: 'Commission has been cancelled',
+                                type: 'success',
+                              });
+                            } catch (error) {
+                              console.error('Error cancelling commission:', error);
+                              showAlert({
+                                title: 'Error',
+                                message: 'Failed to cancel commission. Please try again.',
+                                type: 'error',
+                              });
                             }
-                          ]
-                        );
+                          },
+                        });
                       }}
                     >
                       <Ionicons name="close-circle-outline" size={20} color="#F44336" />

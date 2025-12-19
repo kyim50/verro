@@ -16,6 +16,43 @@ const generateToken = (userId) => {
   });
 };
 
+// Check if email is available
+router.post(
+  '/check-email',
+  authLimiter,
+  [body('email').isEmail().normalizeEmail()],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { email } = req.body;
+
+      // Check if email exists in database
+      const { data: existingUsers, error: checkError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', email);
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking email:', checkError);
+        throw checkError;
+      }
+
+      const available = !existingUsers || existingUsers.length === 0;
+
+      res.json({
+        available,
+        message: available ? 'Email is available' : 'Email already exists',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Register
 router.post(
   '/register',

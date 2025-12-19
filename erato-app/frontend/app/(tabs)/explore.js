@@ -2310,28 +2310,22 @@ export default function CommissionDashboard() {
                       onPress={() => {
                         if (updatingStatus.has(selectedCommission.id)) return;
                         const commissionId = selectedCommission.id;
-                        
-                        // Use React Native Alert instead of StyledAlert to avoid modal conflicts
-                        Alert.alert(
-                          'Decline Commission',
-                          'Are you sure you want to decline this commission? This action cannot be undone.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Decline',
-                              style: 'destructive',
-                              onPress: () => {
-                                // Close modal immediately
-                                setShowCommissionModal(false);
-                                setSelectedCommission(null);
-                                // Handle async operation after UI updates
-                                setTimeout(() => {
-                                  handleUpdateStatus(commissionId, 'declined', false);
-                                }, 50);
-                              }
-                            }
-                          ]
-                        );
+
+                        showAlert({
+                          title: 'Decline Commission',
+                          message: 'Are you sure you want to decline this commission? This action cannot be undone.',
+                          type: 'warning',
+                          showCancel: true,
+                          onConfirm: () => {
+                            // Close modal immediately
+                            setShowCommissionModal(false);
+                            setSelectedCommission(null);
+                            // Handle async operation after UI updates
+                            setTimeout(() => {
+                              handleUpdateStatus(commissionId, 'declined', false);
+                            }, 50);
+                          },
+                        });
                       }}
                       disabled={updatingStatus.has(selectedCommission.id)}
                     >
@@ -2350,28 +2344,22 @@ export default function CommissionDashboard() {
                       onPress={() => {
                         if (updatingStatus.has(selectedCommission.id)) return;
                         const commissionId = selectedCommission.id;
-                        
-                        // Use React Native Alert instead of StyledAlert to avoid modal conflicts
-                        Alert.alert(
-                          'Accept Commission',
-                          'Accept this request?',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Accept',
-                              style: 'default',
-                              onPress: () => {
-                                // Close modal immediately
-                                setShowCommissionModal(false);
-                                setSelectedCommission(null);
-                                // Handle async operation after UI updates
-                                setTimeout(() => {
-                                  handleUpdateStatus(commissionId, 'accepted', false);
-                                }, 50);
-                              }
-                            }
-                          ]
-                        );
+
+                        showAlert({
+                          title: 'Accept Commission',
+                          message: 'Accept this request?',
+                          type: 'success',
+                          showCancel: true,
+                          onConfirm: () => {
+                            // Close modal immediately
+                            setShowCommissionModal(false);
+                            setSelectedCommission(null);
+                            // Handle async operation after UI updates
+                            setTimeout(() => {
+                              handleUpdateStatus(commissionId, 'accepted', false);
+                            }, 50);
+                          },
+                        });
                       }}
                       disabled={updatingStatus.has(selectedCommission.id)}
                     >
@@ -2393,28 +2381,22 @@ export default function CommissionDashboard() {
                     onPress={() => {
                       if (updatingStatus.has(selectedCommission.id)) return;
                       const commissionId = selectedCommission.id;
-                      
-                      // Use React Native Alert instead of StyledAlert to avoid modal conflicts
-                      Alert.alert(
-                        'Complete Commission',
-                        'Mark as completed?',
-                        [
-                          { text: 'Not Yet', style: 'cancel' },
-                          {
-                            text: 'Complete',
-                            style: 'default',
-                            onPress: () => {
-                              // Close modal immediately
-                              setShowCommissionModal(false);
-                              setSelectedCommission(null);
-                              // Handle async operation after UI updates
-                              setTimeout(() => {
-                                handleUpdateStatus(commissionId, 'completed', false);
-                              }, 50);
-                            }
-                          }
-                        ]
-                      );
+
+                      showAlert({
+                        title: 'Complete Commission',
+                        message: 'Mark this commission as completed?',
+                        type: 'success',
+                        showCancel: true,
+                        onConfirm: () => {
+                          // Close modal immediately
+                          setShowCommissionModal(false);
+                          setSelectedCommission(null);
+                          // Handle async operation after UI updates
+                          setTimeout(() => {
+                            handleUpdateStatus(commissionId, 'completed', false);
+                          }, 50);
+                        },
+                      });
                     }}
                     disabled={updatingStatus.has(selectedCommission.id)}
                   >

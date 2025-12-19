@@ -30,10 +30,14 @@ export default function EditProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
 
-  // Social media fields (for artists only)
+  // Social media fields
   const [instagramUrl, setInstagramUrl] = useState('');
   const [twitterUrl, setTwitterUrl] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
+
+  // Client-specific fields
+  const [location, setLocation] = useState('');
+  const [website, setWebsite] = useState('');
 
   const navigation = useNavigation();
 
@@ -58,16 +62,22 @@ export default function EditProfileScreen() {
       setFullName(user.full_name || '');
       setBio(user.bio || '');
 
-      // Load social media links if user is an artist
+      // Load social media links
       if (user.artists) {
-        setInstagramUrl(user.artists.instagram_url || '');
-        setTwitterUrl(user.artists.twitter_url || '');
-        setTiktokUrl(user.artists.tiktok_url || '');
+        // For artists, load from artists table
+        setInstagramUrl(user.artists.social_links?.instagram || user.artists.instagram_url || '');
+        setTwitterUrl(user.artists.social_links?.twitter || user.artists.twitter_url || '');
+        setTiktokUrl(user.artists.social_links?.tiktok || user.artists.tiktok_url || '');
       } else {
-        setInstagramUrl('');
-        setTwitterUrl('');
-        setTiktokUrl('');
+        // For clients, load from user metadata if available
+        setInstagramUrl(user.social_links?.instagram || '');
+        setTwitterUrl(user.social_links?.twitter || '');
+        setTiktokUrl(user.social_links?.tiktok || '');
       }
+
+      // Load client-specific fields
+      setLocation(user.location || '');
+      setWebsite(user.website || '');
     }
   }, [user?.id]);
 
@@ -135,7 +145,20 @@ export default function EditProfileScreen() {
         avatar_url: finalAvatarUrl || user?.avatar_url,
         full_name: fullName || '',
         bio: bio || '',
+        location: location || '',
+        website: website || '',
       };
+
+      // Add social links for clients
+      if (!user?.artists) {
+        const socialLinks = {};
+        if (instagramUrl) socialLinks.instagram = instagramUrl.trim();
+        if (twitterUrl) socialLinks.twitter = twitterUrl.trim();
+        if (tiktokUrl) socialLinks.tiktok = tiktokUrl.trim();
+        if (Object.keys(socialLinks).length > 0) {
+          updatePayload.social_links = socialLinks;
+        }
+      }
 
       // Only include username if it's different from current username
       if (username && username.trim() !== '' && username.trim() !== user?.username) {
@@ -182,12 +205,12 @@ export default function EditProfileScreen() {
 
       // Update artist social media links if user is an artist
       if (user?.artists) {
-        const artistData = {};
-        if (instagramUrl) artistData.instagram_url = instagramUrl.trim();
-        if (twitterUrl) artistData.twitter_url = twitterUrl.trim();
-        if (tiktokUrl) artistData.tiktok_url = tiktokUrl.trim();
+        const socialLinks = {};
+        if (instagramUrl) socialLinks.instagram = instagramUrl.trim();
+        if (twitterUrl) socialLinks.twitter = twitterUrl.trim();
+        if (tiktokUrl) socialLinks.tiktok = tiktokUrl.trim();
 
-        if (Object.keys(artistData).length > 0) {
+        if (Object.keys(socialLinks).length > 0) {
           console.log('📡 Updating artist profile at:', apiUrl.substring(0, 30) + '...');
           const artistResponse = await fetch(
             `${apiUrl}/users/me/artist`,
@@ -197,12 +220,14 @@ export default function EditProfileScreen() {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(artistData),
+              body: JSON.stringify({ social_links: socialLinks }),
             }
           );
 
           if (!artistResponse.ok) {
-            throw new Error('Failed to update artist profile');
+            const artistError = await artistResponse.json().catch(() => ({}));
+            console.error('Artist update error:', artistError);
+            throw new Error(artistError.error || 'Failed to update artist profile');
           }
         }
       }
@@ -338,57 +363,96 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
-        {/* Social Media Links (for artists only) */}
-        {user?.artists && (
+        {/* Additional Info (for clients) */}
+        {!user?.artists && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Social Media</Text>
-            <Text style={styles.sublabel}>
-              Link your social media accounts to get verified
-            </Text>
+            <Text style={styles.sectionTitle}>Additional Information</Text>
 
             <View style={styles.inputGroup}>
-              <View style={styles.socialInputContainer}>
-                <Ionicons name="logo-instagram" size={20} color={colors.text.primary} style={styles.socialIcon} />
+              <Text style={styles.label}>Location</Text>
+              <View style={styles.iconInputContainer}>
+                <Ionicons name="location-outline" size={20} color={colors.text.secondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.socialInput}
-                  value={instagramUrl}
-                  onChangeText={setInstagramUrl}
-                  placeholder="Instagram username or URL"
+                  style={styles.iconInput}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="City, Country"
                   placeholderTextColor={colors.text.disabled}
-                  autoCapitalize="none"
+                  maxLength={100}
                 />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <View style={styles.socialInputContainer}>
-                <Ionicons name="logo-twitter" size={20} color={colors.text.primary} style={styles.socialIcon} />
+              <Text style={styles.label}>Website</Text>
+              <View style={styles.iconInputContainer}>
+                <Ionicons name="link-outline" size={20} color={colors.text.secondary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.socialInput}
-                  value={twitterUrl}
-                  onChangeText={setTwitterUrl}
-                  placeholder="Twitter username or URL"
+                  style={styles.iconInput}
+                  value={website}
+                  onChangeText={setWebsite}
+                  placeholder="https://yourwebsite.com"
                   placeholderTextColor={colors.text.disabled}
                   autoCapitalize="none"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <View style={styles.socialInputContainer}>
-                <Ionicons name="musical-notes" size={20} color={colors.text.primary} style={styles.socialIcon} />
-                <TextInput
-                  style={styles.socialInput}
-                  value={tiktokUrl}
-                  onChangeText={setTiktokUrl}
-                  placeholder="TikTok username or URL"
-                  placeholderTextColor={colors.text.disabled}
-                  autoCapitalize="none"
+                  keyboardType="url"
+                  maxLength={200}
                 />
               </View>
             </View>
           </View>
         )}
+
+        {/* Social Media Links */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Social Media</Text>
+          <Text style={styles.sublabel}>
+            {user?.artists
+              ? 'Link your social media accounts to get verified'
+              : 'Connect your social media accounts (optional)'}
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.socialInputContainer}>
+              <Ionicons name="logo-instagram" size={20} color={colors.text.primary} style={styles.socialIcon} />
+              <TextInput
+                style={styles.socialInput}
+                value={instagramUrl}
+                onChangeText={setInstagramUrl}
+                placeholder="Instagram username or URL"
+                placeholderTextColor={colors.text.disabled}
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.socialInputContainer}>
+              <Ionicons name="logo-twitter" size={20} color={colors.text.primary} style={styles.socialIcon} />
+              <TextInput
+                style={styles.socialInput}
+                value={twitterUrl}
+                onChangeText={setTwitterUrl}
+                placeholder="Twitter username or URL"
+                placeholderTextColor={colors.text.disabled}
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.socialInputContainer}>
+              <Ionicons name="musical-notes" size={20} color={colors.text.primary} style={styles.socialIcon} />
+              <TextInput
+                style={styles.socialInput}
+                value={tiktokUrl}
+                onChangeText={setTiktokUrl}
+                placeholder="TikTok username or URL"
+                placeholderTextColor={colors.text.disabled}
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -583,6 +647,31 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.md,
     justifyContent: 'center',
+  },
+  iconInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  inputIcon: {
+    marginRight: spacing.sm,
+  },
+  iconInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 15,
+    paddingVertical: spacing.xs,
   },
   socialInputContainer: {
     flexDirection: 'row',

@@ -13,8 +13,14 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+
+const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL ||
+                process.env.EXPO_PUBLIC_API_URL ||
+                'https://api.verrocio.com/api';
 
 const STEPS = {
   EMAIL: 0,
@@ -29,7 +35,7 @@ export default function SignupFlowScreen() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    dob: '', // Format: MM/DD/YYYY
+    dob: '',
     username: '',
     fullName: '',
     userType: 'client',
@@ -37,11 +43,42 @@ export default function SignupFlowScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [checkingEmail, setCheckingEmail] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const register = useAuthStore((state) => state.register);
+
+  // Check if email exists
+  const checkEmailAvailability = async (email) => {
+    try {
+      setCheckingEmail(true);
+      // Try to register with just email to check if it exists
+      // This is a lightweight check - we'll catch the error if email exists
+      const response = await axios.post(`${API_URL}/auth/check-email`, {
+        email,
+      }, {
+        timeout: 5000,
+      });
+      return response.data.available !== false;
+    } catch (error) {
+      // If endpoint doesn't exist (404) or any other error, skip check
+      // Backend will validate on actual registration
+      if (error.response?.status === 404) {
+        console.log('Email check endpoint not available, skipping check');
+        return true;
+      }
+      // If we get a specific error about email existing, catch it
+      if (error.response?.data?.error?.toLowerCase().includes('email')) {
+        return false;
+      }
+      // For other errors, allow to proceed (backend will catch it)
+      return true;
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
 
   // Animate step transitions
   useEffect(() => {
@@ -83,8 +120,61 @@ export default function SignupFlowScreen() {
     return age >= 13;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setError('');
+
+    // Validate before animation
+    let hasError = false;
+    switch (currentStep) {
+      case STEPS.EMAIL:
+        if (!formData.email) {
+          setError('Please enter your email');
+          hasError = true;
+        } else if (!validateEmail(formData.email)) {
+          setError('Please enter a valid email');
+          hasError = true;
+        } else {
+          // Check if email is available
+          const isAvailable = await checkEmailAvailability(formData.email);
+          if (!isAvailable) {
+            setError('This email is already registered. Please log in or use a different email.');
+            hasError = true;
+          }
+        }
+        break;
+
+      case STEPS.PASSWORD:
+        if (!formData.password) {
+          setError('Please create a password');
+          hasError = true;
+        } else if (formData.password.length < 8) {
+          setError('Password must be at least 8 characters');
+          hasError = true;
+        }
+        break;
+
+      case STEPS.DOB:
+        if (!formData.dob) {
+          setError('Please enter your date of birth');
+          hasError = true;
+        } else if (!validateDOB(formData.dob)) {
+          setError('Invalid date of birth or you must be at least 13 years old');
+          hasError = true;
+        }
+        break;
+
+      case STEPS.USERNAME:
+        if (!formData.username) {
+          setError('Please enter a username');
+          hasError = true;
+        } else if (formData.username.length < 3) {
+          setError('Username must be at least 3 characters');
+          hasError = true;
+        }
+        break;
+    }
+
+    if (hasError) return;
 
     // Fade out before transition
     Animated.parallel([
@@ -102,59 +192,13 @@ export default function SignupFlowScreen() {
       // Reset animation values for next step
       fadeAnim.setValue(0);
       slideAnim.setValue(20);
+
+      if (currentStep < STEPS.USER_TYPE) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        handleSignup();
+      }
     });
-
-    switch (currentStep) {
-      case STEPS.EMAIL:
-        if (!formData.email) {
-          setError('Please enter your email');
-          return;
-        }
-        if (!validateEmail(formData.email)) {
-          setError('Please enter a valid email');
-          return;
-        }
-        break;
-
-      case STEPS.PASSWORD:
-        if (!formData.password) {
-          setError('Please create a password');
-          return;
-        }
-        if (formData.password.length < 8) {
-          setError('Password must be at least 8 characters');
-          return;
-        }
-        break;
-
-      case STEPS.DOB:
-        if (!formData.dob) {
-          setError('Please enter your date of birth');
-          return;
-        }
-        if (!validateDOB(formData.dob)) {
-          setError('Invalid date of birth or you must be at least 13 years old');
-          return;
-        }
-        break;
-
-      case STEPS.USERNAME:
-        if (!formData.username) {
-          setError('Please enter a username');
-          return;
-        }
-        if (formData.username.length < 3) {
-          setError('Username must be at least 3 characters');
-          return;
-        }
-        break;
-    }
-
-    if (currentStep < STEPS.USER_TYPE) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleSignup();
-    }
   };
 
   const handleBack = () => {
@@ -311,8 +355,12 @@ export default function SignupFlowScreen() {
               placeholder="Username"
               placeholderTextColor={colors.text.disabled}
               value={formData.username}
-              onChangeText={(text) => setFormData({ ...formData, username: text.toLowerCase().replace(/\s/g, '') })}
+              onChangeText={(text) => {
+                const cleanText = text.toLowerCase().replace(/\s/g, '');
+                setFormData({ ...formData, username: cleanText });
+              }}
               autoCapitalize="none"
+              autoCorrect={false}
               autoFocus
               editable={!loading}
             />
@@ -448,12 +496,12 @@ export default function SignupFlowScreen() {
         {/* Next Button */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.nextButton, loading && styles.nextButtonDisabled]}
+            style={[styles.nextButton, (loading || checkingEmail) && styles.nextButtonDisabled]}
             onPress={handleNext}
-            disabled={loading}
+            disabled={loading || checkingEmail}
             activeOpacity={0.9}
           >
-            {loading ? (
+            {(loading || checkingEmail) ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.nextButtonText}>

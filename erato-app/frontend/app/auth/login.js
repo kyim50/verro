@@ -66,36 +66,6 @@ export default function LoginScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {/* OAuth Buttons */}
-          <TouchableOpacity
-            style={styles.oauthButton}
-            onPress={() => {
-              setError('Google login coming soon');
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="logo-google" size={20} color={colors.text.primary} />
-            <Text style={styles.oauthButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.oauthButton}
-            onPress={() => {
-              setError('Apple login coming soon');
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="logo-apple" size={20} color={colors.text.primary} />
-            <Text style={styles.oauthButtonText}>Continue with Apple</Text>
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
           {/* Email Input */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
