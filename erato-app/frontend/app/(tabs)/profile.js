@@ -121,8 +121,9 @@ export default function ProfileScreen() {
       await fetchProfile(user.id, token, forceRefresh);
       // Check if avatar changed and update key to force image refresh
       const updatedProfile = useProfileStore.getState().profile;
-      const newAvatarUrl = updatedProfile?.avatar_url || user?.avatar_url;
-      const newBannerUrl = updatedProfile?.banner_url || user?.banner_url;
+      const updatedUser = useAuthStore.getState().user; // Get fresh user from store
+      const newAvatarUrl = updatedProfile?.avatar_url || updatedUser?.avatar_url;
+      const newBannerUrl = updatedUser?.banner_url || updatedProfile?.banner_url; // Check user first since that's what edit updates
       // Only update avatar key if URL actually changed (not just on every load)
       if (newAvatarUrl && prevAvatarUrl !== newAvatarUrl) {
         prevAvatarUrlRef.current = newAvatarUrl;
@@ -132,11 +133,14 @@ export default function ProfileScreen() {
         prevAvatarUrlRef.current = newAvatarUrl;
       }
       // Check if banner changed and update key to force image refresh
+      console.log('🖼️ Banner check:', { prevBannerUrl, newBannerUrl, changed: prevBannerUrl !== newBannerUrl });
       if (newBannerUrl && prevBannerUrl !== newBannerUrl) {
+        console.log('🔄 Banner changed! Incrementing banner key');
         prevBannerUrlRef.current = newBannerUrl;
         setBannerKey(prev => prev + 1);
       } else if (!prevBannerUrlRef.current && newBannerUrl) {
         // Set initial banner URL ref without updating key (prevents flash on first load)
+        console.log('📌 Setting initial banner URL ref');
         prevBannerUrlRef.current = newBannerUrl;
       }
       setIsInitialLoad(false);
@@ -483,66 +487,71 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
         >
-          {/* Banner Image */}
-          <View style={styles.bannerContainer}>
+          {/* Banner Section with Overlapping Avatar */}
+          <View style={styles.bannerSection}>
+            {/* Banner Image */}
             {(() => {
               // Use custom banner if set, otherwise fall back to first portfolio image
               const bannerSource = profile?.banner_url || user?.banner_url || profile?.artist?.portfolio_images?.[0];
               return bannerSource ? (
-                <Image
-                  key={bannerKey > 0 ? `banner-${bannerKey}` : 'banner-initial'}
-                  source={{
-                    uri: (() => {
-                      const url = bannerSource;
-                      // Only add cache-busting parameter if banner key changed (not on every render)
-                      if (bannerKey > 0) {
-                        const separator = url.includes('?') ? '&' : '?';
-                        return `${url}${separator}_v=${bannerKey}`;
-                      }
-                      return url;
-                    })()
-                  }}
-                  style={styles.bannerImage}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                  placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                  transition={300}
-                />
+                <View style={styles.bannerContainer}>
+                  <Image
+                    key={bannerKey > 0 ? `banner-${bannerKey}` : 'banner-initial'}
+                    source={{
+                      uri: (() => {
+                        const url = bannerSource;
+                        // Only add cache-busting parameter if banner key changed (not on every render)
+                        if (bannerKey > 0) {
+                          const separator = url.includes('?') ? '&' : '?';
+                          return `${url}${separator}_v=${bannerKey}`;
+                        }
+                        return url;
+                      })()
+                    }}
+                    style={styles.bannerImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                    transition={300}
+                  />
+                </View>
               ) : (
                 <View style={styles.bannerPlaceholder} />
               );
             })()}
+
+            {/* Avatar overlapping the banner */}
+            <View style={styles.avatarContainer}>
+              {(profile?.avatar_url || user?.avatar_url) ? (
+                <Image
+                  source={{
+                    uri: (() => {
+                      const url = profile?.avatar_url || user?.avatar_url;
+                      // Only add cache-busting parameter if avatar key changed (not on every render)
+                      if (avatarKey > 0) {
+                        const separator = url?.includes('?') ? '&' : '?';
+                        return `${url}${separator}_v=${avatarKey}`;
+                      }
+                      return url;
+                    })()
+                  }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                  transition={300}
+                  key={avatarKey > 0 ? `avatar-${avatarKey}` : 'avatar-initial'}
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={40} color={colors.text.disabled} />
+                </View>
+              )}
+            </View>
           </View>
 
           {/* Profile Info */}
           <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
-            {(profile?.avatar_url || user?.avatar_url) ? (
-              <Image
-                source={{
-                  uri: (() => {
-                    const url = profile?.avatar_url || user?.avatar_url;
-                    // Only add cache-busting parameter if avatar key changed (not on every render)
-                    if (avatarKey > 0) {
-                      const separator = url?.includes('?') ? '&' : '?';
-                      return `${url}${separator}_v=${avatarKey}`;
-                    }
-                    return url;
-                  })()
-                }}
-                style={styles.avatar}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                transition={300}
-                key={avatarKey > 0 ? `avatar-${avatarKey}` : 'avatar-initial'}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={60} color={colors.text.disabled} />
-              </View>
-            )}
-          </View>
 
           <View style={styles.usernameRow}>
             <Text style={styles.username}>@{profile?.username}</Text>
@@ -1449,9 +1458,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 22 : 24,
   },
+  bannerSection: {
+    position: 'relative',
+    marginBottom: IS_SMALL_SCREEN ? 45 : 50, // Space for half of the overlapping avatar
+  },
   bannerContainer: {
     width: '100%',
-    height: 200,
+    height: 280,
+    position: 'relative',
     backgroundColor: colors.surfaceLight,
     borderRadius: 16,
     overflow: 'hidden',
@@ -1462,39 +1476,50 @@ const styles = StyleSheet.create({
   },
   bannerPlaceholder: {
     width: '100%',
-    height: '100%',
+    height: 280,
     backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
   },
   profileSection: {
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingTop: 0, // Remove top padding since avatar is now above
     paddingBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    marginTop: -(IS_SMALL_SCREEN ? 45 : 50),
   },
   avatarContainer: {
-    marginBottom: spacing.md,
+    position: 'absolute',
+    bottom: -(IS_SMALL_SCREEN ? 45 : 50), // Half of avatar height to overlap
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  avatar: {
+    width: IS_SMALL_SCREEN ? 90 : 100,
+    height: IS_SMALL_SCREEN ? 90 : 100,
+    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     borderWidth: 4,
     borderColor: colors.background,
-    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  avatar: {
-    width: IS_SMALL_SCREEN ? 90 : 100,
-    height: IS_SMALL_SCREEN ? 90 : 100,
-    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
-    backgroundColor: colors.surface,
-  },
   avatarPlaceholder: {
     width: IS_SMALL_SCREEN ? 90 : 100,
     height: IS_SMALL_SCREEN ? 90 : 100,
     borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     backgroundColor: colors.surface,
+    borderWidth: 4,
+    borderColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   usernameRow: {
     flexDirection: 'row',

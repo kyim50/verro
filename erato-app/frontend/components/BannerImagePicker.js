@@ -41,7 +41,7 @@ export default function BannerImagePicker({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
-        aspect: [16, 9], // Banner aspect ratio
+        aspect: [7, 2], // Banner aspect ratio matching display (roughly full-width at 280px height)
         quality: 0.8,
       });
 
