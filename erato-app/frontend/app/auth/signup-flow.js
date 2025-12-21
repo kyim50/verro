@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -30,16 +30,10 @@ const STEPS = {
   USER_TYPE: 4,
 };
 
-// Add state to track if inputs should be enabled
-const useInputDelay = () => {
+// Simple input state management
+const useInputState = () => {
   const [inputsEnabled, setInputsEnabled] = useState(true);
-
-  const delayInputs = () => {
-    setInputsEnabled(false);
-    setTimeout(() => setInputsEnabled(true), 100); // Small delay after animation
-  };
-
-  return { inputsEnabled, delayInputs };
+  return { inputsEnabled, setInputsEnabled };
 };
 
 export default function SignupFlowScreen() {
@@ -56,10 +50,9 @@ export default function SignupFlowScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [checkingEmail, setCheckingEmail] = useState(false);
-  const { inputsEnabled, delayInputs } = useInputDelay();
+  const { inputsEnabled } = useInputState();
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const register = useAuthStore((state) => state.register);
 
@@ -95,27 +88,17 @@ export default function SignupFlowScreen() {
 
   // Animate step transitions
   useEffect(() => {
-    // Disable inputs during animation
-    delayInputs();
-
     // Reset animation values for new step
-    fadeAnim.setValue(0.8); // Start slightly faded instead of 0 to prevent flash
-    slideAnim.setValue(20);
+    fadeAnim.setValue(0);
+    slideAnim.setValue(0);
 
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400, // Slightly longer duration
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 40,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [currentStep, delayInputs]);
+    // Simple fade-in animation without transforms that might block touches
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [currentStep]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -386,8 +369,8 @@ export default function SignupFlowScreen() {
         autoCapitalize="none"
         autoCorrect={false}
         autoFocus={currentStep === STEPS.USERNAME} // Only autofocus on username step
-        editable={!loading && inputsEnabled}
-        selectTextOnFocus={!loading && inputsEnabled}
+        editable={!loading}
+        selectTextOnFocus={!loading}
       />
       <TextInput
         style={styles.input}
@@ -398,7 +381,7 @@ export default function SignupFlowScreen() {
           // Also use functional update here for consistency
           setFormData(prev => ({ ...prev, fullName: text }))
         }
-        editable={!loading && inputsEnabled}
+        editable={!loading}
       />
     </View>
   );
@@ -514,7 +497,6 @@ export default function SignupFlowScreen() {
             styles.content,
             {
               opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
             }
           ]}
         >
