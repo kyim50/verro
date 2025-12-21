@@ -163,16 +163,21 @@ export default function EditProfileScreen() {
       let finalAvatarUrl = avatarUrl;
       let finalBannerUrl = bannerUrl;
 
+      console.log('🔍 Banner URL before save:', bannerUrl);
+      console.log('🔍 Avatar URL before save:', avatarUrl);
+
       // Upload new profile image if it's a local file
       if (avatarUrl && avatarUrl.startsWith('file://')) {
         const { uploadImage } = require('../../utils/imageUpload');
         finalAvatarUrl = await uploadImage(avatarUrl, 'profiles', '', token);
+        console.log('✅ Uploaded avatar:', finalAvatarUrl);
       }
 
       // Upload new banner image if it's a local file
       if (bannerUrl && bannerUrl.startsWith('file://')) {
         const { uploadImage } = require('../../utils/imageUpload');
         finalBannerUrl = await uploadImage(bannerUrl, 'banners', '', token);
+        console.log('✅ Uploaded banner:', finalBannerUrl);
       }
 
       // Prepare update payload - only include fields that have values
@@ -184,6 +189,8 @@ export default function EditProfileScreen() {
         location: location || '',
         website: website || '',
       };
+
+      console.log('📦 Update payload:', JSON.stringify(updatePayload, null, 2));
 
       // Add social links for clients
       if (!user?.artists) {
@@ -272,7 +279,7 @@ export default function EditProfileScreen() {
 
       // Fetch updated user data (this will update auth store)
       await fetchUserData();
-      
+
       // Also refresh profile store if user is viewing their own profile - do this immediately
       if (user?.id) {
         // Force immediate update by clearing cache and re-fetching
@@ -280,15 +287,19 @@ export default function EditProfileScreen() {
         await fetchProfile(user.id, token);
       }
 
+      console.log('✅ Profile update complete, banner URL should be:', finalBannerUrl);
+
       Toast.show({
         type: 'success',
         text1: 'Success!',
         text2: 'Profile updated successfully',
         visibilityTime: 2000,
       });
-      
-      // Navigate back immediately - profile screen will refresh on focus
-      router.back();
+
+      // Wait a bit for the profile to refresh before navigating back
+      setTimeout(() => {
+        router.back();
+      }, 500);
     } catch (error) {
       console.error('Error updating profile:', error);
       const errorMessage = error.message || 'Failed to update profile. Please try again.';
