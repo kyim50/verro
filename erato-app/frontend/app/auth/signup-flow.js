@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,18 @@ const STEPS = {
   USER_TYPE: 4,
 };
 
+// Add state to track if inputs should be enabled
+const useInputDelay = () => {
+  const [inputsEnabled, setInputsEnabled] = useState(true);
+
+  const delayInputs = () => {
+    setInputsEnabled(false);
+    setTimeout(() => setInputsEnabled(true), 100); // Small delay after animation
+  };
+
+  return { inputsEnabled, delayInputs };
+};
+
 export default function SignupFlowScreen() {
   const [currentStep, setCurrentStep] = useState(STEPS.EMAIL);
   const [formData, setFormData] = useState({
@@ -44,6 +56,7 @@ export default function SignupFlowScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [checkingEmail, setCheckingEmail] = useState(false);
+  const { inputsEnabled, delayInputs } = useInputDelay();
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -82,10 +95,17 @@ export default function SignupFlowScreen() {
 
   // Animate step transitions
   useEffect(() => {
+    // Disable inputs during animation
+    delayInputs();
+
+    // Reset animation values for new step
+    fadeAnim.setValue(0.8); // Start slightly faded instead of 0 to prevent flash
+    slideAnim.setValue(20);
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 400, // Slightly longer duration
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
@@ -95,7 +115,7 @@ export default function SignupFlowScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [currentStep]);
+  }, [currentStep, delayInputs]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -358,26 +378,27 @@ export default function SignupFlowScreen() {
         onChangeText={(text) => {
           const cleanText = text.toLowerCase().replace(/\s/g, '');
           // Use functional update to get latest state
-          setFormData(prev => ({ 
-            ...prev, 
-            username: cleanText 
+          setFormData(prev => ({
+            ...prev,
+            username: cleanText
           }));
         }}
         autoCapitalize="none"
         autoCorrect={false}
-        autoFocus
-        editable={!loading}
+        autoFocus={currentStep === STEPS.USERNAME} // Only autofocus on username step
+        editable={!loading && inputsEnabled}
+        selectTextOnFocus={!loading && inputsEnabled}
       />
       <TextInput
         style={styles.input}
         placeholder="Full Name (optional)"
         placeholderTextColor={colors.text.disabled}
         value={formData.fullName}
-        onChangeText={(text) => 
+        onChangeText={(text) =>
           // Also use functional update here for consistency
           setFormData(prev => ({ ...prev, fullName: text }))
         }
-        editable={!loading}
+        editable={!loading && inputsEnabled}
       />
     </View>
   );
@@ -464,6 +485,7 @@ export default function SignupFlowScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       style={styles.container}
     >
       <ScrollView
