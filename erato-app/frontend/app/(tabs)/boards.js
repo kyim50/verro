@@ -87,21 +87,16 @@ export default function BoardsScreen() {
     }, [activeTab, isArtistUser, token])
   );
 
-  const loadBoards = useCallback(async (skipCache = true) => {
-    try {
-      const fetchedBoards = await fetchBoards(null, { skipCache });
-      console.log('Boards loaded:', fetchedBoards?.length || 0, 'boards');
-      // Log board counts for debugging
-      fetchedBoards?.forEach(board => {
-        const count = board.board_artworks?.length || board.artworks?.[0]?.count || 0;
-        console.log(`Board "${board.name}": ${count} pins`);
-      });
-      return fetchedBoards;
-    } catch (error) {
-      console.error('Error loading boards:', error);
-      throw error;
-    }
-  }, [fetchBoards]);
+
+
+const loadBoards = useCallback(async (skipCache = true) => {
+  try {
+    return await fetchBoards(null, { skipCache });
+  } catch (error) {
+    console.error('Error loading boards:', error);
+    throw error;
+  }
+}, [fetchBoards]);
 
   const loadCommissions = async () => {
     setCommissionsLoading(true);
@@ -332,34 +327,39 @@ export default function BoardsScreen() {
     }
   };
 
-  const handleDeleteBoard = (board) => {
-    showAlert({
-      title: 'Delete Board',
-      message: `Are you sure you want to delete "${board.name}"?`,
-      type: 'error',
-      showCancel: true,
-      confirmText: 'Delete',
-      onConfirm: async () => {
-        try {
-          await deleteBoard(board.id);
-          // Refresh boards list after deletion
-          await loadBoards();
-          showAlert({
-            title: 'Success',
-            message: 'Board deleted!',
-            type: 'success',
-          });
-        } catch (error) {
-          const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
-          showAlert({
-            title: 'Error',
-            message: errorMessage,
-            type: 'error',
-          });
-        }
-      },
-    });
-  };
+ const handleDeleteBoard = (board) => {
+  showAlert({
+    title: 'Delete Board',
+    message: `Are you sure you want to delete "${board.name}"?`,
+    type: 'error',
+    showCancel: true,
+    confirmText: 'Delete',
+    onConfirm: async () => {
+      try {
+        await deleteBoard(board.id);
+        await loadBoards(true);
+        
+        // Show toast instead of alert
+        Toast.show({
+          type: 'success',
+          text1: 'Board Deleted',
+          text2: `"${board.name}" has been deleted`,
+          visibilityTime: 3000,
+          position: 'bottom',
+        });
+      } catch (error) {
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage,
+          visibilityTime: 4000,
+          position: 'bottom',
+        });
+      }
+    },
+  });
+};
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -394,7 +394,7 @@ export default function BoardsScreen() {
       ? countFromBackend
       : countFromArray;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
-    const isCreatedBoard = item.board_type === 'created';
+    const isSystemBoard = item.board_type === 'created'|| item.board_type === 'Liked';
     
     // Format last updated time
     const getTimeAgo = (dateString) => {
@@ -417,11 +417,35 @@ export default function BoardsScreen() {
     
     const lastUpdated = getTimeAgo(item.updated_at || item.created_at);
 
+    // Show board options menu
+    const showBoardOptions = (e) => {
+      e.stopPropagation(); // Prevent navigation
+      
+      showAlert({
+        title: 'Board Options',
+        message: `What would you like to do with "${item.name}"?`,
+        type: 'info',
+        buttons: [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => handleDeleteBoard(item),
+          },
+        ],
+      });
+    };
+
     return (
       <TouchableOpacity
         style={styles.boardCard}
         onPress={() => router.push(`/board/${item.id}`)}
         activeOpacity={0.9}
+        delayPressIn={50}
       >
         {/* Pinterest-style Collage - larger image on left, smaller grid on right */}
         <View style={styles.coverGrid}>
@@ -465,6 +489,21 @@ export default function BoardsScreen() {
             <Text style={styles.boardName} numberOfLines={1}>
               {item.name}
             </Text>
+            
+            {/* Options button (three dots) - Show for all except "created" board */}
+            {!isSystemBoard && (
+              <TouchableOpacity
+                onPressIn={(e) => {
+  e.stopPropagation(); // Stop immediately on press start
+  showBoardOptions(e);
+}}
+                style={styles.optionsButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+            
             {!item.is_public && (
               <Ionicons name="lock-closed" size={14} color={colors.text.secondary} style={styles.lockIcon} />
             )}
