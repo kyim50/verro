@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore, useBoardStore, useFeedStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import { useEngagementTracking } from '../../hooks/useEngagementTracking';
 
 const { width, height } = Dimensions.get('window');
@@ -391,26 +391,52 @@ export default function ArtworkDetailScreen() {
 
         {/* Content Section - Below image, no overlap */}
         <View style={styles.contentSection}>
-          {/* Title and Like */}
-          <View style={styles.titleRow}>
-            <Text style={styles.title}>{artwork.title}</Text>
-            <TouchableOpacity onPress={handleLike} style={styles.likeButton}>
+          {/* Action Row - Pinterest-style Save and Like */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={async () => {
+                if (!token) {
+                  Toast.show({
+                    type: 'info',
+                    text1: 'Login Required',
+                    text2: 'Please login to save artworks',
+                    visibilityTime: 2000,
+                  });
+                  return;
+                }
+                // Show board selection (you may need to implement a board picker modal)
+                Toast.show({
+                  type: 'info',
+                  text1: 'Save',
+                  text2: 'Board selection coming soon',
+                  visibilityTime: 2000,
+                });
+                trackSave({ board_id: 'default' });
+              }}
+            >
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLike} style={styles.likeButtonRound}>
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
-                size={28}
+                size={24}
                 color={isLiked ? colors.primary : colors.text.secondary}
               />
             </TouchableOpacity>
           </View>
 
+          {/* Title */}
+          <Text style={styles.title}>{artwork.title}</Text>
+
           {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statChip}>
-              <Ionicons name="eye-outline" size={18} color={colors.text.secondary} />
+              <Ionicons name="eye-outline" size={16} color={colors.text.secondary} />
               <Text style={styles.statChipText}>{artwork.view_count || 0} views</Text>
             </View>
             <View style={styles.statChip}>
-              <Ionicons name="heart-outline" size={18} color={colors.text.secondary} />
+              <Ionicons name="heart-outline" size={16} color={colors.text.secondary} />
               <Text style={styles.statChipText}>{artwork.like_count || 0} likes</Text>
             </View>
           </View>
@@ -686,8 +712,45 @@ const styles = StyleSheet.create({
   contentSection: {
     backgroundColor: colors.background,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  likeButtonRound: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
   },
   titleRow: {
     flexDirection: 'row',
@@ -700,9 +763,9 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontSize: IS_VERY_SMALL_SCREEN ? 22 : IS_SMALL_SCREEN ? 24 : 28,
-    flex: 1,
     lineHeight: IS_VERY_SMALL_SCREEN ? 28 : IS_SMALL_SCREEN ? 32 : 36,
     fontWeight: '700',
+    marginBottom: spacing.sm,
   },
   likeButton: {
     padding: spacing.sm,
@@ -784,15 +847,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   artistCard: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    borderRadius: 16, // Pinterest-style soft rounding
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    borderRadius: 20, // Pinterest-style soft rounding
     padding: spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, // Soft Pinterest shadow
-    shadowRadius: 8,
+    shadowOpacity: 0.06, // Soft Pinterest shadow
+    shadowRadius: 12,
     elevation: 2,
   },
   artistCardContent: {

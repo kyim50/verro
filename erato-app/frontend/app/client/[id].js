@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -340,18 +341,26 @@ export default function ClientProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Tab Content */}
+          {/* Tab Content - Horizontal Carousel */}
           {activeReviewTab === 'received' ? (
             reviewsReceived.length > 0 ? (
-              <View style={styles.reviewsList}>
-                {reviewsReceived.map((review) => (
-                  <ReviewCard
-                    key={review.id}
-                    review={review}
-                    isArtist={false}
-                  />
-                ))}
-              </View>
+              <FlatList
+                data={reviewsReceived}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.reviewsCarouselContent}
+                snapToInterval={width * 0.85 + spacing.md}
+                decelerationRate="fast"
+                renderItem={({ item }) => (
+                  <View style={styles.reviewCarouselItem}>
+                    <ReviewCard
+                      review={item}
+                      isArtist={false}
+                    />
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+              />
             ) : (
               <View style={styles.emptyReviewsContainer}>
                 <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
@@ -363,15 +372,23 @@ export default function ClientProfileScreen() {
             )
           ) : (
             reviewsGiven.length > 0 ? (
-              <View style={styles.reviewsList}>
-                {reviewsGiven.map((review) => (
-                  <ReviewCard
-                    key={review.id}
-                    review={review}
-                    isArtist={false}
-                  />
-                ))}
-              </View>
+              <FlatList
+                data={reviewsGiven}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.reviewsCarouselContent}
+                snapToInterval={width * 0.85 + spacing.md}
+                decelerationRate="fast"
+                renderItem={({ item }) => (
+                  <View style={styles.reviewCarouselItem}>
+                    <ReviewCard
+                      review={item}
+                      isArtist={false}
+                    />
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+              />
             ) : (
               <View style={styles.emptyReviewsContainer}>
                 <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
@@ -562,17 +579,19 @@ const styles = StyleSheet.create({
   clientHeader: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
+    paddingTop: spacing.xl,
     paddingBottom: spacing.md,
   },
   avatarContainer: {
-    marginBottom: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   avatar: {
     width: IS_SMALL_SCREEN ? 110 : 120,
     height: IS_SMALL_SCREEN ? 110 : 120,
     borderRadius: IS_SMALL_SCREEN ? 55 : 60,
-    borderWidth: 0,
+    borderWidth: 4,
+    borderColor: colors.background,
   },
   nameContainer: {
     alignItems: 'center',
@@ -800,6 +819,15 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
     gap: spacing.md,
+  },
+  reviewsCarouselContent: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  reviewCarouselItem: {
+    width: width * 0.85,
+    marginRight: spacing.md,
   },
   emptyReviewsContainer: {
     justifyContent: 'center',

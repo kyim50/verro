@@ -277,16 +277,19 @@ export default function EditArtistProfileScreen() {
           />
 
           <View style={styles.switchRow}>
-            <View>
+            <View style={{ flex: 1, marginRight: spacing.md, minWidth: 0 }}>
               <Text style={styles.switchLabel}>Allow waitlist</Text>
-              <Text style={styles.switchDescription}>Let clients join when full</Text>
+              <Text style={styles.switchDescription} numberOfLines={2}>Let clients join when full</Text>
             </View>
-            <Switch
-              value={allowWaitlist}
-              onValueChange={setAllowWaitlist}
-              trackColor={{ false: colors.border, true: colors.primary + '60' }}
-              thumbColor={allowWaitlist ? colors.primary : colors.surface}
-            />
+            <View style={{ flexShrink: 0 }}>
+              <Switch
+                value={allowWaitlist}
+                onValueChange={setAllowWaitlist}
+                trackColor={{ false: colors.border + '40', true: colors.primary + '40' }}
+                thumbColor={allowWaitlist ? colors.primary : colors.background}
+                ios_backgroundColor={colors.border + '40'}
+              />
+            </View>
           </View>
         </View>
 
@@ -407,17 +410,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '80',
+    borderRadius: 20,
+    padding: spacing.lg,
+    borderWidth: 0,
     marginBottom: spacing.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   quickLinkIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary + '20',
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -436,71 +443,87 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   section: {
-    marginBottom: spacing.xl,
-    gap: spacing.sm,
+    marginBottom: spacing.xl + spacing.sm,
+    gap: spacing.xs,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs / 2,
   },
   helperText: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    fontWeight: '400',
   },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: 16,
+    marginTop: spacing.sm,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   switchLabel: {
     ...typography.bodyBold,
     color: colors.text.primary,
     marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '600',
   },
   switchDescription: {
     ...typography.caption,
     color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '400',
+    maxWidth: '90%',
   },
   statusButtons: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
   statusButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm + 2,
+    gap: spacing.sm,
+    paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   statusButtonActive: {
-    borderColor: colors.primary + '80',
-    backgroundColor: `${colors.primary}15`,
+    backgroundColor: colors.primary + '15',
+    shadowOpacity: 0.08,
   },
   statusButtonText: {
     ...typography.bodyBold,
     color: colors.text.secondary,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontSize: 15,
   },
   statusButtonTextActive: {
     color: colors.primary,
+    fontWeight: '700',
   },
   priceRow: {
     flexDirection: 'row',
@@ -513,31 +536,44 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     marginBottom: spacing.xs,
+    fontSize: 13,
+    fontWeight: '500',
   },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    paddingTop: spacing.md,
+    borderRadius: 16,
+    padding: spacing.md + 2,
+    paddingTop: spacing.md + 2,
     color: colors.text.primary,
     ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    minHeight: 48,
+    borderWidth: 0,
+    minHeight: 52,
     fontSize: 15,
     textAlignVertical: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   textArea: {
-    minHeight: 90,
+    minHeight: 100,
     textAlignVertical: 'top',
-    paddingTop: spacing.md,
+    paddingTop: spacing.md + 2,
   },
   saveButton: {
     backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md + 4,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: spacing.xl,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
   saveButtonDisabled: {
     opacity: 0.5,
@@ -545,6 +581,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     ...typography.button,
     color: colors.text.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

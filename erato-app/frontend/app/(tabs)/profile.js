@@ -801,15 +801,24 @@ export default function ProfileScreen() {
                 </View>
               ) : activeReviewTab === 'received' ? (
                 reviewsReceived.length > 0 ? (
-                  <View style={styles.reviewsList}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.reviewsScrollContainer}
+                    pagingEnabled={false}
+                    snapToInterval={width - spacing.md}
+                    decelerationRate="fast"
+                  >
                     {reviewsReceived.map((review) => (
-                      <ReviewCard
-                        key={review.id}
-                        review={review}
-                        isArtist={isOwnProfile}
-                      />
+                      <View key={review.id} style={styles.reviewCardWrapper}>
+                        <ReviewCard
+                          review={review}
+                          isArtist={isOwnProfile}
+                          showingGivenReviews={false}
+                        />
+                      </View>
                     ))}
-                  </View>
+                  </ScrollView>
                 ) : (
                   <View style={styles.emptyReviewsContainer}>
                     <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
@@ -821,15 +830,24 @@ export default function ProfileScreen() {
                 )
               ) : (
                 reviewsGiven.length > 0 ? (
-                  <View style={styles.reviewsList}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.reviewsScrollContainer}
+                    pagingEnabled={false}
+                    snapToInterval={width - spacing.md}
+                    decelerationRate="fast"
+                  >
                     {reviewsGiven.map((review) => (
-                      <ReviewCard
-                        key={review.id}
-                        review={review}
-                        isArtist={isOwnProfile}
-                      />
+                      <View key={review.id} style={styles.reviewCardWrapper}>
+                        <ReviewCard
+                          review={review}
+                          isArtist={isOwnProfile}
+                          showingGivenReviews={true}
+                        />
+                      </View>
                     ))}
-                  </View>
+                  </ScrollView>
                 ) : (
                   <View style={styles.emptyReviewsContainer}>
                     <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
@@ -1516,39 +1534,40 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   commissionCard: {
-    backgroundColor: 'transparent',
-    borderRadius: borderRadius.lg,
-    padding: 0,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: spacing.lg,
     gap: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   statusBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.border,
+    borderWidth: 0,
     justifyContent: 'center',
   },
   statusBadgeOpen: {
-    borderColor: colors.success,
-    backgroundColor: colors.success + '20',
+    backgroundColor: colors.success + '15',
   },
   statusBadgeLimited: {
-    borderColor: colors.status.warning,
-    backgroundColor: colors.status.warning + '20',
+    backgroundColor: colors.status.warning + '15',
   },
   statusBadgeClosed: {
-    borderColor: colors.error,
-    backgroundColor: colors.error + '20',
+    backgroundColor: colors.error + '15',
   },
   statusBadgeText: {
     ...typography.bodyBold,
-    fontSize: IS_SMALL_SCREEN ? 15 : 16,
-    fontWeight: '700',
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontWeight: '600',
   },
   commissionStatus: {
     flexDirection: 'row',
@@ -1571,23 +1590,22 @@ const styles = StyleSheet.create({
   },
   infoGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   infoGridItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.xs : spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '80',
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    borderWidth: 0,
   },
   infoIconContainer: {
-    width: IS_SMALL_SCREEN ? 36 : 44,
-    height: IS_SMALL_SCREEN ? 36 : 44,
+    width: IS_SMALL_SCREEN ? 40 : 48,
+    height: IS_SMALL_SCREEN ? 40 : 48,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '20',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.sm,
@@ -1595,14 +1613,15 @@ const styles = StyleSheet.create({
   infoGridLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 12 : 13,
-    marginBottom: spacing.xs,
+    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    marginBottom: spacing.xs / 2,
     textAlign: 'center',
+    fontWeight: '500',
   },
   infoGridValue: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 13 : 15,
+    fontSize: IS_SMALL_SCREEN ? 14 : 16,
     fontWeight: '700',
     textAlign: 'center',
     flexWrap: 'wrap',
@@ -1779,6 +1798,16 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
     gap: spacing.md,
+  },
+  reviewsScrollContainer: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
+  },
+  reviewCardWrapper: {
+    width: width - (spacing.md * 3),
+    marginRight: spacing.sm,
   },
   reviewsLoadingContainer: {
     paddingVertical: spacing.xxl,

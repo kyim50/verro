@@ -1101,7 +1101,7 @@ export default function CommissionDashboard() {
               style={styles.actionButton}
               onPress={() => setShowStatsModal(true)}
             >
-              <Ionicons name="stats-chart" size={18} color={colors.primary} />
+              <Ionicons name="stats-chart" size={20} color={colors.primary} />
               <Text style={styles.actionButtonText}>Stats</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1128,14 +1128,14 @@ export default function CommissionDashboard() {
                 }, 100);
               }}
             >
-              <Ionicons name="analytics-outline" size={18} color={colors.primary} />
+              <Ionicons name="analytics-outline" size={20} color={colors.primary} />
               <Text style={styles.actionButtonText}>Engagement</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/commission-requests')}
             >
-              <Ionicons name="list-outline" size={18} color={colors.primary} />
+              <Ionicons name="list-outline" size={20} color={colors.primary} />
               <Text style={styles.actionButtonText}>
                 {isArtist ? 'Quest Board' : 'Requests'}
               </Text>
@@ -1148,7 +1148,7 @@ export default function CommissionDashboard() {
                 loadAllTransactions();
               }}
             >
-              <Ionicons name="receipt-outline" size={18} color={colors.primary} />
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
               <Text style={styles.actionButtonText}>Transactions</Text>
             </TouchableOpacity>
             {isArtist && (
@@ -1156,7 +1156,7 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => setShowTemplatesModal(true)}
               >
-                <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.primary} />
+                <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.primary} />
                 <Text style={styles.actionButtonText}>Templates</Text>
               </TouchableOpacity>
             )}
@@ -1165,7 +1165,7 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => router.push('/artist-settings')}
               >
-                <Ionicons name="settings-outline" size={18} color={colors.primary} />
+                <Ionicons name="settings-outline" size={20} color={colors.primary} />
                 <Text style={styles.actionButtonText}>Settings</Text>
               </TouchableOpacity>
             )}
@@ -1174,7 +1174,7 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => router.push('/commission/create')}
               >
-                <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
                 <Text style={styles.actionButtonText}>New Request</Text>
               </TouchableOpacity>
             )}
@@ -2073,23 +2073,27 @@ export default function CommissionDashboard() {
                     )}
                   </View>
 
+                  {/* Title */}
+                  {selectedCommission.client_note || selectedCommission.note ? (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Title</Text>
+                      <View style={styles.detailTitleCard}>
+                        <Text style={styles.detailTitleText}>{selectedCommission.client_note || selectedCommission.note}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
                   {/* Description */}
                   <View style={styles.detailSection}>
                     <Text style={styles.detailSectionTitle}>Description</Text>
-                    {selectedCommission.details || selectedCommission.description ? (
-                      <Text style={styles.detailText}>{selectedCommission.details || selectedCommission.description}</Text>
-                    ) : (
-                      <Text style={styles.detailTextPlaceholder}>No description provided</Text>
-                    )}
-                  </View>
-
-                  {/* Client Note */}
-                  {selectedCommission.client_note || selectedCommission.note ? (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Client Note</Text>
-                      <Text style={styles.detailText}>{selectedCommission.client_note || selectedCommission.note}</Text>
+                    <View style={styles.detailDescriptionCard}>
+                      {selectedCommission.details || selectedCommission.description ? (
+                        <Text style={styles.detailDescriptionText}>{selectedCommission.details || selectedCommission.description}</Text>
+                      ) : (
+                        <Text style={styles.detailTextPlaceholder}>No description provided</Text>
+                      )}
                     </View>
-                  ) : null}
+                  </View>
 
                   {/* Payment Status - Always show payment status */}
                   <View style={[styles.detailSection, styles.paymentStatusSection]}>
@@ -2652,43 +2656,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 0,
+    paddingVertical: spacing.md + 2,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '15',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
   },
   batchSelectedText: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
   },
   batchActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   batchActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, // Full pill shape like Pinterest
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg + 4,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.full,
   },
   acceptBatchButton: {
     backgroundColor: colors.status.success,
+    shadowColor: colors.status.success,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 3,
   },
   declineBatchButton: {
     backgroundColor: colors.status.error,
+    shadowColor: colors.status.error,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 3,
   },
   batchActionText: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600', // Pinterest-style
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   // Kanban Styles
   kanbanContainer: {
@@ -2991,7 +3008,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: colors.text.primary, // Changed from primary to match design
+    backgroundColor: colors.status.error,
     borderRadius: 2,
   },
   detailModalHeader: {
@@ -3101,19 +3118,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    padding: spacing.md + 2,
+    borderRadius: 20,
     backgroundColor: colors.surface,
     marginBottom: spacing.md,
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   detailAvatar: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 52,
     borderRadius: borderRadius.full,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   detailUserInfo: {
     flex: 1,
@@ -3145,10 +3172,15 @@ const styles = StyleSheet.create({
   detailStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs - 2,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs - 1,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 1,
     borderRadius: borderRadius.full,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   detailStatusText: {
     ...typography.caption,
@@ -3162,11 +3194,12 @@ const styles = StyleSheet.create({
   },
   detailSectionTitle: {
     ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-    letterSpacing: 0.2,
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   detailContentBox: {
     backgroundColor: colors.surface,
@@ -3188,10 +3221,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    padding: spacing.md + 2,
+    borderRadius: 16,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   detailTextPlaceholder: {
     ...typography.body,
@@ -3200,10 +3237,51 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontStyle: 'italic',
     backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    padding: spacing.md + 2,
+    borderRadius: 16,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  detailTitleCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.md + 4,
+    borderRadius: 20,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  detailTitleText: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 26,
+    letterSpacing: -0.3,
+  },
+  detailDescriptionCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: 20,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  detailDescriptionText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 15,
+    lineHeight: 24,
+    letterSpacing: -0.1,
   },
   detailPriceText: {
     ...typography.h2,
@@ -3215,8 +3293,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
+    borderTopWidth: 0,
     backgroundColor: colors.background,
   },
   commissionDetailContent: {
@@ -3232,11 +3309,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
     gap: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.status.error,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   detailDeclineButtonDisabled: {
     opacity: 0.5,
@@ -3253,10 +3334,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.status.success,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.full,
     gap: spacing.sm,
-    ...shadows.medium,
+    shadowColor: colors.status.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
   detailAcceptButtonDisabled: {
     opacity: 0.5,
@@ -3272,19 +3357,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.status.success,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
     gap: spacing.sm,
-    ...shadows.medium,
+    shadowColor: colors.status.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 4,
   },
   detailCompleteButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.6,
   },
   detailCompleteButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   notesContent: {
     padding: spacing.lg,
@@ -3399,27 +3490,32 @@ const styles = StyleSheet.create({
   // Pinterest-style Filter Bar
   pinterestFilterBar: {
     backgroundColor: colors.background,
-    paddingVertical: spacing.sm,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '15',
   },
   pinterestFilterContent: {
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
+    gap: spacing.xs,
   },
   pinterestFilterItem: {
-    marginRight: spacing.lg,
-    paddingVertical: spacing.xs - 2,
+    marginRight: spacing.xl,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     position: 'relative',
   },
   pinterestFilterText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '500',
+    letterSpacing: -0.2,
   },
   pinterestFilterTextActive: {
     color: colors.text.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   pinterestFilterUnderline: {
     position: 'absolute',
@@ -3583,34 +3679,34 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
+    paddingTop: spacing.xs,
   },
   actionsScrollContent: {
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingRight: spacing.md,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.md + 2,
-    paddingVertical: spacing.sm - 2,
+    gap: spacing.sm,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + 2 : spacing.lg,
+    paddingVertical: IS_SMALL_SCREEN ? spacing.sm + 2 : spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
-    minWidth: IS_SMALL_SCREEN ? 85 : 95,
+    minWidth: IS_SMALL_SCREEN ? 90 : 100,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: colors.border + '20',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 0,
   },
   actionButtonText: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 13 : 14,
-    fontWeight: '500',
+    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontWeight: '600',
   },
   compactTitle: {
     ...typography.h1,
@@ -3888,20 +3984,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: 20,
+    padding: spacing.lg + 2,
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
     marginHorizontal: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
-    ...shadows.small,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   detailPricingLabel: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   detailBudgetLabel: {
     ...typography.body,
@@ -3920,10 +4021,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    borderRadius: 16,
+    padding: spacing.md + 2,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   paymentStatusInfo: {
     flex: 1,
@@ -4125,15 +4230,15 @@ const styles = StyleSheet.create({
   },
   pinterestModalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 24, // Pinterest-style soft rounding
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 30, // Pinterest-style soft rounding
+    borderTopRightRadius: 30,
     height: '92%',
     paddingTop: spacing.sm,
     shadowColor: colors.text.primary,
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 10,
   },
   pinterestHeader: {
     flexDirection: 'row',
@@ -4237,17 +4342,16 @@ const styles = StyleSheet.create({
   pinterestStatCard: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 14,
+    borderRadius: 20,
     padding: spacing.md,
-    paddingVertical: spacing.md + 4,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
+    borderWidth: 0,
   },
   pinterestStatIconCircle: {
     width: 38,

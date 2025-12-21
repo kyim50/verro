@@ -258,7 +258,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
     if (!newBoardName.trim()) {
       showAlert({
         title: 'Error',
-        message: 'Board name is required',
+        message: 'Canvas name is required',
         type: 'error',
       });
       return;
@@ -313,7 +313,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
       Toast.show({
         type: 'success',
         text1: 'Success',
-        text2: 'Board created!',
+        text2: 'Canvas created!',
         visibilityTime: 2000,
       });
     } catch (error) {
@@ -329,7 +329,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
 
  const handleDeleteBoard = (board) => {
   showAlert({
-    title: 'Delete Board',
+    title: 'Delete Canvas',
     message: `Are you sure you want to delete "${board.name}"?`,
     type: 'error',
     showCancel: true,
@@ -338,17 +338,8 @@ const loadBoards = useCallback(async (skipCache = true) => {
       try {
         await deleteBoard(board.id);
         await loadBoards(true);
-        
-        // Show toast instead of alert
-        Toast.show({
-          type: 'success',
-          text1: 'Board Deleted',
-          text2: `"${board.name}" has been deleted`,
-          visibilityTime: 3000,
-          position: 'bottom',
-        });
       } catch (error) {
-        const errorMessage = error.response?.data?.error || error.message || 'Failed to delete board';
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to delete canvas';
         Toast.show({
           type: 'error',
           text1: 'Error',
@@ -417,27 +408,10 @@ const loadBoards = useCallback(async (skipCache = true) => {
     
     const lastUpdated = getTimeAgo(item.updated_at || item.created_at);
 
-    // Show board options menu
+    // Show canvas delete confirmation directly
     const showBoardOptions = (e) => {
       e.stopPropagation(); // Prevent navigation
-      
-      showAlert({
-        title: 'Board Options',
-        message: `What would you like to do with "${item.name}"?`,
-        type: 'info',
-        buttons: [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => handleDeleteBoard(item),
-          },
-        ],
-      });
+      handleDeleteBoard(item);
     };
 
     return (
@@ -493,10 +467,10 @@ const loadBoards = useCallback(async (skipCache = true) => {
             {/* Options button (three dots) - Show for all except "created" board */}
             {!isSystemBoard && (
               <TouchableOpacity
-                onPressIn={(e) => {
-  e.stopPropagation(); // Stop immediately on press start
-  showBoardOptions(e);
-}}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  showBoardOptions(e);
+                }}
                 style={styles.optionsButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -619,13 +593,13 @@ const loadBoards = useCallback(async (skipCache = true) => {
         <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
         <Text style={styles.emptyTitle}>No Collections Yet</Text>
         <Text style={styles.emptyText}>
-          Create boards to save and organize artworks you love!
+          Create canvases to save and organize artworks you love!
         </Text>
         <TouchableOpacity
           style={styles.createButton}
           onPress={() => setShowCreateModal(true)}
         >
-          <Text style={styles.createButtonText}>Create Your First Board</Text>
+          <Text style={styles.createButtonText}>Create Your First Canvas</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1230,6 +1204,9 @@ const styles = StyleSheet.create({
   },
   lockIcon: {
     marginLeft: 2,
+  },
+  optionsButton: {
+    padding: 4,
   },
   boardMeta: {
     ...typography.caption,
