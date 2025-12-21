@@ -338,45 +338,21 @@ export default function SignupFlowScreen() {
         );
 
       case STEPS.USERNAME:
-  return (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Choose a username</Text>
-      <Text style={styles.stepSubtitle}>
-        You can always change it later
-      </Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Username"
-        placeholderTextColor={colors.text.disabled}
-        value={formData.username}
-        onChangeText={(text) => {
-          const cleanText = text.toLowerCase().replace(/\s/g, '');
-          // Use functional update to get latest state
-          setFormData(prev => ({
-            ...prev,
-            username: cleanText
-          }));
-        }}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoFocus={currentStep === STEPS.USERNAME} // Only autofocus on username step
-        editable={!loading}
-        selectTextOnFocus={!loading}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name (optional)"
-        placeholderTextColor={colors.text.disabled}
-        value={formData.fullName}
-        onChangeText={(text) =>
-          // Also use functional update here for consistency
-          setFormData(prev => ({ ...prev, fullName: text }))
-        }
-        editable={!loading}
-      />
-    </View>
-  );
-
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Choose a username</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor={colors.text.disabled}
+              value={formData.username}
+              onChangeText={(text) => setFormData({ ...formData, username: text })}
+              autoCapitalize="none"
+              autoFocus
+              editable={!loading}
+            />
+          </View>
+        );
       case STEPS.USER_TYPE:
         return (
           <View style={styles.stepContainer}>
