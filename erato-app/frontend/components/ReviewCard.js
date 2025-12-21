@@ -18,7 +18,7 @@ import { useAuthStore } from '../store';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
-export default function ReviewCard({ review, isArtist = false, onUpdate }) {
+export default function ReviewCard({ review, isArtist = false, onUpdate, showingGivenReviews = false }) {
   const { token, user } = useAuthStore();
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [responseText, setResponseText] = useState(review.artist_response || '');
@@ -30,13 +30,24 @@ export default function ReviewCard({ review, isArtist = false, onUpdate }) {
   // Determine who left the review
   const isClientReview = review.review_type === 'client_to_artist';
 
-  // Get reviewer info based on review type
-  const reviewer = isClientReview
-    ? (review.client || review.clients)
-    : (review.artist || review.artists);
+  // Get reviewer info based on context
+  // If showing "given" reviews, show who received the review
+  // If showing "received" reviews, show who gave the review
+  let reviewer;
+  if (showingGivenReviews) {
+    // Show the person who received the review
+    reviewer = isClientReview
+      ? (review.artist || review.artists)
+      : (review.client || review.clients);
+  } else {
+    // Show the person who gave the review
+    reviewer = isClientReview
+      ? (review.client || review.clients)
+      : (review.artist || review.artists);
+  }
 
-  const reviewerName = reviewer?.full_name || reviewer?.username || 'Anonymous';
-  const reviewerAvatar = reviewer?.avatar_url || reviewer?.profile_picture || DEFAULT_AVATAR;
+  const reviewerName = reviewer?.users?.full_name || reviewer?.users?.username || reviewer?.full_name || reviewer?.username || 'Anonymous';
+  const reviewerAvatar = reviewer?.users?.avatar_url || reviewer?.users?.profile_picture || reviewer?.avatar_url || reviewer?.profile_picture || DEFAULT_AVATAR;
 
   const handleSubmitResponse = async () => {
     if (!responseText.trim()) {
@@ -515,6 +526,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
 
 
 

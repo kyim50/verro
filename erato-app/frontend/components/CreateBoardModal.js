@@ -50,7 +50,7 @@ export default function CreateBoardModal({
                   >
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                   </TouchableOpacity>
-                  <Text style={styles.modalTitle}>Create board</Text>
+                  <Text style={styles.modalTitle}>Create canvas</Text>
                   <View style={{ width: 28 }} />
                 </View>
 
@@ -60,7 +60,7 @@ export default function CreateBoardModal({
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                 >
-                  {/* Board Preview Thumbnail */}
+                  {/* Canvas Preview Thumbnail */}
                   <View style={styles.preview}>
                     <View style={styles.previewGrid}>
                       <View style={styles.previewItem} />
@@ -69,12 +69,12 @@ export default function CreateBoardModal({
                     </View>
                   </View>
 
-                  {/* Board Name Input */}
+                  {/* Canvas Name Input */}
                   <View style={styles.inputSection}>
-                    <Text style={styles.label}>Board name</Text>
+                    <Text style={styles.label}>Canvas name</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="Name your board"
+                      placeholder="Name your canvas"
                       placeholderTextColor={colors.text.disabled}
                       value={boardName}
                       onChangeText={setBoardName}
@@ -98,7 +98,7 @@ export default function CreateBoardModal({
                           {isPublic ? 'Public' : 'Private'}
                         </Text>
                         <Text style={styles.toggleDescription}>
-                          {isPublic ? 'Anyone can see this board' : 'Only you can see this board'}
+                          {isPublic ? 'Anyone can see this canvas' : 'Only you can see this canvas'}
                         </Text>
                       </View>
                     </View>

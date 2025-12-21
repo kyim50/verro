@@ -762,10 +762,29 @@ export default function ArtistProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Artist Header - Pinterest-inspired clean layout */}
-        <View style={styles.artistHeader}>
-          {/* Avatar */}
-          {/* Avatar */}
+        {/* Banner Art with Overlapping Avatar */}
+        <View style={styles.bannerSection}>
+          {/* Banner Art */}
+          {(() => {
+            // Use first portfolio image or first artwork as banner
+            const bannerImage = artist.portfolio_images?.[0] || artworks?.[0]?.image_url || artworks?.[0]?.thumbnail_url;
+
+            return bannerImage ? (
+              <View style={styles.bannerContainer}>
+                <Image
+                  source={{ uri: bannerImage }}
+                  style={styles.bannerImage}
+                  contentFit="cover"
+                />
+                {/* Gradient overlay for better readability */}
+                <View style={styles.bannerOverlay} />
+              </View>
+            ) : (
+              <View style={styles.bannerPlaceholder} />
+            );
+          })()}
+
+          {/* Avatar overlapping the banner */}
           <View style={styles.avatarContainer}>
             <Image
               source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/120' }}
@@ -773,6 +792,10 @@ export default function ArtistProfileScreen() {
               contentFit="cover"
             />
           </View>
+        </View>
+
+        {/* Artist Header - Pinterest-inspired clean layout */}
+        <View style={styles.artistHeader}>
 
           {/* Name and Username */}
           <View style={styles.nameContainer}>
@@ -952,22 +975,30 @@ export default function ArtistProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Tab Content */}
+          {/* Tab Content - Horizontal Carousel */}
           {reviewsLoading ? (
             <View style={styles.reviewsLoadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : activeReviewTab === 'received' ? (
             reviewsReceived.length > 0 ? (
-              <View style={styles.reviewsList}>
-                {reviewsReceived.map((review) => (
-                  <ReviewCard
-                    key={review.id}
-                    review={review}
-                    isArtist={isOwnProfile}
-                  />
-                ))}
-              </View>
+              <FlatList
+                data={reviewsReceived}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.reviewsCarouselContent}
+                snapToInterval={width * 0.85 + spacing.md}
+                decelerationRate="fast"
+                renderItem={({ item }) => (
+                  <View style={styles.reviewCarouselItem}>
+                    <ReviewCard
+                      review={item}
+                      isArtist={isOwnProfile}
+                    />
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+              />
             ) : (
               <View style={styles.emptyReviewsContainer}>
                 <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
@@ -979,15 +1010,23 @@ export default function ArtistProfileScreen() {
             )
           ) : (
             reviewsGiven.length > 0 ? (
-              <View style={styles.reviewsList}>
-                {reviewsGiven.map((review) => (
-                  <ReviewCard
-                    key={review.id}
-                    review={review}
-                    isArtist={isOwnProfile}
-                  />
-                ))}
-              </View>
+              <FlatList
+                data={reviewsGiven}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.reviewsCarouselContent}
+                snapToInterval={width * 0.85 + spacing.md}
+                decelerationRate="fast"
+                renderItem={({ item }) => (
+                  <View style={styles.reviewCarouselItem}>
+                    <ReviewCard
+                      review={item}
+                      isArtist={isOwnProfile}
+                    />
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+              />
             ) : (
               <View style={styles.emptyReviewsContainer}>
                 <Ionicons name="star-outline" size={48} color={colors.text.disabled} />
@@ -1772,6 +1811,34 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
   },
+  bannerSection: {
+    position: 'relative',
+    marginBottom: 60, // Space for half of the overlapping avatar
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 280,
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: borderRadius.md,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.6) 100%)',
+  },
+  bannerPlaceholder: {
+    width: '100%',
+    height: 280,
+    backgroundColor: colors.surfaceLight,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1815,20 +1882,27 @@ const styles = StyleSheet.create({
   artistHeader: {
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
-    paddingTop: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
+    paddingTop: 0, // Remove top padding since avatar is now above
     paddingBottom: IS_SMALL_SCREEN ? spacing.xl : spacing.xxl,
   },
   avatarContainer: {
-    marginBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    position: 'absolute',
+    bottom: -60, // Half of avatar height to overlap
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
   },
   avatar: {
     width: IS_SMALL_SCREEN ? 110 : 120,
     height: IS_SMALL_SCREEN ? 110 : 120,
     borderRadius: IS_SMALL_SCREEN ? 55 : 60,
-    borderWidth: 0, // Remove border for cleaner look
+    borderWidth: 4,
+    borderColor: colors.background, // White border to stand out from banner
   },
   nameContainer: {
     alignItems: 'center',
+    marginTop: spacing.md, // Add top margin for spacing after avatar
     marginBottom: spacing.md,
     width: '100%',
   },
@@ -2750,6 +2824,15 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
     gap: spacing.md,
+  },
+  reviewsCarouselContent: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  reviewCarouselItem: {
+    width: width * 0.85,
+    marginRight: spacing.md,
   },
   reviewsLoadingContainer: {
     paddingVertical: spacing.xxl,

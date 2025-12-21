@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Switch,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -183,18 +182,18 @@ export default function ArtistSettings() {
                   Temporarily stop accepting new commissions
                 </Text>
               </View>
-              <Switch
-                value={commissionsPaused}
-                onValueChange={(value) => {
-                  setCommissionsPaused(value);
-                  // Auto-save toggle changes
+              <TouchableOpacity
+                style={[styles.switch, commissionsPaused && styles.switchActive]}
+                onPress={() => {
+                  setCommissionsPaused(!commissionsPaused);
                   setTimeout(() => {
                     saveSettings(false);
                   }, 300);
                 }}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.text.primary}
-              />
+                activeOpacity={0.8}
+              >
+                <View style={[styles.switchThumb, commissionsPaused && styles.switchThumbActive]} />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -233,18 +232,18 @@ export default function ArtistSettings() {
                   Allow clients to join waitlist when full
                 </Text>
               </View>
-              <Switch
-                value={waitlistEnabled}
-                onValueChange={(value) => {
-                  setWaitlistEnabled(value);
-                  // Auto-save toggle changes
+              <TouchableOpacity
+                style={[styles.switch, waitlistEnabled && styles.switchActive]}
+                onPress={() => {
+                  setWaitlistEnabled(!waitlistEnabled);
                   setTimeout(() => {
                     saveSettings(false);
                   }, 300);
                 }}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.text.primary}
-              />
+                activeOpacity={0.8}
+              >
+                <View style={[styles.switchThumb, waitlistEnabled && styles.switchThumbActive]} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.divider} />
@@ -256,19 +255,24 @@ export default function ArtistSettings() {
                   Automatically decline new requests when queue is full
                 </Text>
               </View>
-              <Switch
-                value={autoDecline}
-                onValueChange={(value) => {
-                  setAutoDecline(value);
-                  // Auto-save toggle changes
+              <TouchableOpacity
+                style={[
+                  styles.switch,
+                  autoDecline && styles.switchActive,
+                  waitlistEnabled && styles.switchDisabled
+                ]}
+                onPress={() => {
+                  if (waitlistEnabled) return;
+                  setAutoDecline(!autoDecline);
                   setTimeout(() => {
                     saveSettings(false);
                   }, 300);
                 }}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.text.primary}
+                activeOpacity={0.8}
                 disabled={waitlistEnabled}
-              />
+              >
+                <View style={[styles.switchThumb, autoDecline && styles.switchThumbActive]} />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -439,7 +443,7 @@ const styles = StyleSheet.create({
     paddingTop: Constants.statusBarHeight + spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
+    borderBottomColor: colors.border + '15',
     backgroundColor: colors.background,
   },
   backButton: {
@@ -449,6 +453,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   headerTitle: {
     ...typography.h2,
@@ -463,11 +472,14 @@ const styles = StyleSheet.create({
   },
   settingCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
+    borderRadius: 20,
+    padding: spacing.lg,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   marginTop: {
     marginTop: spacing.md,
@@ -476,14 +488,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     minHeight: 60,
   },
   settingInfo: {
     flex: 1,
     marginRight: spacing.md,
     justifyContent: 'center',
-    flexShrink: 1,
+    minWidth: 0,
   },
   settingLabel: {
     ...typography.bodyBold,
@@ -500,16 +512,15 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.sm,
+    backgroundColor: colors.border + '30',
+    marginVertical: spacing.md,
   },
   numberInput: {
     ...typography.h3,
     color: colors.text.primary,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    borderRadius: 12,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     width: 70,
@@ -517,14 +528,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   textInput: {
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    borderRadius: 12,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     width: 120,
@@ -532,6 +547,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   inputLabel: {
     ...typography.bodyBold,
@@ -550,30 +570,38 @@ const styles = StyleSheet.create({
   multilineInput: {
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    borderRadius: 16,
+    padding: spacing.lg,
     paddingTop: spacing.md,
     fontSize: 15,
     lineHeight: 22,
     minHeight: 120,
     textAlignVertical: 'top',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   largeMultilineInput: {
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border + '60',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderWidth: 0,
+    borderRadius: 16,
+    padding: spacing.lg,
     paddingTop: spacing.md,
     fontSize: 15,
     lineHeight: 22,
     minHeight: 200,
     textAlignVertical: 'top',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   saveButton: {
     flexDirection: 'row',
@@ -581,10 +609,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
     marginTop: spacing.lg,
-    ...shadows.medium,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -594,8 +627,38 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   bottomSpacer: {
     height: spacing.xxl,
+  },
+  switch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    justifyContent: 'center',
+    padding: 2,
+    flexShrink: 0,
+  },
+  switchActive: {
+    backgroundColor: colors.primary,
+  },
+  switchDisabled: {
+    opacity: 0.5,
+  },
+  switchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  switchThumbActive: {
+    alignSelf: 'flex-end',
   },
 });
