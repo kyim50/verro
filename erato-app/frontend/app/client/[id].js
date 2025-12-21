@@ -206,9 +206,22 @@ export default function ClientProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Client Header - Pinterest-inspired clean layout */}
-        <View style={styles.clientHeader}>
-          {/* Avatar */}
+        {/* Banner Section with Overlapping Avatar */}
+        <View style={styles.bannerSection}>
+          {/* Banner Image */}
+          {client.banner_url ? (
+            <View style={styles.bannerContainer}>
+              <Image
+                source={{ uri: client.banner_url }}
+                style={styles.bannerImage}
+                contentFit="cover"
+              />
+            </View>
+          ) : (
+            <View style={styles.bannerPlaceholder} />
+          )}
+
+          {/* Avatar overlapping the banner */}
           <View style={styles.avatarContainer}>
             <Image
               source={{ uri: client.avatar_url || DEFAULT_AVATAR }}
@@ -216,6 +229,10 @@ export default function ClientProfileScreen() {
               contentFit="cover"
             />
           </View>
+        </View>
+
+        {/* Client Header - Pinterest-inspired clean layout */}
+        <View style={styles.clientHeader}>
 
           {/* Name and Username */}
           <View style={styles.nameContainer}>
@@ -576,22 +593,54 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xxl,
   },
+  bannerSection: {
+    position: 'relative',
+    marginBottom: IS_SMALL_SCREEN ? 45 : 50, // Space for half of the overlapping avatar
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 280,
+    position: 'relative',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerPlaceholder: {
+    width: '100%',
+    height: 280,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
+  },
   clientHeader: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
+    paddingTop: 0, // Remove top padding since avatar is now above
     paddingBottom: spacing.md,
   },
   avatarContainer: {
+    position: 'absolute',
+    bottom: -(IS_SMALL_SCREEN ? 45 : 50), // Half of avatar height to overlap
+    left: 0,
+    right: 0,
     alignItems: 'center',
+    zIndex: 10,
     marginBottom: spacing.lg,
   },
   avatar: {
-    width: IS_SMALL_SCREEN ? 110 : 120,
-    height: IS_SMALL_SCREEN ? 110 : 120,
-    borderRadius: IS_SMALL_SCREEN ? 55 : 60,
+    width: IS_SMALL_SCREEN ? 90 : 100,
+    height: IS_SMALL_SCREEN ? 90 : 100,
+    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     borderWidth: 4,
     borderColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   nameContainer: {
     alignItems: 'center',
