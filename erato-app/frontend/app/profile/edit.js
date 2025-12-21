@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,7 +11,7 @@ import {
   Switch,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router, useNavigation } from 'expo-router';
+import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
@@ -20,7 +20,7 @@ import { colors, spacing, typography, borderRadius } from '../../constants/theme
 import BannerImagePicker from '../../components/BannerImagePicker';
 
 export default function EditProfileScreen() {
-  const { user, token, fetchUser, setUser } = useAuthStore();
+  const { user, token, fetchUser: fetchUserData, setUser } = useAuthStore();
   const { fetchProfile } = useProfileStore();
   const [loading, setLoading] = useState(false);
   const [avatarKey, setAvatarKey] = useState(0); // For forcing avatar re-render
@@ -60,6 +60,16 @@ export default function EditProfileScreen() {
       });
     };
   }, [navigation]);
+
+  // Refresh user data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        // Fetch latest user data to ensure we have the most recent banner/avatar URLs
+        fetchUserData();
+      }
+    }, [user?.id, fetchUserData])
+  );
 
   useEffect(() => {
     if (user) {
