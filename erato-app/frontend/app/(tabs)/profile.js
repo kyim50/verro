@@ -121,8 +121,9 @@ export default function ProfileScreen() {
       await fetchProfile(user.id, token, forceRefresh);
       // Check if avatar changed and update key to force image refresh
       const updatedProfile = useProfileStore.getState().profile;
-      const newAvatarUrl = updatedProfile?.avatar_url || user?.avatar_url;
-      const newBannerUrl = updatedProfile?.banner_url || user?.banner_url;
+      const updatedUser = useAuthStore.getState().user; // Get fresh user from store
+      const newAvatarUrl = updatedProfile?.avatar_url || updatedUser?.avatar_url;
+      const newBannerUrl = updatedUser?.banner_url || updatedProfile?.banner_url; // Check user first since that's what edit updates
       // Only update avatar key if URL actually changed (not just on every load)
       if (newAvatarUrl && prevAvatarUrl !== newAvatarUrl) {
         prevAvatarUrlRef.current = newAvatarUrl;
@@ -132,11 +133,14 @@ export default function ProfileScreen() {
         prevAvatarUrlRef.current = newAvatarUrl;
       }
       // Check if banner changed and update key to force image refresh
+      console.log('🖼️ Banner check:', { prevBannerUrl, newBannerUrl, changed: prevBannerUrl !== newBannerUrl });
       if (newBannerUrl && prevBannerUrl !== newBannerUrl) {
+        console.log('🔄 Banner changed! Incrementing banner key');
         prevBannerUrlRef.current = newBannerUrl;
         setBannerKey(prev => prev + 1);
       } else if (!prevBannerUrlRef.current && newBannerUrl) {
         // Set initial banner URL ref without updating key (prevents flash on first load)
+        console.log('📌 Setting initial banner URL ref');
         prevBannerUrlRef.current = newBannerUrl;
       }
       setIsInitialLoad(false);
