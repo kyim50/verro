@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -267,95 +268,140 @@ export default function EditPortfolioScreen() {
 
   if (initialLoading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Portfolio</Text>
-          <View style={styles.placeholder} />
+          <View style={styles.headerText}>
+            <View style={styles.badge}>
+              <Ionicons name="images" size={14} color="#E60023" />
+              <Text style={styles.badgeText}>Edit Portfolio</Text>
+            </View>
+            <Text style={styles.headerTitle}>Update Your Portfolio</Text>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color="#E60023" />
           <Text style={styles.loadingText}>Loading portfolio...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
+  const progress = (filledCount / 6) * 100;
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Portfolio</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.title}>Portfolio Images</Text>
-          <Text style={styles.subtitle}>
-            Showcase your best work ({filledCount}/6 images)
-          </Text>
-          <Text style={styles.description}>
-            Add up to 6 images that represent your artistic style. These will be shown when people explore your profile.
+        <View style={styles.headerText}>
+          <View style={styles.badge}>
+            <Ionicons name="images" size={14} color="#E60023" />
+            <Text style={styles.badgeText}>Edit Portfolio</Text>
+          </View>
+          <Text style={styles.headerTitle}>Update Your Portfolio</Text>
+          <Text style={styles.headerSubtitle}>
+            Keep your work fresh and showcase your best pieces
           </Text>
         </View>
+      </View>
+
+      {/* Progress Bar */}
+      <View style={styles.progressContainer}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressLabel}>Your Progress</Text>
+          <Text style={styles.progressCount}>
+            {filledCount}/6
+          </Text>
+        </View>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
 
         <View style={styles.grid}>
           {portfolioImages.map((imageUri, index) => (
-            <View key={index} style={styles.imageContainer}>
+            <TouchableOpacity
+              key={index}
+              style={styles.slot}
+              onPress={() => pickImage(index)}
+              activeOpacity={0.8}
+            >
               {imageUri ? (
                 <>
                   <Image
                     source={{ uri: imageUri }}
-                    style={styles.image}
+                    style={styles.slotImage}
                     contentFit="cover"
                   />
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => removeImage(index)}
                   >
-                    <Ionicons name="close-circle" size={28} color={colors.error} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.replaceButton}
-                    onPress={() => pickImage(index)}
-                  >
-                    <Ionicons name="camera" size={20} color={colors.text.primary} />
+                    <Ionicons name="close" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity
-                  style={styles.emptySlot}
-                  onPress={() => pickImage(index)}
-                >
-                  <Ionicons name="add-circle-outline" size={48} color={colors.text.disabled} />
-                  <Text style={styles.emptyText}>Add Image {index + 1}</Text>
-                </TouchableOpacity>
+                <View style={styles.emptySlot}>
+                  <Ionicons name="add" size={40} color={colors.text.disabled} />
+                </View>
               )}
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 
+        {/* Tips Card */}
+        <View style={styles.tipsCard}>
+          <View style={styles.tipsHeader}>
+            <Ionicons name="bulb" size={20} color="#E60023" />
+            <Text style={styles.tipsTitle}>Portfolio Tips</Text>
+          </View>
+          <View style={styles.tipsList}>
+            <TipItem text="Show variety in your work" />
+            <TipItem text="Use high-quality images" />
+            <TipItem text="Highlight your unique style" />
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Bottom Actions */}
+      <View style={styles.bottomActions}>
         <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+          style={[styles.saveButton, (loading || filledCount === 0) && styles.buttonDisabled]}
           onPress={handleSave}
           disabled={loading || filledCount === 0}
         >
           {loading ? (
-            <ActivityIndicator color={colors.text.primary} />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.saveButtonText}>Save Portfolio</Text>
+            <Text style={styles.saveButtonText}>Save</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+        {filledCount === 0 && (
+          <Text style={styles.requirementText}>
+            Add at least 1 image to save
+          </Text>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function TipItem({ text }) {
+  return (
+    <View style={styles.tipItem}>
+      <Ionicons name="checkmark-circle" size={16} color="#E60023" />
+      <Text style={styles.tipText}>{text}</Text>
     </View>
   );
 }
@@ -367,28 +413,49 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
+    marginRight: spacing.md,
+    marginTop: spacing.xs,
+  },
+  headerText: {
+    flex: 1,
+  },
+  badge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFE5E5',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  badgeText: {
+    ...typography.small,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E60023',
+    letterSpacing: 0.3,
   },
   headerTitle: {
-    ...typography.h2,
+    ...typography.h1,
+    fontSize: 28,
+    fontWeight: '800',
     color: colors.text.primary,
+    marginBottom: spacing.xs,
+    lineHeight: 34,
   },
-  placeholder: {
-    width: 40,
+  headerSubtitle: {
+    ...typography.body,
+    fontSize: 15,
+    color: colors.text.secondary,
+    lineHeight: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -400,91 +467,156 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.md,
   },
-  content: {
-    padding: spacing.lg,
+  progressContainer: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
   },
-  section: {
-    marginBottom: spacing.xl,
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
-  title: {
-    ...typography.h1,
+  progressLabel: {
+    ...typography.small,
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.text.primary,
-    marginBottom: spacing.sm,
   },
-  subtitle: {
-    ...typography.h3,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
+  progressCount: {
+    ...typography.small,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E60023',
   },
-  description: {
-    ...typography.body,
-    color: colors.text.secondary,
-    lineHeight: 22,
+  progressBar: {
+    height: 8,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#E60023',
+    borderRadius: borderRadius.full,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
   },
-  imageContainer: {
-    width: '47%',
+  slot: {
+    width: '48%',
     aspectRatio: 3 / 4,
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
     overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: colors.surface,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  image: {
+  slotImage: {
     width: '100%',
     height: '100%',
+  },
+  emptySlot: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
   },
   removeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: colors.background,
+    top: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: '#000000',
     borderRadius: borderRadius.full,
-  },
-  replaceButton: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptySlot: {
-    width: '100%',
-    height: '100%',
+  tipsCard: {
     backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    borderRadius: borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  emptyText: {
-    ...typography.caption,
-    color: colors.text.disabled,
-    marginTop: spacing.sm,
+  tipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  tipsTitle: {
+    ...typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  tipsList: {
+    gap: spacing.sm,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  tipText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  bottomActions: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    borderTopWidth: 0,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8,
   },
   saveButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
+    backgroundColor: '#E60023',
     borderRadius: borderRadius.full,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: spacing.md,
+    justifyContent: 'center',
   },
-  saveButtonDisabled: {
+  buttonDisabled: {
     opacity: 0.5,
   },
   saveButtonText: {
     ...typography.button,
-    color: colors.text.primary,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  requirementText: {
+    ...typography.small,
+    fontSize: 13,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 });

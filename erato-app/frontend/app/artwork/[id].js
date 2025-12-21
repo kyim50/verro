@@ -20,6 +20,7 @@ import Constants from 'expo-constants';
 import { useAuthStore, useBoardStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import { useEngagementTracking } from '../../hooks/useEngagementTracking';
+import SaveToBoardModal from '../../components/SaveToBoardModal';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -34,12 +35,13 @@ export default function ArtworkDetailScreen() {
   const { id } = useLocalSearchParams();
   const { user, token } = useAuthStore();
   const { saveArtworkToBoard, boards, fetchBoards, createBoard } = useBoardStore();
-  const { likedArtworks, setLikedArtwork, loadLikedArtworks } = useFeedStore();
+  const { likedArtworks, setLikedArtwork, loadLikedArtworks, removeArtwork, reset, fetchArtworks } = useFeedStore();
 
   const [artwork, setArtwork] = useState(null);
   const [similarArtworks, setSimilarArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const isLikingRef = useRef(false); // Prevent useEffect from interfering during like operation
 
   // Get liked state from shared store
@@ -286,6 +288,16 @@ export default function ArtworkDetailScreen() {
     }
   };
 
+  const handleSaveToBoard = async (boardId, artworkId) => {
+    try {
+      await saveArtworkToBoard(boardId, artworkId);
+      trackSave({ board_id: boardId });
+    } catch (error) {
+      console.error('Error saving to board:', error);
+      throw error; // Re-throw to let modal handle the error
+    }
+  };
+
   const handleDeleteArtwork = () => {
     if (!token || !artwork || artwork.artist_id !== user?.id) return;
     showAlert({
@@ -301,15 +313,15 @@ export default function ArtworkDetailScreen() {
 
           // Optimistically remove from local feed
           try {
-            feedStore.removeArtwork?.(artwork.id);
+            removeArtwork?.(artwork.id);
           } catch (e) {
             console.warn('Local feed removal failed:', e?.message || e);
           }
 
           // Force refetch feed to drop the deleted item everywhere
           try {
-            feedStore.reset?.();
-            await feedStore.fetchArtworks?.(true);
+            reset?.();
+            await fetchArtworks?.(true);
           } catch (e) {
             console.warn('Feed refresh after delete failed:', e?.message || e);
           }
@@ -395,7 +407,7 @@ export default function ArtworkDetailScreen() {
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={styles.saveButton}
-              onPress={async () => {
+              onPress={() => {
                 if (!token) {
                   Toast.show({
                     type: 'info',
@@ -405,14 +417,7 @@ export default function ArtworkDetailScreen() {
                   });
                   return;
                 }
-                // Show board selection (you may need to implement a board picker modal)
-                Toast.show({
-                  type: 'info',
-                  text1: 'Save',
-                  text2: 'Board selection coming soon',
-                  visibilityTime: 2000,
-                });
-                trackSave({ board_id: 'default' });
+                setShowSaveModal(true);
               }}
             >
               <Text style={styles.saveButtonText}>Save</Text>
@@ -628,6 +633,15 @@ export default function ArtworkDetailScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Save to Board Modal */}
+      <SaveToBoardModal
+        visible={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        boards={boards}
+        onSaveToBoard={handleSaveToBoard}
+        artworkId={id}
+      />
     </View>
   );
 }
