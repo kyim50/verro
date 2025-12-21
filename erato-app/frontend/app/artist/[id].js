@@ -766,8 +766,8 @@ export default function ArtistProfileScreen() {
         <View style={styles.bannerSection}>
           {/* Banner Art */}
           {(() => {
-            // Use first portfolio image or first artwork as banner
-            const bannerImage = artist.portfolio_images?.[0] || artworks?.[0]?.image_url || artworks?.[0]?.thumbnail_url;
+            // Use custom banner if set, otherwise fall back to first portfolio image or first artwork
+            const bannerImage = artist.users?.banner_url || artist.portfolio_images?.[0] || artworks?.[0]?.image_url || artworks?.[0]?.thumbnail_url;
 
             return bannerImage ? (
               <View style={styles.bannerContainer}>
@@ -776,8 +776,6 @@ export default function ArtistProfileScreen() {
                   style={styles.bannerImage}
                   contentFit="cover"
                 />
-                {/* Gradient overlay for better readability */}
-                <View style={styles.bannerOverlay} />
               </View>
             ) : (
               <View style={styles.bannerPlaceholder} />
@@ -1813,31 +1811,25 @@ const styles = StyleSheet.create({
   },
   bannerSection: {
     position: 'relative',
-    marginBottom: 60, // Space for half of the overlapping avatar
+    marginBottom: IS_SMALL_SCREEN ? 45 : 50, // Space for half of the overlapping avatar
   },
   bannerContainer: {
     width: '100%',
     height: 280,
     position: 'relative',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
     overflow: 'hidden',
-    borderRadius: borderRadius.md,
   },
   bannerImage: {
     width: '100%',
     height: '100%',
   },
-  bannerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.6) 100%)',
-  },
   bannerPlaceholder: {
     width: '100%',
     height: 280,
     backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -1887,18 +1879,23 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'absolute',
-    bottom: -60, // Half of avatar height to overlap
+    bottom: -(IS_SMALL_SCREEN ? 45 : 50), // Half of avatar height to overlap
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 10,
   },
   avatar: {
-    width: IS_SMALL_SCREEN ? 110 : 120,
-    height: IS_SMALL_SCREEN ? 110 : 120,
-    borderRadius: IS_SMALL_SCREEN ? 55 : 60,
+    width: IS_SMALL_SCREEN ? 90 : 100,
+    height: IS_SMALL_SCREEN ? 90 : 100,
+    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     borderWidth: 4,
-    borderColor: colors.background, // White border to stand out from banner
+    borderColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   nameContainer: {
     alignItems: 'center',

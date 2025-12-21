@@ -11,21 +11,24 @@ import {
   Switch,
 } from 'react-native';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import BannerImagePicker from '../../components/BannerImagePicker';
 
 export default function EditProfileScreen() {
   const { user, token, fetchUser, setUser } = useAuthStore();
   const { fetchProfile } = useProfileStore();
   const [loading, setLoading] = useState(false);
+  const [avatarKey, setAvatarKey] = useState(0); // For forcing avatar re-render
+  const [bannerKey, setBannerKey] = useState(0); // For forcing banner re-render
 
   // User fields
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
@@ -38,6 +41,9 @@ export default function EditProfileScreen() {
   // Client-specific fields
   const [location, setLocation] = useState('');
   const [website, setWebsite] = useState('');
+
+  // Modal states
+  const [showBannerPicker, setShowBannerPicker] = useState(false);
 
   const navigation = useNavigation();
 
@@ -58,6 +64,7 @@ export default function EditProfileScreen() {
   useEffect(() => {
     if (user) {
       setAvatarUrl(user.avatar_url || '');
+      setBannerUrl(user.banner_url || '');
       setUsername(user.username || '');
       setFullName(user.full_name || '');
       setBio(user.bio || '');
@@ -102,7 +109,18 @@ export default function EditProfileScreen() {
 
     if (!result.canceled) {
       setAvatarUrl(result.assets[0].uri);
+      setAvatarKey(prev => prev + 1); // Force re-render
     }
+  };
+
+  const pickBannerImage = () => {
+    setShowBannerPicker(true);
+  };
+
+  const handleBannerSelected = (imageUri) => {
+    setBannerUrl(imageUri);
+    setBannerKey(prev => prev + 1); // Force re-render
+    setShowBannerPicker(false);
   };
 
   const handleSave = async () => {
@@ -133,6 +151,7 @@ export default function EditProfileScreen() {
 
     try {
       let finalAvatarUrl = avatarUrl;
+      let finalBannerUrl = bannerUrl;
 
       // Upload new profile image if it's a local file
       if (avatarUrl && avatarUrl.startsWith('file://')) {
@@ -140,9 +159,16 @@ export default function EditProfileScreen() {
         finalAvatarUrl = await uploadImage(avatarUrl, 'profiles', '', token);
       }
 
+      // Upload new banner image if it's a local file
+      if (bannerUrl && bannerUrl.startsWith('file://')) {
+        const { uploadImage } = require('../../utils/imageUpload');
+        finalBannerUrl = await uploadImage(bannerUrl, 'banners', '', token);
+      }
+
       // Prepare update payload - only include fields that have values
       const updatePayload = {
         avatar_url: finalAvatarUrl || user?.avatar_url,
+        banner_url: finalBannerUrl || user?.banner_url || '',
         full_name: fullName || '',
         bio: bio || '',
         location: location || '',
@@ -190,10 +216,11 @@ export default function EditProfileScreen() {
       
       // Immediately update the user in auth store with all updated fields
       if (updatedUser) {
-        const newUserData = { 
-          ...user, 
-          ...updatedUser, 
+        const newUserData = {
+          ...user,
+          ...updatedUser,
           avatar_url: finalAvatarUrl,
+          banner_url: finalBannerUrl,
           username: username.trim(),
           full_name: fullName,
           bio: bio,
@@ -201,6 +228,7 @@ export default function EditProfileScreen() {
         setUser(newUserData);
         // Update local state immediately
         setAvatarUrl(finalAvatarUrl);
+        setBannerUrl(finalBannerUrl);
       }
 
       // Update artist social media links if user is an artist
@@ -290,15 +318,59 @@ export default function EditProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Banner Section */}
+        <View style={styles.bannerSection}>
+          <View style={styles.bannerImageContainer}>
+            <Image
+              key={bannerKey > 0 ? `banner-${bannerKey}` : 'banner-initial'}
+              source={{
+                uri: (() => {
+                  const url = bannerUrl || 'https://via.placeholder.com/800x200';
+                  // Only add cache-busting parameter if banner key changed (not on every render)
+                  if (bannerKey > 0) {
+                    const separator = url.includes('?') ? '&' : '?';
+                    return `${url}${separator}_v=${bannerKey}`;
+                  }
+                  return url;
+                })()
+              }}
+              style={styles.bannerImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+              transition={300}
+            />
+            <TouchableOpacity
+              style={styles.changeBannerButton}
+              onPress={pickBannerImage}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="camera" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Profile Header Section */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <Image
-              key={avatarUrl}
-              source={{ uri: avatarUrl || 'https://via.placeholder.com/150' }}
+              key={avatarKey > 0 ? `avatar-${avatarKey}` : 'avatar-initial'}
+              source={{
+                uri: (() => {
+                  const url = avatarUrl || 'https://via.placeholder.com/150';
+                  // Only add cache-busting parameter if avatar key changed (not on every render)
+                  if (avatarKey > 0) {
+                    const separator = url.includes('?') ? '&' : '?';
+                    return `${url}${separator}_v=${avatarKey}`;
+                  }
+                  return url;
+                })()
+              }}
               style={styles.avatar}
               contentFit="cover"
-              cachePolicy="none"
+              cachePolicy="memory-disk"
+              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+              transition={300}
             />
             <TouchableOpacity
               style={styles.changePhotoButton}
@@ -311,7 +383,7 @@ export default function EditProfileScreen() {
               <Text style={styles.changePhotoText}>Change Photo</Text>
             </TouchableOpacity>
           </View>
-          
+
         </View>
 
         {/* Basic Info */}
@@ -454,6 +526,14 @@ export default function EditProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Banner Image Picker Modal */}
+      <BannerImagePicker
+        visible={showBannerPicker}
+        onClose={() => setShowBannerPicker(false)}
+        onImageSelected={handleBannerSelected}
+        initialImage={bannerUrl}
+      />
     </View>
   );
 }
@@ -502,6 +582,37 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xl,
   },
+  bannerSection: {
+    marginBottom: spacing.lg,
+  },
+  bannerImageContainer: {
+    width: '100%',
+    height: 200,
+    backgroundColor: colors.surfaceLight,
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  changeBannerButton: {
+    position: 'absolute',
+    bottom: spacing.md,
+    right: spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   profileHeader: {
     alignItems: 'center',
     paddingTop: spacing.xl,
@@ -510,6 +621,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '40',
     marginBottom: spacing.xl,
+    marginTop: -45, // Overlap with banner like main profile
   },
   section: {
     paddingHorizontal: spacing.lg,
@@ -525,6 +637,14 @@ const styles = StyleSheet.create({
   avatarContainer: {
     alignItems: 'center',
     marginBottom: spacing.md,
+    borderWidth: 4,
+    borderColor: colors.background,
+    borderRadius: 60,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   avatar: {
     width: 110,

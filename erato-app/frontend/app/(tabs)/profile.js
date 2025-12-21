@@ -40,6 +40,7 @@ export default function ProfileScreen() {
   const userBoards = boardStore.boards;
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [avatarKey, setAvatarKey] = useState(0);
+  const [bannerKey, setBannerKey] = useState(0);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
   const [selectedPortfolioIndex, setSelectedPortfolioIndex] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -47,6 +48,7 @@ export default function ProfileScreen() {
   const [portfolioTouchBlocked, setPortfolioTouchBlocked] = useState(false);
   const portfolioModalClosingRef = useRef(false);
   const prevAvatarUrlRef = useRef(null);
+  const prevBannerUrlRef = useRef(null);
   const [reviewsReceived, setReviewsReceived] = useState([]);
   const [reviewsGiven, setReviewsGiven] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -79,6 +81,7 @@ export default function ProfileScreen() {
       reset();
       setIsInitialLoad(true);
       prevAvatarUrlRef.current = null; // Reset avatar ref on user change
+      prevBannerUrlRef.current = null; // Reset banner ref on user change
     }
 
     if (user?.id) {
@@ -112,10 +115,12 @@ export default function ProfileScreen() {
     try {
       if (!user?.id) return;
       const prevAvatarUrl = prevAvatarUrlRef.current;
+      const prevBannerUrl = prevBannerUrlRef.current;
       await fetchProfile(user.id, token, forceRefresh);
       // Check if avatar changed and update key to force image refresh
       const updatedProfile = useProfileStore.getState().profile;
       const newAvatarUrl = updatedProfile?.avatar_url || user?.avatar_url;
+      const newBannerUrl = updatedProfile?.banner_url || user?.banner_url;
       // Only update avatar key if URL actually changed (not just on every load)
       if (newAvatarUrl && prevAvatarUrl !== newAvatarUrl) {
         prevAvatarUrlRef.current = newAvatarUrl;
@@ -123,6 +128,14 @@ export default function ProfileScreen() {
       } else if (!prevAvatarUrlRef.current && newAvatarUrl) {
         // Set initial avatar URL ref without updating key (prevents flash on first load)
         prevAvatarUrlRef.current = newAvatarUrl;
+      }
+      // Check if banner changed and update key to force image refresh
+      if (newBannerUrl && prevBannerUrl !== newBannerUrl) {
+        prevBannerUrlRef.current = newBannerUrl;
+        setBannerKey(prev => prev + 1);
+      } else if (!prevBannerUrlRef.current && newBannerUrl) {
+        // Set initial banner URL ref without updating key (prevents flash on first load)
+        prevBannerUrlRef.current = newBannerUrl;
       }
       setIsInitialLoad(false);
     } catch (error) {
@@ -464,16 +477,47 @@ export default function ProfileScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
         >
+          {/* Banner Image */}
+          <View style={styles.bannerContainer}>
+            {(() => {
+              // Use custom banner if set, otherwise fall back to first portfolio image
+              const bannerSource = profile?.banner_url || user?.banner_url || profile?.artist?.portfolio_images?.[0];
+              return bannerSource ? (
+                <Image
+                  key={bannerKey > 0 ? `banner-${bannerKey}` : 'banner-initial'}
+                  source={{
+                    uri: (() => {
+                      const url = bannerSource;
+                      // Only add cache-busting parameter if banner key changed (not on every render)
+                      if (bannerKey > 0) {
+                        const separator = url.includes('?') ? '&' : '?';
+                        return `${url}${separator}_v=${bannerKey}`;
+                      }
+                      return url;
+                    })()
+                  }}
+                  style={styles.bannerImage}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                  transition={300}
+                />
+              ) : (
+                <View style={styles.bannerPlaceholder} />
+              );
+            })()}
+          </View>
+
           {/* Profile Info */}
           <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {(profile?.avatar_url || user?.avatar_url) ? (
-              <Image 
-                source={{ 
+              <Image
+                source={{
                   uri: (() => {
                     const url = profile?.avatar_url || user?.avatar_url;
                     // Only add cache-busting parameter if avatar key changed (not on every render)
@@ -483,7 +527,7 @@ export default function ProfileScreen() {
                     }
                     return url;
                   })()
-                }} 
+                }}
                 style={styles.avatar}
                 contentFit="cover"
                 cachePolicy="memory-disk"
@@ -1417,19 +1461,44 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: IS_SMALL_SCREEN ? 22 : 24,
   },
+  bannerContainer: {
+    width: '100%',
+    height: 200,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.surfaceLight,
+  },
   profileSection: {
     alignItems: 'center',
-    padding: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    paddingBottom: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
+    marginTop: -(IS_SMALL_SCREEN ? 45 : 50),
   },
   avatarContainer: {
     marginBottom: spacing.md,
+    borderWidth: 4,
+    borderColor: colors.background,
+    borderRadius: IS_SMALL_SCREEN ? 45 : 50,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   avatar: {
     width: IS_SMALL_SCREEN ? 90 : 100,
     height: IS_SMALL_SCREEN ? 90 : 100,
     borderRadius: IS_SMALL_SCREEN ? 45 : 50,
     backgroundColor: colors.surface,
-    borderWidth: 0, // Pinterest-style: no border
   },
   avatarPlaceholder: {
     width: IS_SMALL_SCREEN ? 90 : 100,
@@ -1547,9 +1616,9 @@ const styles = StyleSheet.create({
   statusBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
     borderWidth: 0,
@@ -1595,15 +1664,19 @@ const styles = StyleSheet.create({
   infoGridItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.md + 2,
+    paddingVertical: spacing.lg,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: 16,
-    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   infoIconContainer: {
-    width: IS_SMALL_SCREEN ? 40 : 48,
-    height: IS_SMALL_SCREEN ? 40 : 48,
+    width: IS_SMALL_SCREEN ? 36 : 40,
+    height: IS_SMALL_SCREEN ? 36 : 40,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primary + '15',
     justifyContent: 'center',
@@ -1613,15 +1686,15 @@ const styles = StyleSheet.create({
   infoGridLabel: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 11 : 12,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
     marginBottom: spacing.xs / 2,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   infoGridValue: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 16,
+    fontSize: IS_SMALL_SCREEN ? 15 : 16,
     fontWeight: '700',
     textAlign: 'center',
     flexWrap: 'wrap',
@@ -1656,11 +1729,14 @@ const styles = StyleSheet.create({
   },
   specialtiesContainer: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: 16,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '80',
     gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   tagContainer: {
     flexDirection: 'row',
@@ -1672,14 +1748,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
   },
   tagText: {
     ...typography.caption,
-    color: colors.text.primary,
+    color: colors.primary,
     fontSize: IS_SMALL_SCREEN ? 12 : 13,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   artworkGrid: {
     flexDirection: 'row',

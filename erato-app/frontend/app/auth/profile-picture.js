@@ -121,7 +121,8 @@ export default function ProfilePictureScreen() {
       if (userType === 'artist') {
         router.replace('/onboarding/welcome');
       } else {
-        router.replace('/onboarding/client');
+        // Skip quiz for clients, go directly to home
+        router.replace('/(tabs)/home');
       }
     } catch (error) {
       console.error('Error uploading profile picture:', error);
@@ -240,9 +241,12 @@ const styles = StyleSheet.create({
     borderRadius: (width * 0.45) / 2,
     overflow: 'hidden',
     backgroundColor: colors.surface,
-    borderWidth: 4,
-    borderColor: colors.primary,
-    ...shadows.large,
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
   },
   avatar: {
     width: '100%',
@@ -306,15 +310,19 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
   },
   continueButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
+    backgroundColor: '#E60023',
+    borderRadius: borderRadius.full,
     padding: spacing.md + 4,
     alignItems: 'center',
-    ...shadows.medium,
+    shadowColor: '#E60023',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
   continueButtonText: {
     ...typography.button,
-    color: colors.text.primary,
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
   },
