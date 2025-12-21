@@ -600,7 +600,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     if (!artist) {
       const { data: userData } = await supabaseAdmin
         .from('users')
-        .select('id, username, avatar_url, full_name, bio')
+        .select('id, username, avatar_url, banner_url, full_name, bio')
         .eq('id', req.params.id)
         .single();
       
@@ -625,7 +625,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     const userId = artist.user_id || artist.id;
     const { data: userData } = await supabaseAdmin
       .from('users')
-      .select('id, username, avatar_url, full_name, bio')
+      .select('id, username, avatar_url, banner_url, full_name, bio')
       .eq('id', userId)
       .single();
 

@@ -11,6 +11,7 @@ import {
   Switch,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
@@ -341,7 +342,11 @@ export default function EditProfileScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Banner Section with Overlapping Avatar */}
         <View style={styles.bannerSection}>
-          <View style={styles.bannerImageContainer}>
+          <TouchableOpacity
+            style={styles.bannerImageContainer}
+            onPress={pickBannerImage}
+            activeOpacity={0.8}
+          >
             <Image
               key={bannerKey > 0 ? `banner-${bannerKey}` : 'banner-initial'}
               source={{
@@ -361,18 +366,14 @@ export default function EditProfileScreen() {
               placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
               transition={300}
             />
-            <TouchableOpacity
-              style={styles.changeBannerButton}
-              onPress={pickBannerImage}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="camera" size={20} color="#FFFFFF" />
-              <Text style={styles.changeBannerText}>7:2</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
 
           {/* Avatar overlapping the banner */}
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={pickProfileImage}
+            activeOpacity={0.8}
+          >
             <Image
               key={avatarKey > 0 ? `avatar-${avatarKey}` : 'avatar-initial'}
               source={{
@@ -392,14 +393,7 @@ export default function EditProfileScreen() {
               placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
               transition={300}
             />
-            <TouchableOpacity
-              style={styles.changePhotoButton}
-              onPress={pickProfileImage}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="camera" size={16} color={colors.text.primary} />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Profile Header Section */}
@@ -619,29 +613,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  changeBannerButton: {
-    position: 'absolute',
-    bottom: spacing.md,
-    right: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  changeBannerText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
   profileHeader: {
     alignItems: 'center',
     paddingTop: 0, // Remove top padding since avatar is now above
@@ -682,24 +653,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
-  },
-  changePhotoButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.background,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   username: {
     ...typography.h3,
