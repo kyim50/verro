@@ -339,14 +339,14 @@ export default function EditProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Banner Section */}
+        {/* Banner Section with Overlapping Avatar */}
         <View style={styles.bannerSection}>
           <View style={styles.bannerImageContainer}>
             <Image
               key={bannerKey > 0 ? `banner-${bannerKey}` : 'banner-initial'}
               source={{
                 uri: (() => {
-                  const url = bannerUrl || 'https://via.placeholder.com/800x200';
+                  const url = bannerUrl || 'https://via.placeholder.com/800x280';
                   // Only add cache-busting parameter if banner key changed (not on every render)
                   if (bannerKey > 0) {
                     const separator = url.includes('?') ? '&' : '?';
@@ -367,12 +367,11 @@ export default function EditProfileScreen() {
               activeOpacity={0.8}
             >
               <Ionicons name="camera" size={20} color="#FFFFFF" />
+              <Text style={styles.changeBannerText}>7:2</Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Profile Header Section */}
-        <View style={styles.profileHeader}>
+          {/* Avatar overlapping the banner */}
           <View style={styles.avatarContainer}>
             <Image
               key={avatarKey > 0 ? `avatar-${avatarKey}` : 'avatar-initial'}
@@ -398,12 +397,13 @@ export default function EditProfileScreen() {
               onPress={pickProfileImage}
               activeOpacity={0.8}
             >
-              <View style={styles.changePhotoIconContainer}>
-                <Ionicons name="camera" size={18} color={colors.text.primary} />
-              </View>
-              <Text style={styles.changePhotoText}>Change Photo</Text>
+              <Ionicons name="camera" size={16} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Profile Header Section */}
+        <View style={styles.profileHeader}>
 
         </View>
 
@@ -604,11 +604,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   bannerSection: {
-    marginBottom: spacing.lg,
+    position: 'relative',
+    marginBottom: 50, // Space for half of the overlapping avatar
   },
   bannerImageContainer: {
     width: '100%',
-    height: 200,
+    height: 280,
     backgroundColor: colors.surfaceLight,
     position: 'relative',
     borderRadius: 16,
@@ -622,27 +623,33 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: spacing.md,
     right: spacing.md,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
   },
+  changeBannerText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
   profileHeader: {
     alignItems: 'center',
-    paddingTop: spacing.xl,
+    paddingTop: 0, // Remove top padding since avatar is now above
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '40',
     marginBottom: spacing.xl,
-    marginTop: -45, // Overlap with banner like main profile
   },
   section: {
     paddingHorizontal: spacing.lg,
@@ -656,53 +663,43 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   avatarContainer: {
+    position: 'absolute',
+    bottom: -50, // Half of avatar height to overlap
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginBottom: spacing.md,
+    zIndex: 10,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.surface,
     borderWidth: 4,
     borderColor: colors.background,
-    borderRadius: 60,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.md,
-    borderWidth: 0,
-  },
   changePhotoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.full,
-    gap: spacing.sm,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  changePhotoIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary + '20',
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  changePhotoText: {
-    ...typography.body,
-    color: colors.text.primary,
-    fontWeight: '600',
-    fontSize: 14,
+    borderWidth: 3,
+    borderColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   username: {
     ...typography.h3,
