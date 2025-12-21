@@ -1163,15 +1163,6 @@ export default function ArtistProfileScreen() {
                 <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Commission Packages</Text>
               </View>
-              {isOwnProfile && (
-                <TouchableOpacity
-                  style={styles.manageLink}
-                  onPress={() => router.push('/commission-packages')}
-                >
-                  <Text style={styles.manageLinkText}>Manage</Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                </TouchableOpacity>
-              )}
             </View>
 
             {isPackagesLoading ? (

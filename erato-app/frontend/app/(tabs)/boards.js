@@ -328,6 +328,16 @@ const loadBoards = useCallback(async (skipCache = true) => {
   };
 
  const handleDeleteBoard = (board) => {
+  // Prevent deletion of system boards (Created, Liked)
+  if (board.board_type === 'created' || board.name === 'Liked') {
+    showAlert({
+      title: 'Cannot Delete',
+      message: 'This is a system canvas and cannot be deleted.',
+      type: 'info',
+    });
+    return;
+  }
+
   showAlert({
     title: 'Delete Canvas',
     message: `Are you sure you want to delete "${board.name}"?`,
@@ -385,7 +395,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
       ? countFromBackend
       : countFromArray;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
-    const isSystemBoard = item.board_type === 'created'|| item.board_type === 'Liked';
+    const isSystemBoard = item.board_type === 'created' || item.name === 'Liked';
     
     // Format last updated time
     const getTimeAgo = (dateString) => {

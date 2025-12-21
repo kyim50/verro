@@ -930,28 +930,14 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={styles.quickActionItem}
-                onPress={() => router.push('/commission-packages')}
+                onPress={() => router.push('/commission-management')}
               >
                 <View style={styles.quickActionIcon}>
-                  <Ionicons name="cube-outline" size={24} color={colors.primary} />
+                  <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Commission Packages</Text>
-                  <Text style={styles.quickActionSubtitle}>Manage packages & custom forms</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.quickActionItem}
-                onPress={() => router.push('/artist-settings')}
-              >
-                <View style={styles.quickActionIcon}>
-                  <Ionicons name="settings-outline" size={24} color={colors.primary} />
-                </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Commission Settings</Text>
-                  <Text style={styles.quickActionSubtitle}>Queue, terms & preferences</Text>
+                  <Text style={styles.quickActionTitle}>Commission Management</Text>
+                  <Text style={styles.quickActionSubtitle}>Settings, packages & pricing</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
               </TouchableOpacity>

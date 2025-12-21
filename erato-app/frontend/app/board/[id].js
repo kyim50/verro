@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Dimensions,
   Modal,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
+import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
@@ -25,13 +27,17 @@ const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - spacing.md * 2) / NUM_
 
 export default function BoardDetailScreen() {
   const { id } = useLocalSearchParams();
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const [board, setBoard] = useState(null);
   const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedArtwork, setSelectedArtwork] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [columns, setColumns] = useState([[], []]);
+  const [editMode, setEditMode] = useState(false);
+  const [selectedArtworks, setSelectedArtworks] = useState(new Set());
+  const [showBoardSelector, setShowBoardSelector] = useState(false);
+  const [userBoards, setUserBoards] = useState([]);
 
   const fetchBoardDetails = useCallback(async () => {
     try {
@@ -61,6 +67,140 @@ export default function BoardDetailScreen() {
       fetchBoardDetails();
     }, [fetchBoardDetails])
   );
+
+  // Fetch user's boards for moving artworks
+  const fetchUserBoards = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/users/${user.id}/boards`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Filter out the current board and system boards
+      const filteredBoards = response.data.filter(b =>
+        b.id !== id && b.name !== 'Liked' && b.board_type !== 'created'
+      );
+      setUserBoards(filteredBoards);
+    } catch (error) {
+      console.error('Error fetching user boards:', error);
+    }
+  }, [user?.id, token, id]);
+
+  // Toggle edit mode
+  const toggleEditMode = () => {
+    if (editMode) {
+      setSelectedArtworks(new Set());
+    } else {
+      fetchUserBoards();
+    }
+    setEditMode(!editMode);
+  };
+
+  // Toggle artwork selection
+  const toggleArtworkSelection = (artworkId) => {
+    const newSelected = new Set(selectedArtworks);
+    if (newSelected.has(artworkId)) {
+      newSelected.delete(artworkId);
+    } else {
+      newSelected.add(artworkId);
+    }
+    setSelectedArtworks(newSelected);
+  };
+
+  // Delete selected artworks from board
+  const handleDeleteSelected = () => {
+    Alert.alert(
+      'Delete Artworks',
+      `Are you sure you want to remove ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'} from this board?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Delete each selected artwork from the board
+              await Promise.all(
+                Array.from(selectedArtworks).map(artworkId =>
+                  axios.delete(`${API_URL}/boards/${id}/artworks/${artworkId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  })
+                )
+              );
+
+              Toast.show({
+                type: 'success',
+                text1: 'Success',
+                text2: `Removed ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'}`,
+                visibilityTime: 2000,
+              });
+
+              setSelectedArtworks(new Set());
+              setEditMode(false);
+              await fetchBoardDetails();
+            } catch (error) {
+              console.error('Error deleting artworks:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to remove artworks',
+                visibilityTime: 3000,
+              });
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Move/Add selected artworks to another board
+  const handleMoveToBoard = async (targetBoardId) => {
+    const isLikedBoard = board?.name === 'Liked';
+
+    try {
+      await Promise.all(
+        Array.from(selectedArtworks).map(async (artworkId) => {
+          // Add to target board
+          await axios.post(
+            `${API_URL}/boards/${targetBoardId}/artworks`,
+            { artwork_id: artworkId },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          // Only remove from current board if it's NOT the Liked board
+          if (!isLikedBoard) {
+            await axios.delete(`${API_URL}/boards/${id}/artworks/${artworkId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          }
+        })
+      );
+
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: isLikedBoard
+          ? `Added ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'} to board`
+          : `Moved ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'}`,
+        visibilityTime: 2000,
+      });
+
+      setSelectedArtworks(new Set());
+      setEditMode(false);
+      setShowBoardSelector(false);
+
+      // Only refresh if we removed artworks (non-Liked boards)
+      if (!isLikedBoard) {
+        await fetchBoardDetails();
+      }
+    } catch (error) {
+      console.error('Error with artworks:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: isLikedBoard ? 'Failed to add artworks to board' : 'Failed to move artworks',
+        visibilityTime: 3000,
+      });
+    }
+  };
 
   // Organize artworks into balanced columns (Pinterest masonry style)
   useEffect(() => {
@@ -108,13 +248,19 @@ export default function BoardDetailScreen() {
   }, [artworks]);
 
   const renderArtwork = (item) => {
+    const isSelected = selectedArtworks.has(item.id);
+
     return (
       <TouchableOpacity
         key={item.id}
         style={styles.artworkCard}
         onPress={() => {
-          setSelectedArtwork(item);
-          setShowModal(true);
+          if (editMode) {
+            toggleArtworkSelection(item.id);
+          } else {
+            setSelectedArtwork(item);
+            setShowModal(true);
+          }
         }}
         activeOpacity={0.9}
       >
@@ -123,6 +269,13 @@ export default function BoardDetailScreen() {
           style={[styles.artworkImage, { height: item.imageHeight }]}
           contentFit="cover"
         />
+        {editMode && (
+          <View style={styles.selectionOverlay}>
+            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+              {isSelected && <Ionicons name="checkmark" size={18} color="#FFF" />}
+            </View>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -135,24 +288,65 @@ export default function BoardDetailScreen() {
     );
   }
 
+  const isLikedBoard = board?.name === 'Liked';
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (editMode) {
+              toggleEditMode();
+            } else {
+              router.back();
+            }
+          }}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <Ionicons name={editMode ? "close" : "arrow-back"} size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{board?.name || 'Board'}</Text>
-          <Text style={styles.headerSubtitle}>
-            {artworks.length} {artworks.length === 1 ? 'artwork' : 'artworks'}
+          <Text style={styles.headerTitle}>
+            {editMode ? `${selectedArtworks.size} Selected` : board?.name || 'Board'}
           </Text>
+          {!editMode && (
+            <Text style={styles.headerSubtitle}>
+              {artworks.length} {artworks.length === 1 ? 'artwork' : 'artworks'}
+            </Text>
+          )}
         </View>
-        <View style={{ width: 40 }} />
+        {artworks.length > 0 && (
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={toggleEditMode}
+          >
+            <Text style={styles.editButtonText}>{editMode ? 'Done' : 'Edit'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* Edit Mode Actions */}
+      {editMode && selectedArtworks.size > 0 && (
+        <View style={styles.actionBar}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => setShowBoardSelector(true)}
+          >
+            <Ionicons name="folder-outline" size={20} color={colors.primary} />
+            <Text style={styles.actionButtonText}>
+              {isLikedBoard ? 'Add to Board' : 'Move to Board'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={handleDeleteSelected}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.status.error} />
+            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {artworks.length === 0 ? (
         <View style={styles.emptyState}>
@@ -228,6 +422,57 @@ export default function BoardDetailScreen() {
               </View>
             )}
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Board Selector Modal */}
+      <Modal
+        visible={showBoardSelector}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowBoardSelector(false)}
+      >
+        <View style={styles.boardSelectorContainer}>
+          <TouchableOpacity
+            style={styles.boardSelectorOverlay}
+            activeOpacity={1}
+            onPress={() => setShowBoardSelector(false)}
+          />
+          <View style={styles.boardSelectorContent}>
+            <View style={styles.boardSelectorHeader}>
+              <Text style={styles.boardSelectorTitle}>Move to Board</Text>
+              <TouchableOpacity onPress={() => setShowBoardSelector(false)}>
+                <Ionicons name="close" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.boardList}>
+              {userBoards.length === 0 ? (
+                <View style={styles.emptyBoardList}>
+                  <Text style={styles.emptyBoardText}>No boards available</Text>
+                  <Text style={styles.emptyBoardSubtext}>Create a board first to move artworks</Text>
+                </View>
+              ) : (
+                userBoards.map((targetBoard) => (
+                  <TouchableOpacity
+                    key={targetBoard.id}
+                    style={styles.boardItem}
+                    onPress={() => handleMoveToBoard(targetBoard.id)}
+                  >
+                    <Ionicons name="folder" size={24} color={colors.primary} />
+                    <View style={styles.boardItemInfo}>
+                      <Text style={styles.boardItemName}>{targetBoard.name}</Text>
+                      {targetBoard.description && (
+                        <Text style={styles.boardItemDescription} numberOfLines={1}>
+                          {targetBoard.description}
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </View>
@@ -373,5 +618,144 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 16,
+  },
+  editButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+  },
+  editButtonText: {
+    ...typography.button,
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  actionBar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  actionButtonText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    borderColor: colors.status.error,
+  },
+  deleteButtonText: {
+    color: colors.status.error,
+  },
+  selectionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#FFF',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  boardSelectorContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  boardSelectorOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  boardSelectorContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '70%',
+  },
+  boardSelectorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  boardSelectorTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  boardList: {
+    maxHeight: 400,
+  },
+  boardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  boardItemInfo: {
+    flex: 1,
+  },
+  boardItemName: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  boardItemDescription: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  emptyBoardList: {
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  emptyBoardText: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  emptyBoardSubtext: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
