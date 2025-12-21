@@ -68,15 +68,15 @@ export default function LoginScreen() {
 
           {/* Email Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email or Username</Text>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Email or Username"
               placeholderTextColor={colors.text.disabled}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
-              keyboardType="email-address"
+              keyboardType="default"
               editable={!loading}
             />
           </View>

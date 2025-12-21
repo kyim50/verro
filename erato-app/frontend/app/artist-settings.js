@@ -636,13 +636,13 @@ const styles = StyleSheet.create({
     width: 50,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.border,
+    backgroundColor: '#FF6B6B',
     justifyContent: 'center',
     padding: 2,
     flexShrink: 0,
   },
   switchActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#E60023',
   },
   switchDisabled: {
     opacity: 0.5,

@@ -1231,10 +1231,10 @@ export default function CommissionDashboard() {
             {isArtist && (
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => router.push('/artist-settings')}
+                onPress={() => router.push('/commission-management')}
               >
-                <Ionicons name="settings-outline" size={20} color={colors.primary} />
-                <Text style={styles.actionButtonText}>Settings</Text>
+                <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
+                <Text style={styles.actionButtonText}>Manage</Text>
               </TouchableOpacity>
             )}
             {!isArtist && (
