@@ -271,7 +271,7 @@ export default function EditProfileScreen() {
       }
 
       // Fetch updated user data (this will update auth store)
-      await fetchUser();
+      await fetchUserData();
       
       // Also refresh profile store if user is viewing their own profile - do this immediately
       if (user?.id) {
