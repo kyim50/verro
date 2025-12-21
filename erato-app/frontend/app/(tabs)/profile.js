@@ -32,7 +32,7 @@ const IS_SMALL_SCREEN = width < 400;
 const IS_VERY_SMALL_SCREEN = width < 380;
 
 export default function ProfileScreen() {
-  const { user, token, logout } = useAuthStore();
+  const { user, token, logout, fetchUser } = useAuthStore();
   const { profile, fetchProfile, isLoading, reset } = useProfileStore();
   const feedStore = useFeedStore();
   const boardStore = useBoardStore();
@@ -70,8 +70,10 @@ export default function ProfileScreen() {
         loadProfile(true);
         // Also load boards with artwork details
         fetchBoards(null, { skipCache: true });
+        // Refresh user data to ensure banner/avatar URLs are up to date
+        fetchUser();
       }
-    }, [user?.id, loadProfile, fetchBoards])
+    }, [user?.id, loadProfile, fetchBoards, fetchUser])
   );
 
   useEffect(() => {
