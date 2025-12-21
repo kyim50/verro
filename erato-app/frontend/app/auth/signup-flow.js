@@ -337,23 +337,22 @@ export default function SignupFlowScreen() {
           </View>
         );
 
-        case STEPS.USERNAME:
-          return (
-            <View style={styles.stepContainer}>
-              <Text style={styles.stepTitle}>Choose a username</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Username"
-                placeholderTextColor={colors.text.disabled}
-                value={formData.username}
-                onChangeText={(text) => setFormData({ ...formData, username: text })}
-                autoCapitalize="none"
-                autoFocus
-                editable={!loading}
-              />
-            </View>
-          );
-
+      case STEPS.USERNAME:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Choose a username</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor={colors.text.disabled}
+              value={formData.username}
+              onChangeText={(text) => setFormData({ ...formData, username: text })}
+              autoCapitalize="none"
+              autoFocus
+              editable={!loading}
+            />
+          </View>
+        );
       case STEPS.USER_TYPE:
         return (
           <View style={styles.stepContainer}>

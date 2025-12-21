@@ -1210,14 +1210,24 @@ router.get('/:id/files', authenticate, async (req, res) => {
     }
 
     // Get all files for this commission
+    console.log('📂 Fetching files for commission:', id);
     const { data: files, error: filesError } = await supabaseAdmin
       .from('commission_files')
       .select('*')
       .eq('commission_id', id)
       .order('created_at', { ascending: true });
 
-    if (filesError) throw filesError;
+    console.log('📂 Files query result:', { filesCount: files?.length || 0, error: filesError });
+    if (files && files.length > 0) {
+      console.log('📂 Sample file:', files[0]);
+    }
 
+    if (filesError) {
+      console.error('❌ Error fetching files:', filesError);
+      throw filesError;
+    }
+
+    console.log('✅ Returning files:', files?.length || 0);
     res.json({ files: files || [] });
   } catch (error) {
     console.error('Error fetching commission files:', error);
