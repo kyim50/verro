@@ -17,7 +17,6 @@ import {
   Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { showAlert } from '../../components/StyledAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,15 +50,62 @@ function CommissionFilesTab({ commissionId, token, isArtist }) {
   const loadFiles = async () => {
     try {
       setLoading(true);
-      // Get all progress updates with images
-      const response = await axios.get(
-        `${API_URL}/commissions/${commissionId}/progress`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const updates = response.data.updates || [];
-      
-      // Extract all images from progress updates
+      console.log('Loading files for commission:', commissionId);
+
+      // Fetch both reference images and progress updates in parallel
+      console.log('Fetching files from:', `${API_URL}/commissions/${commissionId}/files`);
+      console.log('Fetching progress from:', `${API_URL}/commissions/${commissionId}/progress`);
+
+      const [filesResponse, progressResponse] = await Promise.all([
+        axios.get(
+          `${API_URL}/commissions/${commissionId}/files`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(err => {
+          console.error('❌ Error fetching commission files:', {
+            status: err.response?.status,
+            statusText: err.response?.statusText,
+            data: err.response?.data,
+            message: err.message
+          });
+          return { data: { files: [] } };
+        }),
+        axios.get(
+          `${API_URL}/commissions/${commissionId}/progress`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(err => {
+          console.error('❌ Error fetching progress updates:', {
+            status: err.response?.status,
+            statusText: err.response?.statusText,
+            data: err.response?.data,
+            message: err.message
+          });
+          return { data: { updates: [] } };
+        })
+      ]);
+
+      console.log('Files response:', filesResponse.data);
+      console.log('Progress response:', progressResponse.data);
+
       const allFiles = [];
+
+      // Add reference images from commission_files table
+      const referenceFiles = filesResponse.data.files || [];
+      console.log('Reference files count:', referenceFiles.length);
+      referenceFiles.forEach((file) => {
+        console.log('Adding reference file:', file);
+        allFiles.push({
+          id: `file-${file.id}`,
+          url: file.file_url,
+          type: file.file_type || 'image',
+          createdAt: file.created_at,
+          note: file.file_name || 'Reference Image',
+          isReference: true,
+        });
+      });
+
+      // Add images from progress updates
+      const updates = progressResponse.data.updates || [];
+      console.log('Progress updates count:', updates.length);
       updates.forEach(update => {
         if (update.images && update.images.length > 0) {
           update.images.forEach((imageUrl, index) => {
@@ -70,11 +116,16 @@ function CommissionFilesTab({ commissionId, token, isArtist }) {
               createdAt: update.created_at,
               note: update.note,
               updateId: update.id,
+              isReference: false,
             });
           });
         }
       });
-      
+
+      // Sort by creation date (oldest first)
+      allFiles.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+      console.log('Total files to display:', allFiles.length);
       setFiles(allFiles);
     } catch (error) {
       console.error('Error loading files:', error);
@@ -143,6 +194,12 @@ function CommissionFilesTab({ commissionId, token, isArtist }) {
             style={styles.fileImage}
             contentFit="cover"
           />
+          {file.isReference && (
+            <View style={styles.referenceImageBadge}>
+              <Ionicons name="image-outline" size={12} color="#fff" />
+              <Text style={styles.referenceImageBadgeText}>Reference</Text>
+            </View>
+          )}
           {file.note && (
             <View style={styles.fileNoteOverlay}>
               <Text style={styles.fileNoteText} numberOfLines={2}>{file.note}</Text>
@@ -664,92 +721,103 @@ export default function CommissionDashboard() {
   const handleUpdateStatus = async (commissionId, newStatus, closeModal = false) => {
     // Prevent multiple simultaneous updates
     if (updatingStatus.has(commissionId)) {
+      console.log('Update already in progress for commission:', commissionId);
       return;
     }
 
-    try {
-      setUpdatingStatus(prev => new Set(prev).add(commissionId));
+    console.log('Starting status update:', { commissionId, newStatus, closeModal });
 
+    // Add to updating set immediately
+    setUpdatingStatus(prev => new Set(prev).add(commissionId));
+
+    try {
       // Find commission to get artwork_id for engagement tracking
       const commission = commissions.find(c => c.id === commissionId);
 
       // Update commission status via API
-      await axios.patch(
+      console.log('Sending API request to update status...');
+      const response = await axios.patch(
         `${API_URL}/commissions/${commissionId}/status`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Close modal immediately if requested (before heavy operations)
+      console.log('Status update successful:', response.data);
+
+      // Show success message
+      Toast.show({
+        type: 'success',
+        text1: 'Success',
+        text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
+        visibilityTime: 2000,
+      });
+
+      // Track engagement metrics if artwork exists (fire-and-forget, don't block UI)
+      if (commission?.artwork_id && token) {
+        const engagementType = newStatus === 'accepted' || newStatus === 'in_progress'
+          ? 'commission_inquiry'
+          : null;
+
+        if (engagementType) {
+          // Don't await - fire and forget to prevent blocking
+          axios.post(
+            `${API_URL}/engagement/track`,
+            {
+              artwork_id: commission.artwork_id,
+              engagement_type: engagementType,
+              metadata: {
+                commission_id: commissionId,
+                action: newStatus === 'accepted' || newStatus === 'in_progress' ? 'accepted' : 'declined',
+                source: 'commission_management'
+              }
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          ).catch((engagementError) => {
+            // Fail silently - don't disrupt user experience
+            console.warn('Failed to track engagement:', engagementError);
+          });
+        }
+      }
+
+      // Close modal immediately after API success
       if (closeModal) {
+        console.log('Closing modal...');
         setShowCommissionModal(false);
         setSelectedCommission(null);
       }
 
-      // Show success message after a brief delay to ensure modal closes first
-      setTimeout(() => {
-        Toast.show({
-          type: 'success',
-          text1: 'Success',
-          text2: `Commission ${formatStatus(newStatus).toLowerCase()}`,
-          visibilityTime: 2000,
-        });
-      }, 100);
+      // Clear updating status
+      setUpdatingStatus(prev => {
+        const next = new Set(prev);
+        next.delete(commissionId);
+        return next;
+      });
 
-      // Track engagement metrics if artwork exists (fire-and-forget, don't block UI)
-      if (commission?.artwork_id && token) {
-        const engagementType = newStatus === 'accepted' || newStatus === 'in_progress' 
-          ? 'commission_inquiry' 
-          : null;
-        
-        if (engagementType) {
-          // Don't await - fire and forget to prevent blocking
-          setTimeout(() => {
-            axios.post(
-              `${API_URL}/engagement/track`,
-              {
-                artwork_id: commission.artwork_id,
-                engagement_type: engagementType,
-                metadata: {
-                  commission_id: commissionId,
-                  action: newStatus === 'accepted' || newStatus === 'in_progress' ? 'accepted' : 'declined',
-                  source: 'commission_management'
-                }
-              },
-              { headers: { Authorization: `Bearer ${token}` } }
-            ).catch((engagementError) => {
-              // Fail silently - don't disrupt user experience
-              console.warn('Failed to track engagement:', engagementError);
-            });
-          }, 200);
-        }
-      }
+      // Reload commissions in background (don't await)
+      console.log('Reloading commissions in background...');
+      loadCommissions().then(() => {
+        console.log('Commissions reloaded successfully');
+      }).catch((error) => {
+        console.warn('Error reloading commissions:', error);
+      });
 
-      // Reload commissions in background (don't await to prevent blocking)
-      // Use longer delay to ensure UI is responsive first
-      setTimeout(() => {
-        loadCommissions().catch((error) => {
-          console.warn('Error reloading commissions:', error);
-        });
-      }, 300);
     } catch (error) {
       console.error('Error updating status:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update status';
+
       Toast.show({
         type: 'error',
         text1: 'Error',
         text2: errorMessage,
         visibilityTime: 3000,
       });
-    } finally {
-      // Clear updating status after a short delay to allow UI to update
-      setTimeout(() => {
-        setUpdatingStatus(prev => {
-          const next = new Set(prev);
-          next.delete(commissionId);
-          return next;
-        });
-      }, 50);
+
+      // Clear updating status on error
+      setUpdatingStatus(prev => {
+        const next = new Set(prev);
+        next.delete(commissionId);
+        return next;
+      });
     }
   };
 
@@ -1962,29 +2030,29 @@ export default function CommissionDashboard() {
                     </Text>
                     {detailTab === 'details' && <View style={styles.detailTabUnderline} />}
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.detailTab}
+                    onPress={() => setDetailTab('files')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.detailTabText, detailTab === 'files' && styles.detailTabTextActive]}>
+                      Files
+                    </Text>
+                    {detailTab === 'files' && <View style={styles.detailTabUnderline} />}
+                  </TouchableOpacity>
+
                   {(selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') && (
-                    <>
-                      <TouchableOpacity
-                        style={styles.detailTab}
-                        onPress={() => setDetailTab('progress')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.detailTabText, detailTab === 'progress' && styles.detailTabTextActive]}>
-                          Progress
-                        </Text>
-                        {detailTab === 'progress' && <View style={styles.detailTabUnderline} />}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.detailTab}
-                        onPress={() => setDetailTab('files')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.detailTabText, detailTab === 'files' && styles.detailTabTextActive]}>
-                          Files
-                        </Text>
-                        {detailTab === 'files' && <View style={styles.detailTabUnderline} />}
-                      </TouchableOpacity>
-                    </>
+                    <TouchableOpacity
+                      style={styles.detailTab}
+                      onPress={() => setDetailTab('progress')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.detailTabText, detailTab === 'progress' && styles.detailTabTextActive]}>
+                        Progress
+                      </Text>
+                      {detailTab === 'progress' && <View style={styles.detailTabUnderline} />}
+                    </TouchableOpacity>
                   )}
                 </ScrollView>
               </View>
@@ -2283,19 +2351,12 @@ export default function CommissionDashboard() {
                   </View>
                 ) : detailTab === 'files' ? (
                   <View style={{ flex: 1, minHeight: 200 }}>
-                    {selectedCommission?.id && (selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') ? (
-                      <CommissionFilesTab 
+                    {selectedCommission?.id ? (
+                      <CommissionFilesTab
                         commissionId={selectedCommission.id}
                         token={token}
                         isArtist={isArtist}
                       />
-                    ) : selectedCommission?.id ? (
-                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
-                        <Ionicons name="lock-closed-outline" size={48} color={colors.text.disabled} />
-                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary, textAlign: 'center' }}>
-                          Accept the commission to view files
-                        </Text>
-                      </View>
                     ) : (
                       <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
                         <ActivityIndicator size="large" color={colors.primary} />
@@ -2312,24 +2373,42 @@ export default function CommissionDashboard() {
                     <TouchableOpacity
                       style={[styles.detailDeclineButton, updatingStatus.has(selectedCommission.id) && styles.detailDeclineButtonDisabled]}
                       onPress={() => {
-                        if (updatingStatus.has(selectedCommission.id)) return;
-                        const commissionId = selectedCommission.id;
+                        console.log('🔴 DECLINE BUTTON CLICKED');
+                        console.log('Commission ID:', selectedCommission.id);
+                        console.log('Updating status has commission?', updatingStatus.has(selectedCommission.id));
 
-                        showAlert({
-                          title: 'Decline Commission',
-                          message: 'Are you sure you want to decline this commission? This action cannot be undone.',
-                          type: 'warning',
-                          showCancel: true,
-                          onConfirm: () => {
-                            // Close modal immediately
-                            setShowCommissionModal(false);
-                            setSelectedCommission(null);
-                            // Handle async operation after UI updates
-                            setTimeout(() => {
-                              handleUpdateStatus(commissionId, 'declined', false);
-                            }, 50);
-                          },
-                        });
+                        if (updatingStatus.has(selectedCommission.id)) {
+                          console.log('⚠️ Skipping - update already in progress');
+                          return;
+                        }
+
+                        const commissionId = selectedCommission.id;
+                        console.log('📢 Showing decline alert...');
+
+                        Alert.alert(
+                          'Decline Commission',
+                          'Are you sure you want to decline this commission? This action cannot be undone.',
+                          [
+                            {
+                              text: 'Cancel',
+                              style: 'cancel',
+                              onPress: () => console.log('Decline cancelled'),
+                            },
+                            {
+                              text: 'Decline',
+                              style: 'destructive',
+                              onPress: async () => {
+                                console.log('Decline confirmed, calling handleUpdateStatus...');
+                                try {
+                                  await handleUpdateStatus(commissionId, 'declined', true);
+                                  console.log('handleUpdateStatus completed successfully');
+                                } catch (error) {
+                                  console.error('handleUpdateStatus failed:', error);
+                                }
+                              },
+                            },
+                          ]
+                        );
                       }}
                       disabled={updatingStatus.has(selectedCommission.id)}
                     >
@@ -2346,24 +2425,41 @@ export default function CommissionDashboard() {
                     <TouchableOpacity
                       style={[styles.detailAcceptButton, updatingStatus.has(selectedCommission.id) && styles.detailAcceptButtonDisabled]}
                       onPress={() => {
-                        if (updatingStatus.has(selectedCommission.id)) return;
-                        const commissionId = selectedCommission.id;
+                        console.log('🟢 ACCEPT BUTTON CLICKED');
+                        console.log('Commission ID:', selectedCommission.id);
+                        console.log('Updating status has commission?', updatingStatus.has(selectedCommission.id));
 
-                        showAlert({
-                          title: 'Accept Commission',
-                          message: 'Accept this request?',
-                          type: 'success',
-                          showCancel: true,
-                          onConfirm: () => {
-                            // Close modal immediately
-                            setShowCommissionModal(false);
-                            setSelectedCommission(null);
-                            // Handle async operation after UI updates
-                            setTimeout(() => {
-                              handleUpdateStatus(commissionId, 'accepted', false);
-                            }, 50);
-                          },
-                        });
+                        if (updatingStatus.has(selectedCommission.id)) {
+                          console.log('⚠️ Skipping - update already in progress');
+                          return;
+                        }
+
+                        const commissionId = selectedCommission.id;
+                        console.log('📢 Showing accept alert...');
+
+                        Alert.alert(
+                          'Accept Commission',
+                          'Accept this request?',
+                          [
+                            {
+                              text: 'Cancel',
+                              style: 'cancel',
+                              onPress: () => console.log('Accept cancelled'),
+                            },
+                            {
+                              text: 'Accept',
+                              onPress: async () => {
+                                console.log('Accept confirmed, calling handleUpdateStatus...');
+                                try {
+                                  await handleUpdateStatus(commissionId, 'accepted', true);
+                                  console.log('handleUpdateStatus completed successfully');
+                                } catch (error) {
+                                  console.error('handleUpdateStatus failed:', error);
+                                }
+                              },
+                            },
+                          ]
+                        );
                       }}
                       disabled={updatingStatus.has(selectedCommission.id)}
                     >
@@ -3976,6 +4072,24 @@ const styles = StyleSheet.create({
   fileDateText: {
     ...typography.caption,
     color: colors.text.primary,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  referenceImageBadge: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  referenceImageBadgeText: {
+    ...typography.caption,
+    color: '#fff',
     fontSize: 10,
     fontWeight: '600',
   },

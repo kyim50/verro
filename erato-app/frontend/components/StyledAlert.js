@@ -24,24 +24,34 @@ export const showAlert = ({
   cancelText = 'Cancel',
   confirmText = 'Confirm'
 }) => {
+  console.log('📢 showAlert called:', { title, message, type, showCancel, hasOnConfirm: !!onConfirm });
+  console.log('📢 alertInstance exists?', !!alertInstance);
+  console.log('📢 alertInstance.show exists?', !!alertInstance?.show);
+
   if (alertInstance && alertInstance.show) {
     // If showCancel is true, automatically create buttons
     let finalButtons = buttons;
     if (showCancel && onConfirm && !buttons) {
+      console.log('📢 Creating buttons with onConfirm');
       finalButtons = [
-        { text: cancelText, style: 'cancel', onPress: () => {} },
+        { text: cancelText, style: 'cancel', onPress: () => { console.log('Cancel button pressed'); } },
         { text: confirmText, style: type === 'error' ? 'destructive' : 'default', onPress: onConfirm },
       ];
+      console.log('📢 Final buttons:', finalButtons.map(b => ({ text: b.text, hasOnPress: !!b.onPress })));
     }
 
+    console.log('📢 Calling alertInstance.show()...');
     alertInstance.show({ title, message, type, onPress, duration, buttons: finalButtons });
+    console.log('📢 alertInstance.show() called');
   } else {
     // Fallback: log error if alert instance not ready
-    console.warn('StyledAlert instance not ready. Title:', title, 'Message:', message);
+    console.warn('⚠️ StyledAlert instance not ready. Title:', title, 'Message:', message);
   }
 };
 
 const showAlertInternal = (setVisible, setAlertData, timerRef) => (data) => {
+  console.log('🔔 showAlertInternal called with data:', data);
+
   // Always provide fallbacks to avoid empty alerts
   const safeData = {
     title: data?.title || 'Notice',
@@ -52,14 +62,20 @@ const showAlertInternal = (setVisible, setAlertData, timerRef) => (data) => {
     buttons: data?.buttons || null,
   };
 
+  console.log('🔔 Safe data:', safeData);
+  console.log('🔔 Has buttons?', !!safeData.buttons);
+
   // Clear any existing timer
   if (timerRef.current) {
     clearTimeout(timerRef.current);
     timerRef.current = null;
   }
 
+  console.log('🔔 Setting alert data...');
   setAlertData(safeData);
+  console.log('🔔 Setting visible to true...');
   setVisible(true);
+  console.log('🔔 Alert should now be visible');
 
   // Auto-dismiss after duration only if no custom buttons (confirmations should stay)
   if (!safeData.buttons) {
@@ -80,16 +96,23 @@ const StyledAlert = forwardRef((props, ref) => {
   }));
 
   React.useEffect(() => {
+    console.log('🎨 StyledAlert component mounted');
     alertInstance = {
       show: showAlertInternal(setVisible, setAlertData, timerRef),
     };
-    
+
     return () => {
+      console.log('🎨 StyledAlert component unmounting');
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
     };
   }, []);
+
+  React.useEffect(() => {
+    console.log('🎨 StyledAlert visible changed:', visible);
+    console.log('🎨 StyledAlert alertData:', alertData);
+  }, [visible, alertData]);
 
   const handleClose = () => {
     if (timerRef.current) {
@@ -120,12 +143,36 @@ const StyledAlert = forwardRef((props, ref) => {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    setVisible(false);
+
+    // Execute button action BEFORE closing alert
     if (button.onPress) {
-      button.onPress();
+      try {
+        console.log('StyledAlert: Calling button.onPress()');
+        const result = button.onPress();
+        // If it returns a promise, handle it properly
+        if (result && typeof result.then === 'function') {
+          console.log('StyledAlert: onPress returned a promise, waiting...');
+          result
+            .then(() => {
+              console.log('StyledAlert: Promise resolved successfully');
+            })
+            .catch((error) => {
+              console.error('StyledAlert: Error in async button action:', error);
+            });
+        } else {
+          console.log('StyledAlert: onPress completed synchronously');
+        }
+      } catch (error) {
+        console.error('StyledAlert: Error calling button onPress:', error);
+      }
     }
+
+    // Close alert after starting the action
+    setVisible(false);
     setTimeout(() => setAlertData(null), 300);
   };
+
+  console.log('🎨 Rendering StyledAlert, visible:', visible, 'hasButtons:', !!alertData?.buttons);
 
   return (
     <Modal
@@ -133,6 +180,8 @@ const StyledAlert = forwardRef((props, ref) => {
       transparent
       animationType="fade"
       onRequestClose={handleClose}
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
     >
       <TouchableWithoutFeedback onPress={buttons ? null : handleClose}>
         <View style={styles.overlay} pointerEvents="box-none">
@@ -191,6 +240,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
+    zIndex: 9999,
+    elevation: 9999,
   },
   alertContainer: {
     width: '100%',
