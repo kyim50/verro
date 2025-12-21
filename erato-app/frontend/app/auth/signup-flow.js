@@ -90,7 +90,6 @@ export default function SignupFlowScreen() {
   useEffect(() => {
     // Reset animation values for new step
     fadeAnim.setValue(0);
-    slideAnim.setValue(0);
 
     // Simple fade-in animation without transforms that might block touches
     Animated.timing(fadeAnim, {
@@ -180,21 +179,13 @@ export default function SignupFlowScreen() {
     if (hasError) return;
 
     // Fade out before transition
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -20,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
       // Reset animation values for next step
       fadeAnim.setValue(0);
-      slideAnim.setValue(20);
 
       if (currentStep < STEPS.USER_TYPE) {
         setCurrentStep(currentStep + 1);
