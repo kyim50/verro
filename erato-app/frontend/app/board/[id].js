@@ -74,10 +74,12 @@ export default function BoardDetailScreen() {
       const response = await axios.get(`${API_URL}/users/${user.id}/boards`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Fetched boards:', response.data);
       // Filter out the current board and system boards
       const filteredBoards = response.data.filter(b =>
         b.id !== id && b.name !== 'Liked' && b.board_type !== 'created'
       );
+      console.log('Filtered boards for modal:', filteredBoards);
       setUserBoards(filteredBoards);
     } catch (error) {
       console.error('Error fetching user boards:', error);
@@ -331,7 +333,10 @@ export default function BoardDetailScreen() {
         <View style={styles.actionBar}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => setShowBoardSelector(true)}
+            onPress={() => {
+              fetchUserBoards();
+              setShowBoardSelector(true);
+            }}
           >
             <Ionicons name="folder-outline" size={20} color={colors.primary} />
             <Text style={styles.actionButtonText}>
@@ -425,7 +430,7 @@ export default function BoardDetailScreen() {
         </View>
       </Modal>
 
-      {/* Board Selector Modal */}
+      {/* Board Selector Modal - Pinterest Style */}
       <Modal
         visible={showBoardSelector}
         transparent={true}
@@ -440,38 +445,49 @@ export default function BoardDetailScreen() {
           />
           <View style={styles.boardSelectorContent}>
             <View style={styles.boardSelectorHeader}>
-              <Text style={styles.boardSelectorTitle}>Move to Board</Text>
               <TouchableOpacity onPress={() => setShowBoardSelector(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
+                <Ionicons name="close" size={28} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.boardList}>
+            <Text style={styles.boardSelectorTitle}>Move to Board</Text>
+            <View style={styles.boardListContainer}>
               {userBoards.length === 0 ? (
                 <View style={styles.emptyBoardList}>
+                  <Ionicons name="folder-outline" size={48} color={colors.text.disabled} />
                   <Text style={styles.emptyBoardText}>No boards available</Text>
                   <Text style={styles.emptyBoardSubtext}>Create a board first to move artworks</Text>
                 </View>
               ) : (
-                userBoards.map((targetBoard) => (
-                  <TouchableOpacity
-                    key={targetBoard.id}
-                    style={styles.boardItem}
-                    onPress={() => handleMoveToBoard(targetBoard.id)}
-                  >
-                    <Ionicons name="folder" size={24} color={colors.primary} />
-                    <View style={styles.boardItemInfo}>
-                      <Text style={styles.boardItemName}>{targetBoard.name}</Text>
-                      {targetBoard.description && (
-                        <Text style={styles.boardItemDescription} numberOfLines={1}>
-                          {targetBoard.description}
+                <ScrollView
+                  style={styles.boardList}
+                  contentContainerStyle={styles.boardListContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {userBoards.map((targetBoard) => (
+                    <TouchableOpacity
+                      key={targetBoard.id}
+                      style={styles.boardOption}
+                      onPress={() => handleMoveToBoard(targetBoard.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.boardThumbnail}>
+                        <View style={styles.boardThumbnailPlaceholder}>
+                          <Ionicons name="images-outline" size={24} color={colors.text.disabled} />
+                        </View>
+                      </View>
+                      <View style={styles.boardInfo}>
+                        <Text style={styles.boardName} numberOfLines={1}>
+                          {targetBoard.name}
                         </Text>
-                      )}
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
-                  </TouchableOpacity>
-                ))
+                        <Text style={styles.boardMeta}>
+                          {targetBoard.artwork_count || 0} pins
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               )}
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -497,8 +513,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
@@ -636,8 +650,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     backgroundColor: colors.background,
   },
   actionButton: {
@@ -649,8 +661,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   actionButtonText: {
     ...typography.button,
@@ -696,52 +706,74 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
+    minHeight: 300,
     maxHeight: '70%',
+    paddingBottom: spacing.xl,
   },
   boardSelectorHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   boardSelectorTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-  },
-  boardList: {
-    maxHeight: 400,
-  },
-  boardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginBottom: spacing.md,
   },
-  boardItemInfo: {
+  boardListContainer: {
     flex: 1,
   },
-  boardItemName: {
+  boardList: {
+    flex: 1,
+  },
+  boardListContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  boardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  boardThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  boardThumbnailPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  boardInfo: {
+    flex: 1,
+  },
+  boardName: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
-  boardItemDescription: {
+  boardMeta: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 2,
   },
   emptyBoardList: {
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xxl * 2,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
@@ -750,6 +782,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
+    marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   emptyBoardSubtext: {
