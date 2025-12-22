@@ -953,6 +953,20 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={styles.quickActionItem}
+                onPress={() => router.push('/metrics')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="analytics" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Metrics & Analytics</Text>
+                  <Text style={styles.quickActionSubtitle}>View stats, engagement & performance</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
                 onPress={() => router.push('/verification')}
               >
                 <View style={styles.quickActionIcon}>
@@ -1070,6 +1084,20 @@ export default function ProfileScreen() {
                   <View style={styles.quickActionText}>
                     <Text style={styles.quickActionTitle}>My Boards</Text>
                     <Text style={styles.quickActionSubtitle}>Organize artworks into collections</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.quickActionItem}
+                  onPress={() => router.push('/metrics')}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <Ionicons name="analytics" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.quickActionText}>
+                    <Text style={styles.quickActionTitle}>Metrics & Analytics</Text>
+                    <Text style={styles.quickActionSubtitle}>View stats & activity</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
                 </TouchableOpacity>
@@ -1204,90 +1232,6 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* Boards */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>My Boards</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/boards')}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {userBoards && userBoards.length > 0 ? (
-            <View style={styles.boardsGrid}>
-              {userBoards.slice(0, 4).map((board) => {
-                const countFromArray = board.board_artworks?.length || 0;
-                const countFromBackend = board.artworks?.[0]?.count;
-                const artworkCount = (typeof countFromBackend === 'number' && countFromBackend > 0)
-                  ? countFromBackend
-                  : countFromArray;
-                const firstArtworks = board.board_artworks?.slice(0, 4) || [];
-                
-                return (
-                  <TouchableOpacity
-                    key={board.id}
-                    style={styles.boardCard}
-                    onPress={() => router.push(`/board/${board.id}`)}
-                    activeOpacity={0.9}
-                  >
-                    {/* Pinterest-style Collage */}
-                    <View style={styles.boardCoverGrid}>
-                      {firstArtworks.length > 0 ? (
-                        <>
-                          {/* Large image on left */}
-                          <View style={styles.boardGridItemLarge}>
-                            <Image
-                              source={{ uri: firstArtworks[0]?.artworks?.thumbnail_url || firstArtworks[0]?.artworks?.image_url }}
-                              style={styles.boardGridImage}
-                              contentFit="cover"
-                            />
-                          </View>
-                          
-                          {/* Smaller images on right */}
-                          <View style={styles.boardGridItemSmall}>
-                            {firstArtworks.slice(1, 4).map((ba, index) => (
-                              <View key={index} style={styles.boardSmallGridItem}>
-                                <Image
-                                  source={{ uri: ba.artworks?.thumbnail_url || ba.artworks?.image_url }}
-                                  style={styles.boardGridImage}
-                                  contentFit="cover"
-                                />
-                              </View>
-                            ))}
-                            {firstArtworks.length < 4 && (
-                              <View style={[styles.boardSmallGridItem, styles.boardEmptySmallGrid]} />
-                            )}
-                          </View>
-                        </>
-                      ) : (
-                        <View style={styles.boardEmptyGrid}>
-                          <Ionicons name="images-outline" size={32} color={colors.text.disabled} />
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Board Info */}
-                    <View style={styles.boardInfoCompact}>
-                      <View style={styles.boardTitleRow}>
-                        <Text style={styles.boardNameCompact} numberOfLines={1}>
-                          {board.name}
-                        </Text>
-                        {!board.is_public && (
-                          <Ionicons name="lock-closed" size={12} color={colors.text.secondary} />
-                        )}
-                      </View>
-                      <Text style={styles.boardMetaCompact}>
-                        {artworkCount} {artworkCount === 1 ? 'Pin' : 'Pins'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>No boards yet</Text>
-          )}
-        </View>
         </ScrollView>
       )}
 
@@ -1923,28 +1867,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 20,
   },
-  boardsList: {
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  boardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border + '80',
-    ...shadows.small,
-  },
-  boardName: {
-    ...typography.body,
-    color: colors.text.primary,
-    flex: 1,
-    fontSize: IS_SMALL_SCREEN ? 14 : 16,
-  },
   seeAllText: {
     ...typography.body,
     color: colors.primary,
@@ -2213,85 +2135,5 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontWeight: '600',
-  },
-  // Board styles
-  boardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  boardCard: {
-    width: '48%',
-    marginBottom: spacing.md,
-  },
-  boardCoverGrid: {
-    width: '100%',
-    aspectRatio: 1,
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: spacing.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  boardGridItemLarge: {
-    width: '60%',
-    height: '100%',
-    position: 'relative',
-  },
-  boardGridItemSmall: {
-    width: '40%',
-    height: '100%',
-    flexDirection: 'column',
-    borderLeftWidth: 2,
-    borderLeftColor: colors.background,
-  },
-  boardSmallGridItem: {
-    flex: 1,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.background,
-  },
-  boardEmptySmallGrid: {
-    backgroundColor: colors.surfaceLight,
-  },
-  boardGridImage: {
-    width: '100%',
-    height: '100%',
-  },
-  boardEmptyGrid: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceLight,
-  },
-  boardInfoCompact: {
-    paddingHorizontal: spacing.xs / 2,
-    paddingVertical: spacing.xs / 2,
-  },
-  boardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs / 2,
-    gap: spacing.xs / 2,
-  },
-  boardNameCompact: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-    flex: 1,
-  },
-  boardMetaCompact: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 11,
-    fontWeight: '400',
   },
 });
