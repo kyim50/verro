@@ -1,11 +1,10 @@
 import { Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
-import LoadingScreen from './auth/loading';
 import ErrorBoundary from '../components/ErrorBoundary';
 import toastConfig from '../components/StyledToast';
 import StyledAlert, { showAlert } from '../components/StyledAlert';
@@ -35,7 +34,6 @@ function patchToastToAlert() {
 }
 
 export default function RootLayout() {
-  const [isLoading, setIsLoading] = useState(true);
   const loadToken = useAuthStore((state) => state.loadToken);
   const fetchUser = useAuthStore((state) => state.fetchUser);
 
@@ -52,12 +50,6 @@ export default function RootLayout() {
       // Don't crash on non-fatal errors
       if (isFatal) {
         console.error('🚨 Fatal error occurred:', error);
-        // Try to show error screen instead of crashing
-        try {
-          setIsLoading(false);
-        } catch (e) {
-          console.error('Failed to handle fatal error:', e);
-        }
       }
     };
 
@@ -90,15 +82,7 @@ export default function RootLayout() {
     console.log('🔍 Constants.expoConfig.extra:', Constants.expoConfig?.extra);
 
     let mounted = true;
-    
-    // Safety timeout - ensure app loads even if something hangs
-    const safetyTimeout = setTimeout(() => {
-      if (mounted) {
-        console.warn('App initialization timeout - forcing load');
-        setIsLoading(false);
-      }
-    }, 10000); // 10 second max wait
-    
+
     const initializeApp = async () => {
       try {
         if (!mounted) return;
@@ -116,42 +100,15 @@ export default function RootLayout() {
       } catch (error) {
         console.error('Error initializing app:', error);
         // Don't crash - continue anyway
-      } finally {
-        if (mounted) {
-          clearTimeout(safetyTimeout);
-          // Show loading screen for at least 1.5 seconds but max 3 seconds
-          const minWait = setTimeout(() => {
-            if (mounted) {
-              setIsLoading(false);
-            }
-          }, 1500);
-          
-          // But also ensure we don't wait too long
-          setTimeout(() => {
-            clearTimeout(minWait);
-            if (mounted) {
-              setIsLoading(false);
-            }
-          }, 3000);
-        }
       }
     };
-    // Delay initialization slightly to ensure everything is mounted
-    setTimeout(() => {
-      if (mounted) {
-        initializeApp();
-      }
-    }, 100);
-    
+    // Initialize app immediately without loading screen
+    initializeApp();
+
     return () => {
       mounted = false;
-      clearTimeout(safetyTimeout);
     };
   }, []);
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
 
   return (
     <ErrorBoundary>
