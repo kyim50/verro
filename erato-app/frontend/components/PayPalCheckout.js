@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -35,6 +35,8 @@ export default function PayPalCheckout({
   const [loading, setLoading] = useState(false);
   const [approvalUrl, setApprovalUrl] = useState(null);
   const [orderId, setOrderId] = useState(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef(null);
 
   useEffect(() => {
     if (visible && commissionId && amount) {
@@ -43,7 +45,21 @@ export default function PayPalCheckout({
       // Reset state when modal closes
       setApprovalUrl(null);
       setOrderId(null);
+      setIsPolling(false);
+      // Clear polling interval
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     }
+
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
   }, [visible, commissionId, amount]);
 
   const createPayPalOrder = async () => {
@@ -91,18 +107,10 @@ export default function PayPalCheckout({
     if (!urlToOpen) return;
     
     try {
-      // Open PayPal in system browser using Linking
       const canOpen = await Linking.canOpenURL(urlToOpen);
       if (canOpen) {
         await Linking.openURL(urlToOpen);
-        
-        // After opening browser, set up a check for payment completion
-        // We'll poll for payment status after a delay
-        if (orderIdForCheck) {
-          setTimeout(() => {
-            checkPaymentStatus(orderIdForCheck);
-          }, 3000); // Give user time to complete payment
-        }
+        // Don't start polling automatically - let user click button when they return
       } else {
         throw new Error('Cannot open PayPal URL');
       }
@@ -121,8 +129,12 @@ export default function PayPalCheckout({
     const idToCheck = orderIdToCheck || orderId;
     if (!idToCheck) return;
     
+    if (isPolling) return; // Prevent multiple simultaneous checks
+    
     try {
-      // Try to capture the order (will fail if not approved)
+      setLoading(true);
+      setIsPolling(true);
+      
       const response = await axios.post(
         `${API_URL}/payments/capture-order`,
         { orderId: idToCheck },
@@ -133,9 +145,15 @@ export default function PayPalCheckout({
         handlePaymentSuccess(response.data.data);
       }
     } catch (error) {
-      // Payment not completed yet or user cancelled
-      console.log('Payment not completed:', error.message);
-      handlePaymentCancel();
+      console.log('Payment not completed yet:', error.message);
+      Toast.show({
+        type: 'info',
+        text1: 'Payment Not Complete',
+        text2: 'Please complete payment in PayPal and try again',
+      });
+    } finally {
+      setLoading(false);
+      setIsPolling(false);
     }
   };
 
@@ -159,11 +177,7 @@ export default function PayPalCheckout({
   };
 
   const handlePaymentCancel = () => {
-    Toast.show({
-      type: 'info',
-      text1: 'Payment Cancelled',
-      text2: 'You cancelled the payment process',
-    });
+    // Just close the modal
     onClose();
   };
 
@@ -202,16 +216,31 @@ export default function PayPalCheckout({
               <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={20} color={colors.status.info} />
                 <Text style={styles.infoText}>
-                  Click the button below to complete your payment with PayPal. You will be redirected to PayPal's secure checkout page.
+                  Complete your payment in PayPal, then return here and tap "Check Payment Status" to confirm.
                 </Text>
               </View>
 
               <TouchableOpacity
                 style={styles.payPalButton}
-                onPress={handleOpenPayPal}
+                onPress={() => handleOpenPayPal()}
               >
                 <Ionicons name="logo-paypal" size={24} color={colors.text.primary} />
                 <Text style={styles.payPalButtonText}>Continue to PayPal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.checkStatusButton, (loading || isPolling) && styles.checkStatusButtonDisabled]}
+                onPress={() => checkPaymentStatus()}
+                disabled={loading || isPolling}
+              >
+                {loading || isPolling ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name="refresh" size={20} color={colors.primary} />
+                )}
+                <Text style={styles.checkStatusButtonText}>
+                  {loading || isPolling ? 'Checking...' : 'Check Payment Status'}
+                </Text>
               </TouchableOpacity>
 
               <View style={styles.securityNote}>
@@ -325,6 +354,26 @@ const styles = StyleSheet.create({
   payPalButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: 16,
+  },
+  checkStatusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    marginTop: spacing.sm,
+  },
+  checkStatusButtonDisabled: {
+    opacity: 0.5,
+  },
+  checkStatusButtonText: {
+    ...typography.bodyBold,
+    color: colors.primary,
     fontSize: 16,
   },
   amountContainer: {

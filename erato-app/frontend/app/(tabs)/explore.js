@@ -39,7 +39,7 @@ const IS_VERY_SMALL_SCREEN = width < 380;
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 // Commission Files Tab Component
-function CommissionFilesTab({ commissionId, token, isArtist }) {
+function CommissionFilesTab({ commissionId, token, isArtist, onImagePress }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -178,15 +178,7 @@ function CommissionFilesTab({ commissionId, token, isArtist }) {
         <TouchableOpacity
           key={file.id}
           style={styles.fileCard}
-          onPress={() => {
-            // TODO: Open image viewer
-            Toast.show({
-              type: 'info',
-              text1: 'Image Viewer',
-              text2: 'Full screen viewer coming soon',
-              visibilityTime: 2000,
-            });
-          }}
+          onPress={() => onImagePress && onImagePress(file.url)}
           activeOpacity={0.9}
         >
           <Image
@@ -200,16 +192,6 @@ function CommissionFilesTab({ commissionId, token, isArtist }) {
               <Text style={styles.referenceImageBadgeText}>Reference</Text>
             </View>
           )}
-          {file.note && (
-            <View style={styles.fileNoteOverlay}>
-              <Text style={styles.fileNoteText} numberOfLines={2}>{file.note}</Text>
-            </View>
-          )}
-          <View style={styles.fileDateBadge}>
-            <Text style={styles.fileDateText}>
-              {new Date(file.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </Text>
-          </View>
         </TouchableOpacity>
       ))}
     </ScrollView>
@@ -251,6 +233,9 @@ export default function CommissionDashboard() {
   const [showPayPalCheckout, setShowPayPalCheckout] = useState(false);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
+  const [commissionFiles, setCommissionFiles] = useState([]); // Store reference images for Details tab
+  const [selectedImageIndex, setSelectedImageIndex] = useState(null); // For image viewer
+  const [showImageViewer, setShowImageViewer] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -831,15 +816,26 @@ export default function CommissionDashboard() {
             // Set item immediately for faster UI response
             setSelectedCommission(item);
             setShowCommissionModal(true);
+            setCommissionFiles([]); // Reset files
             // Then fetch full commission details in background
             try {
-              const response = await axios.get(`${API_URL}/commissions/${item.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              setSelectedCommission(response.data);
+              const [commissionResponse, filesResponse] = await Promise.all([
+                axios.get(`${API_URL}/commissions/${item.id}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                }),
+                axios.get(`${API_URL}/commissions/${item.id}/files`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                }).catch(err => {
+                  console.error('Error fetching files:', err);
+                  return { data: { files: [] } };
+                })
+              ]);
+              console.log('Files loaded for Details tab:', filesResponse.data.files);
+              setSelectedCommission(commissionResponse.data);
+              setCommissionFiles(filesResponse.data.files || []);
             } catch (error) {
               console.error('Error fetching commission details:', error);
-              // Keep using item data if fetch fails
+              setCommissionFiles([]);
             }
           }
         }}
@@ -1349,14 +1345,12 @@ export default function CommissionDashboard() {
         <PaymentOptions
           visible={showPaymentOptions}
           onClose={() => {
+            console.log('🔴 PaymentOptions closed');
             setShowPaymentOptions(false);
-            // Reopen commission modal after payment options closes
-            setTimeout(() => {
-              setShowCommissionModal(true);
-            }, 100);
           }}
           commission={selectedCommission}
           onProceed={(paymentData) => {
+            console.log('✅ Payment proceed:', paymentData);
             const amount = paymentData.paymentType === 'deposit' 
               ? (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget) * (paymentData.depositPercentage / 100)
               : (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget);
@@ -1367,6 +1361,7 @@ export default function CommissionDashboard() {
               amount,
             });
             setShowPaymentOptions(false);
+            setShowCommissionModal(false);
             setTimeout(() => {
               setShowPayPalCheckout(true);
             }, 200);
@@ -1480,13 +1475,9 @@ export default function CommissionDashboard() {
                   <View style={{ width: 28 }} />
                 </View>
 
-              {/* Tab Bar - Only show Progress/Files tabs if commission is accepted/in_progress */}
+              {/* Tab Bar */}
               <View style={styles.detailTabBar}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.detailTabContent}
-                >
+                <View style={styles.detailTabContent}>
                   <TouchableOpacity
                     style={styles.detailTab}
                     onPress={() => setDetailTab('details')}
@@ -1496,17 +1487,6 @@ export default function CommissionDashboard() {
                       Details
                     </Text>
                     {detailTab === 'details' && <View style={styles.detailTabUnderline} />}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.detailTab}
-                    onPress={() => setDetailTab('files')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.detailTabText, detailTab === 'files' && styles.detailTabTextActive]}>
-                      Files
-                    </Text>
-                    {detailTab === 'files' && <View style={styles.detailTabUnderline} />}
                   </TouchableOpacity>
 
                   {(selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') && (
@@ -1521,7 +1501,18 @@ export default function CommissionDashboard() {
                       {detailTab === 'progress' && <View style={styles.detailTabUnderline} />}
                     </TouchableOpacity>
                   )}
-                </ScrollView>
+
+                  <TouchableOpacity
+                    style={styles.detailTab}
+                    onPress={() => setDetailTab('files')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.detailTabText, detailTab === 'files' && styles.detailTabTextActive]}>
+                      Files
+                    </Text>
+                    {detailTab === 'files' && <View style={styles.detailTabUnderline} />}
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Tab Content */}
@@ -1607,6 +1598,51 @@ export default function CommissionDashboard() {
                       <Text style={styles.detailPriceTextPlaceholder}>No price set</Text>
                     )}
                   </View>
+
+                  {/* Reference Images from commission_files */}
+                  {commissionFiles.length > 0 && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Reference Images</Text>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.referenceImagesScroll}
+                      >
+                        {commissionFiles.map((file, index) => (
+                          <TouchableOpacity
+                            key={file.id}
+                            style={styles.referenceImageCard}
+                            onPress={() => {
+                              setSelectedImageIndex(index);
+                              setShowImageViewer(true);
+                            }}
+                            activeOpacity={0.9}
+                          >
+                            <Image
+                              source={{ uri: file.file_url }}
+                              style={styles.referenceImage}
+                              contentFit="cover"
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Deadline from deadline_text */}
+                  {selectedCommission.deadline_text && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Deadline</Text>
+                      <View style={styles.detailDescriptionCard}>
+                        <View style={styles.deadlineRow}>
+                          <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                          <Text style={styles.detailDescriptionText}>
+                            {selectedCommission.deadline_text}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Title */}
                   {selectedCommission.client_note || selectedCommission.note ? (
@@ -1749,11 +1785,9 @@ export default function CommissionDashboard() {
                       <TouchableOpacity
                         style={styles.paymentButton}
                         onPress={() => {
-                          // Close commission modal first to avoid conflicts
-                          setShowCommissionModal(false);
-                          setTimeout(() => {
-                            setShowPaymentOptions(true);
-                          }, 300);
+                          console.log('💳 Payment button pressed');
+                          // Don't close commission modal, just open payment options
+                          setShowPaymentOptions(true);
                         }}
                       >
                         <Ionicons name="card-outline" size={20} color={colors.text.primary} />
@@ -1816,6 +1850,29 @@ export default function CommissionDashboard() {
                       </View>
                     )}
                   </View>
+                ) : detailTab === 'progress' ? (
+                  <View style={{ flex: 1, minHeight: 200 }}>
+                    {selectedCommission?.id && (selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') ? (
+                      <ProgressTracker
+                        commissionId={selectedCommission.id}
+                        token={token}
+                        isArtist={isArtist}
+                        onProgressUpdate={loadCommissions}
+                      />
+                    ) : selectedCommission?.id ? (
+                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                        <Ionicons name="lock-closed-outline" size={48} color={colors.text.disabled} />
+                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary, textAlign: 'center' }}>
+                          Accept the commission to view progress updates
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>Loading...</Text>
+                      </View>
+                    )}
+                  </View>
                 ) : detailTab === 'files' ? (
                   <View style={{ flex: 1, minHeight: 200 }}>
                     {selectedCommission?.id ? (
@@ -1823,6 +1880,9 @@ export default function CommissionDashboard() {
                         commissionId={selectedCommission.id}
                         token={token}
                         isArtist={isArtist}
+                        onImagePress={(imageUrl) => {
+                          setShowImageViewer(true);
+                        }}
                       />
                     ) : (
                       <View style={{ padding: spacing.xl, alignItems: 'center', justifyContent: 'center' }}>
@@ -1983,6 +2043,46 @@ export default function CommissionDashboard() {
           </View>
         </Modal>
       )}
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={showImageViewer}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageViewer(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)' }}>
+          <TouchableOpacity
+            style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}
+            onPress={() => setShowImageViewer(false)}
+          >
+            <Ionicons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {commissionFiles.length > 0 && selectedImageIndex !== null && (
+            <FlatList
+              data={commissionFiles}
+              horizontal
+              pagingEnabled
+              initialScrollIndex={selectedImageIndex}
+              getItemLayout={(data, index) => ({
+                length: width,
+                offset: width * index,
+                index,
+              })}
+              renderItem={({ item }) => (
+                <View style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
+                  <Image
+                    source={{ uri: item.file_url }}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="contain"
+                  />
+                </View>
+              )}
+              keyExtractor={(item) => item.id}
+            />
+          )}
+        </View>
+      </Modal>
 
       <ReviewModal
         visible={showReviewModal}
@@ -2249,19 +2349,9 @@ const styles = StyleSheet.create({
   },
   acceptBatchButton: {
     backgroundColor: colors.status.success,
-    shadowColor: colors.status.success,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 3,
   },
   declineBatchButton: {
     backgroundColor: colors.status.error,
-    shadowColor: colors.status.error,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 3,
   },
   batchActionText: {
     ...typography.bodyBold,
@@ -2547,6 +2637,7 @@ const styles = StyleSheet.create({
   },
   detailTabContent: {
     paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xl,
   },
@@ -2567,12 +2658,12 @@ const styles = StyleSheet.create({
   },
   detailTabUnderline: {
     position: 'absolute',
-    bottom: -spacing.md, // Position below tab bar
+    bottom: 0,
     left: 0,
     right: 0,
-    height: 3,
-    backgroundColor: colors.status.error,
-    borderRadius: 2,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
   },
   detailModalHeader: {
     flexDirection: 'row',
@@ -2900,11 +2991,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.full,
     gap: spacing.sm,
-    shadowColor: colors.status.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
   },
   detailAcceptButtonDisabled: {
     opacity: 0.5,
@@ -2924,11 +3010,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.full,
     gap: spacing.sm,
-    shadowColor: colors.status.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 4,
   },
   detailCompleteButtonDisabled: {
     opacity: 0.6,
@@ -3519,13 +3600,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     padding: spacing.sm,
   },
   fileNoteText: {
     ...typography.caption,
     color: colors.text.primary,
     fontSize: 11,
+    lineHeight: 14,
   },
   fileDateBadge: {
     position: 'absolute',
@@ -3802,6 +3884,31 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 13,
     marginTop: spacing.xs / 2,
+  },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  referenceImagesScroll: {
+    gap: spacing.sm,
+    paddingRight: spacing.md,
+  },
+  referenceImageCard: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  referenceImage: {
+    width: '100%',
+    height: '100%',
   },
 
   // Pinterest-Style Modal Styles

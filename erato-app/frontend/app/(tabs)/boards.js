@@ -565,6 +565,9 @@ const loadBoards = useCallback(async (skipCache = true) => {
         activeOpacity={0.7}
       >
         <View style={styles.commissionCardContent}>
+          <View style={styles.commissionIconContainer}>
+            <Ionicons name="briefcase" size={20} color={colors.primary} />
+          </View>
           <Image
             source={{ uri: otherUser?.avatar_url || DEFAULT_AVATAR }}
             style={styles.commissionAvatar}
@@ -1256,6 +1259,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
+  },
+  commissionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   commissionAvatar: {
     width: 48,

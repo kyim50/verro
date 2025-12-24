@@ -187,9 +187,13 @@ export default function HomeScreen() {
     const loadArtStyles = async () => {
       setLoadingStyles(true);
       try {
-        // Load all styles (works without token)
+        // Load all styles immediately (works without token)
         const stylesResponse = await axios.get(`${API_URL}/artists/styles/list`);
         const allStyles = stylesResponse.data.styles || stylesResponse.data || [];
+        
+        // Set styles immediately for instant display
+        setArtStyles(allStyles);
+        setStyleSections(organizeStylesIntoSections(allStyles, [], {}));
         
         // Load user's style preferences if logged in (works for both clients and artists)
         let preferredStyleIds = [];
@@ -269,23 +273,23 @@ export default function HomeScreen() {
             // No preferences set
             setCuratedStyles([]);
           }
+          
+          // Re-organize styles with preferences
+          const sections = organizeStylesIntoSections(allStyles, preferredStyleIds, preferredWeights);
+          setStyleSections(sections);
+          
+          // Keep flat list for backward compatibility
+          const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
+          const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
+          preferredStyles.sort((a, b) => {
+            const aWeight = preferredWeights[a.id] || 0;
+            const bWeight = preferredWeights[b.id] || 0;
+            return bWeight - aWeight;
+          });
+          setArtStyles([...preferredStyles, ...otherStyles]);
         } else {
           setCuratedStyles([]);
         }
-        
-        // Organize styles into sections
-        const sections = organizeStylesIntoSections(allStyles, preferredStyleIds, preferredWeights);
-        setStyleSections(sections);
-        
-        // Keep flat list for backward compatibility
-        const preferredStyles = allStyles.filter(s => preferredStyleIds.includes(s.id));
-        const otherStyles = allStyles.filter(s => !preferredStyleIds.includes(s.id));
-        preferredStyles.sort((a, b) => {
-          const aWeight = preferredWeights[a.id] || 0;
-          const bWeight = preferredWeights[b.id] || 0;
-          return bWeight - aWeight;
-        });
-        setArtStyles([...preferredStyles, ...otherStyles]);
       } catch (error) {
         console.error('Error loading art styles:', error);
         setArtStyles([]);
@@ -296,7 +300,7 @@ export default function HomeScreen() {
       }
     };
     loadArtStyles();
-  }, [token]);
+  }, []); // Empty dependency array - load immediately on mount
 
   // Load suggested artists for "Artists you might like" cards
   useEffect(() => {

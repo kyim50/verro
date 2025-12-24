@@ -475,29 +475,6 @@ export default function ArtworkDetailScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
             )}
           </TouchableOpacity>
-
-          {!isOwnArtwork && user?.user_type !== 'artist' && !user?.artists && (
-            <TouchableOpacity
-              style={styles.commissionButton}
-              onPress={() => {
-                if (!user) {
-                  Toast.show({
-                    type: 'info',
-                    text1: 'Login Required',
-                    text2: 'Please login to request a commission',
-                    visibilityTime: 2000,
-                  });
-                  return;
-                }
-                // Track commission inquiry engagement
-                trackCommissionInquiry({ artist_id: artwork.artist_id });
-                router.push(`/commission/create?artistId=${artwork.artist_id}&artworkId=${artwork.id}`);
-              }}
-            >
-              <Ionicons name="mail" size={20} color="#000" />
-              <Text style={styles.commissionButtonText}>Request Commission</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* More Like This - Pinterest-style Masonry Grid */}
@@ -744,11 +721,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
   saveButtonText: {
     ...typography.button,
@@ -905,29 +877,7 @@ const styles = StyleSheet.create({
     fontWeight: '400', // Pinterest-style
     lineHeight: 18,
   },
-  commissionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md + 2,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.full,
-    marginTop: spacing.md,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 5,
-    width: '100%',
-  },
-  commissionButtonText: {
-    ...typography.button,
-    color: '#000',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+
   // Pinterest-style "More like this" Section
   moreSection: {
     marginTop: spacing.xl,

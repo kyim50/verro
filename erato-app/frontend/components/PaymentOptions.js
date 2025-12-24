@@ -67,7 +67,7 @@ export default function PaymentOptions({
   const calculateAmounts = () => {
     if (!commission || !selectedType) return null;
 
-    const total = commission.final_price || commission.total_price || 0;
+    const total = commission.final_price || commission.price || commission.budget || 0;
 
     if (selectedType === 'full') {
       return { total, deposit: 0, final: 0 };
@@ -253,16 +253,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+    borderBottomWidth: 0,
   },
   modalTitle: {
     ...typography.h3,
     color: colors.text.primary,
   },
   modalBody: {
-    padding: spacing.md,
+    padding: spacing.lg,
     maxHeight: '70%',
   },
   description: {
@@ -410,26 +410,28 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    padding: spacing.lg,
+    borderTopWidth: 0,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
+    borderWidth: 0,
   },
   cancelButtonText: {
     ...typography.bodyBold,
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   proceedButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
+    flex: 2,
+    paddingVertical: spacing.md + 2,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   proceedButtonDisabled: {
@@ -438,6 +440,8 @@ const styles = StyleSheet.create({
   proceedButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 
