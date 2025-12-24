@@ -254,6 +254,14 @@ router.post('/create-order', authenticate, async (req, res) => {
     // Create PayPal Order
     const request = new OrdersCreateRequest();
     request.prefer("return=representation");
+    
+    const returnUrl = `${process.env.API_URL || process.env.BACKEND_URL || 'https://api.verrocio.com'}/api/payments/success`;
+    const cancelUrl = `${process.env.API_URL || process.env.BACKEND_URL || 'https://api.verrocio.com'}/api/payments/cancel`;
+    
+    console.log('PayPal redirect URLs:');
+    console.log('- Return URL:', returnUrl);
+    console.log('- Cancel URL:', cancelUrl);
+    
     request.requestBody({
       intent: 'CAPTURE',
       purchase_units: [{
@@ -274,8 +282,8 @@ router.post('/create-order', authenticate, async (req, res) => {
         brand_name: 'Verro',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
-        return_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/success`,
-        cancel_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/cancel`
+        return_url: `${process.env.API_URL || process.env.BACKEND_URL || 'https://api.verrocio.com'}/api/payments/success`,
+        cancel_url: `${process.env.API_URL || process.env.BACKEND_URL || 'https://api.verrocio.com'}/api/payments/cancel`
       }
     });
 
@@ -744,8 +752,8 @@ router.post('/tip', authenticate, async (req, res) => {
         brand_name: 'Verro',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
-        return_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/success`,
-        cancel_url: `${process.env.API_URL || process.env.BACKEND_URL || 'http://localhost:3000'}/api/payments/cancel`
+        return_url: `${process.env.API_URL || process.env.BACKEND_URL || 'https://api.verrocio.com'}/api/payments/success`,
+        cancel_url: `${process.env.API_URL || process.env.BACKEND_URL || 'https://api.verrocio.com'}/api/payments/cancel`
       }
     });
 

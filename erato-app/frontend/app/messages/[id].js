@@ -1565,7 +1565,7 @@ export default function ConversationScreen() {
               style={styles.referencesButton}
               onPress={() => setShowReferences(true)}
             >
-              <Ionicons name="images-outline" size={22} color={colors.primary} />
+              <Ionicons name="briefcase" size={22} color={colors.primary} />
             </TouchableOpacity>
           )}
         </View>

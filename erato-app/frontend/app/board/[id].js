@@ -260,8 +260,7 @@ export default function BoardDetailScreen() {
           if (editMode) {
             toggleArtworkSelection(item.id);
           } else {
-            setSelectedArtwork(item);
-            setShowModal(true);
+            router.push(`/artwork/${item.id}`);
           }
         }}
         activeOpacity={0.9}

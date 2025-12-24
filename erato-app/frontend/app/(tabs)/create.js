@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
   },
   headerSpacer: {
