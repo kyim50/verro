@@ -8,6 +8,7 @@ import {
   StatusBar,
   Platform,
   Animated,
+  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -23,15 +24,16 @@ export default function WelcomeScreen() {
   const [backgroundArtworks, setBackgroundArtworks] = useState([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const tileAnims = useRef([]).current;
 
   useEffect(() => {
     loadBackgroundArtworks();
 
-    // Fade in animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 2000,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
@@ -43,37 +45,97 @@ export default function WelcomeScreen() {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    if (backgroundArtworks.length === 0 || !totalHeight) return;
+
+    Animated.loop(
+      Animated.timing(scrollY, {
+        toValue: -totalHeight,
+        duration: 150000,
+        useNativeDriver: true,
+        easing: t => t,
+      })
+    ).start();
+
+    return () => scrollY.stopAnimation();
+  }, [backgroundArtworks, totalHeight]);
+
+
   const loadBackgroundArtworks = async () => {
     try {
       const response = await axios.get(`${API_URL}/artworks?sort=engagement_score&order=desc&limit=20`);
-      setBackgroundArtworks(response.data.artworks || []);
+      const artworks = response.data.artworks || [];
+      const shuffled = [...artworks].sort(() => Math.random() - 0.5);
+      
+      const leftHeights = [180, 220, 160, 200, 190, 210, 170, 195, 180, 220, 160, 200, 190, 210, 170, 195, 180, 220, 160, 200];
+      const rightHeights = [200, 170, 210, 180, 220, 160, 190, 185, 200, 170, 210, 180, 220, 160, 190, 185, 200, 170, 210, 180];
+      
+      const withHeights = shuffled.map((artwork, i) => ({
+        ...artwork,
+        leftHeight: leftHeights[i],
+        rightHeight: rightHeights[i],
+      }));
+      
+      // Reduce from 50 to 10 repetitions (200 tiles instead of 1000)
+      const repeated = [];
+      for (let i = 0; i < 10; i++) {
+        repeated.push(...withHeights);
+      }
+      
+      // Initialize animations for visible tiles only
+      for (let i = 0; i < Math.min(40, repeated.length); i++) {
+        tileAnims[i] = new Animated.Value(0);
+      }
+      
+      setBackgroundArtworks(repeated);
+      
+      // Defer animations until interactions complete
+      InteractionManager.runAfterInteractions(() => {
+        // Animate tiles sequentially with delay
+        for (let i = 0; i < Math.min(40, repeated.length); i++) {
+          Animated.timing(tileAnims[i], {
+            toValue: 1,
+            duration: 3000,
+            delay: i * 50,
+            useNativeDriver: true,
+          }).start();
+        }
+      });
     } catch (error) {
       console.error('Error loading background artworks:', error);
     }
   };
 
-  const renderMasonryColumn = (columnArtworks, columnIndex) => {
-    const heights = columnIndex === 0
-      ? [180, 220, 160, 200, 190, 210, 170, 195]
-      : [200, 170, 210, 180, 220, 160, 190, 185];
 
+  const renderMasonryColumn = (columnArtworks, columnIndex) => {
     return (
       <View style={styles.masonryColumn}>
-        {columnArtworks.map((artwork, index) => (
-          <View
-            key={artwork.id}
-            style={[
-              styles.backgroundTile,
-              { height: heights[index % heights.length] }
-            ]}
-          >
-            <Image
-              source={{ uri: artwork.thumbnail_url || artwork.image_url }}
-              style={styles.backgroundImage}
-              contentFit="cover"
-            />
-          </View>
-        ))}
+        {columnArtworks.map((artwork, index) => {
+          const actualIndex = columnIndex === 0 ? index * 2 : index * 2 + 1;
+          const opacity = tileAnims[actualIndex] || new Animated.Value(1);
+          
+          return (
+            <Animated.View
+              key={`${artwork.id}-${index}`}
+              style={[
+                styles.backgroundTile,
+                { 
+                  height: columnIndex === 0 ? artwork.leftHeight : artwork.rightHeight,
+                  opacity,
+                }
+              ]}
+            >
+              <Image
+                source={{ uri: artwork.thumbnail_url || artwork.image_url }}
+                style={styles.backgroundImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                priority="high"
+                transition={300}
+              />
+            </Animated.View>
+          );
+        })}
       </View>
     );
   };
@@ -81,16 +143,26 @@ export default function WelcomeScreen() {
   const leftColumn = backgroundArtworks.filter((_, index) => index % 2 === 0);
   const rightColumn = backgroundArtworks.filter((_, index) => index % 2 === 1);
 
+  const leftHeight = leftColumn.reduce((sum, art) => sum + art.leftHeight + 4, 0);
+  const rightHeight = rightColumn.reduce((sum, art) => sum + art.rightHeight + 4, 0);
+  const totalHeight = Math.max(leftHeight, rightHeight);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       {/* Masonry Background */}
       <View style={styles.backgroundContainer}>
-        <View style={styles.masonryContainer}>
-          {renderMasonryColumn(leftColumn, 0)}
-          {renderMasonryColumn(rightColumn, 1)}
-        </View>
+        <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
+          <View style={styles.masonryContainer}>
+            {renderMasonryColumn(leftColumn, 0)}
+            {renderMasonryColumn(rightColumn, 1)}
+          </View>
+          <View style={styles.masonryContainer}>
+            {renderMasonryColumn(leftColumn, 0)}
+            {renderMasonryColumn(rightColumn, 1)}
+          </View>
+        </Animated.View>
 
         {/* Gradient Overlay */}
         <LinearGradient
@@ -152,7 +224,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   masonryContainer: {
-    flex: 1,
     flexDirection: 'row',
     gap: 4,
   },
