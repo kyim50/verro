@@ -27,13 +27,25 @@ export default function MilestoneTracker({ commissionId, isClient = false, onPay
 
   const fetchMilestones = async () => {
     try {
+      console.log('🔍 Fetching milestones for commission:', commissionId);
+      console.log('📍 API URL:', `${API_URL}/milestones/commission/${commissionId}`);
+      console.log('🔑 Token exists:', !!token);
+
       const response = await axios.get(
-        `${API_URL}/payments/milestones/${commissionId}`,
+        `${API_URL}/milestones/commission/${commissionId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMilestones(response.data.data || []);
+
+      console.log('✅ Milestones fetched:', response.data.milestones?.length || 0);
+      setMilestones(response.data.milestones || []);
     } catch (error) {
-      console.error('Error fetching milestones:', error);
+      console.error('❌ Error fetching milestones:', error);
+      console.error('Response:', error.response?.data);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to load milestones',
+        text2: error.response?.data?.error || 'Please try again'
+      });
     } finally {
       setLoading(false);
     }
@@ -80,10 +92,23 @@ export default function MilestoneTracker({ commissionId, isClient = false, onPay
 function MilestoneCard({ milestone, index, isClient, onPay }) {
   const isPaid = milestone.payment_status === 'paid';
   const isUnpaid = milestone.payment_status === 'unpaid';
-  const canPay = isClient && isUnpaid;
+  const isLocked = milestone.is_locked;
+  const canPay = isClient && isUnpaid && !isLocked;
+  const hasRevisionFee = milestone.revision_fee_added > 0;
+  const hasProgressUpdate = milestone.progress_update && milestone.progress_update.length > 0;
+
+  // Get status icon and color
+  const getStatusIcon = () => {
+    if (isPaid) return { name: 'checkmark-circle', color: colors.status.success };
+    if (isLocked) return { name: 'lock-closed', color: colors.text.disabled };
+    if (isUnpaid) return { name: 'time-outline', color: colors.status.warning };
+    return { name: 'ellipse-outline', color: colors.text.disabled };
+  };
+
+  const statusIcon = getStatusIcon();
 
   return (
-    <View style={[styles.milestoneCard, isPaid && styles.milestoneCardPaid]}>
+    <View style={[styles.milestoneCard, isPaid && styles.milestoneCardPaid, isLocked && styles.milestoneCardLocked]}>
       <View style={styles.milestoneHeader}>
         <View style={styles.milestoneNumber}>
           <Text style={styles.milestoneNumberText}>{milestone.milestone_number}</Text>
@@ -95,24 +120,34 @@ function MilestoneCard({ milestone, index, isClient, onPay }) {
               {milestone.description}
             </Text>
           )}
+          {isLocked && (
+            <View style={styles.lockedBadge}>
+              <Ionicons name="lock-closed" size={12} color={colors.text.disabled} />
+              <Text style={styles.lockedText}>Locked - pay previous milestones first</Text>
+            </View>
+          )}
         </View>
-        {isPaid && (
-          <Ionicons name="checkmark-circle" size={24} color={colors.status.success} />
-        )}
+        <Ionicons name={statusIcon.name} size={24} color={statusIcon.color} />
       </View>
 
       <View style={styles.milestoneFooter}>
         <View>
-          <Text style={styles.milestoneAmount}>${milestone.amount.toFixed(2)}</Text>
+          <Text style={styles.milestoneAmount}>${parseFloat(milestone.amount).toFixed(2)}</Text>
           <Text style={styles.milestonePercentage}>
-            {milestone.percentage}% of total
+            {parseFloat(milestone.percentage).toFixed(1)}% of total
           </Text>
+          {hasRevisionFee && (
+            <Text style={styles.revisionFeeText}>
+              +${parseFloat(milestone.revision_fee_added).toFixed(2)} revision fee
+            </Text>
+          )}
         </View>
         {canPay && (
           <TouchableOpacity
             style={styles.payButton}
             onPress={() => onPay && onPay(milestone)}
           >
+            <Ionicons name="card-outline" size={16} color="#fff" />
             <Text style={styles.payButtonText}>Pay Now</Text>
           </TouchableOpacity>
         )}
@@ -124,7 +159,22 @@ function MilestoneCard({ milestone, index, isClient, onPay }) {
             </Text>
           </View>
         )}
+        {isLocked && !isPaid && (
+          <View style={styles.lockedInfo}>
+            <Ionicons name="lock-closed" size={16} color={colors.text.disabled} />
+            <Text style={styles.lockedInfoText}>Locked</Text>
+          </View>
+        )}
       </View>
+
+      {hasProgressUpdate && (
+        <View style={styles.progressUpdateContainer}>
+          <Ionicons name="images-outline" size={14} color={colors.primary} />
+          <Text style={styles.progressUpdateText}>
+            Work in progress - {milestone.progress_update[0].approval_status === 'approved' ? 'Approved' : 'Pending approval'}
+          </Text>
+        </View>
+      )}
 
       {milestone.due_date && (
         <View style={styles.dueDateContainer}>
@@ -181,6 +231,11 @@ const styles = StyleSheet.create({
     borderColor: colors.status.success,
     backgroundColor: colors.status.success + '10',
   },
+  milestoneCardLocked: {
+    opacity: 0.6,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   milestoneHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -234,10 +289,13 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   payButtonText: {
     ...typography.bodyBold,
-    color: colors.text.primary,
+    color: '#fff',
     fontSize: 12,
   },
   paidInfo: {
@@ -261,6 +319,50 @@ const styles = StyleSheet.create({
   dueDateText: {
     ...typography.caption,
     color: colors.text.secondary,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    backgroundColor: colors.text.disabled + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  lockedText: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    fontSize: 11,
+  },
+  lockedInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  lockedInfoText: {
+    ...typography.caption,
+    color: colors.text.disabled,
+  },
+  revisionFeeText: {
+    ...typography.caption,
+    color: colors.status.warning,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  progressUpdateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  progressUpdateText: {
+    ...typography.caption,
+    color: colors.primary,
   },
 });
 

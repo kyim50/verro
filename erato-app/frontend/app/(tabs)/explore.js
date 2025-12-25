@@ -1814,7 +1814,7 @@ export default function CommissionDashboard() {
                   )}
 
                   {/* Milestone Tracker */}
-                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && selectedCommission.payment_type === 'milestone' && (
+                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
                       <MilestoneTracker

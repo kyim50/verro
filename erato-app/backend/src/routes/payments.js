@@ -193,7 +193,7 @@ router.post('/create-order', authenticate, async (req, res) => {
     console.log('- Has Client ID:', hasClientId);
     console.log('- Has Secret:', hasSecret);
     
-    const { commissionId, paymentType, amount } = req.body;
+    const { commissionId, paymentType, amount, milestoneId } = req.body;
     const userId = req.user.id;
 
     // Validate payment type
@@ -202,6 +202,14 @@ router.post('/create-order', authenticate, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid payment type'
+      });
+    }
+
+    // If milestone payment, validate milestone ID
+    if (paymentType === 'milestone' && !milestoneId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Milestone ID is required for milestone payments'
       });
     }
 
@@ -233,6 +241,8 @@ router.post('/create-order', authenticate, async (req, res) => {
 
     // Calculate amount based on payment type
     let calculatedAmount = amount;
+    let milestone = null;
+
     if (!amount) {
       if (paymentType === 'deposit') {
         calculatedAmount = commission.final_price * (commission.deposit_percentage / 100);
@@ -240,6 +250,38 @@ router.post('/create-order', authenticate, async (req, res) => {
         calculatedAmount = commission.final_price;
       } else if (paymentType === 'final') {
         calculatedAmount = commission.final_price - commission.total_paid;
+      } else if (paymentType === 'milestone' && milestoneId) {
+        // Get milestone amount
+        const { data: milestoneData, error: milestoneError } = await supabaseAdmin
+          .from('commission_milestones')
+          .select('*')
+          .eq('id', milestoneId)
+          .eq('commission_id', commissionId)
+          .single();
+
+        if (milestoneError || !milestoneData) {
+          return res.status(404).json({
+            success: false,
+            error: 'Milestone not found'
+          });
+        }
+
+        if (milestoneData.payment_status === 'paid') {
+          return res.status(400).json({
+            success: false,
+            error: 'This milestone has already been paid'
+          });
+        }
+
+        if (milestoneData.is_locked) {
+          return res.status(400).json({
+            success: false,
+            error: 'This milestone is locked. Previous milestones must be completed first.'
+          });
+        }
+
+        milestone = milestoneData;
+        calculatedAmount = parseFloat(milestoneData.amount);
       }
     }
 
@@ -266,7 +308,9 @@ router.post('/create-order', authenticate, async (req, res) => {
       intent: 'CAPTURE',
       purchase_units: [{
         reference_id: commissionId,
-        description: `Commission Payment - ${paymentType}`,
+        description: milestone
+          ? `Milestone Payment - ${milestone.title}`
+          : `Commission Payment - ${paymentType}`,
         amount: {
           currency_code: 'USD',
           value: calculatedAmount.toFixed(2)
@@ -275,7 +319,8 @@ router.post('/create-order', authenticate, async (req, res) => {
           commissionId,
           clientId: userId,
           artistId: commission.artist_id,
-          paymentType
+          paymentType,
+          milestoneId: milestoneId || null
         })
       }],
       application_context: {
@@ -455,14 +500,36 @@ router.post('/capture-order', authenticate, async (req, res) => {
 
     // If milestone payment, update milestone status
     if (paymentType === 'milestone') {
-      const { data: milestone } = await supabaseAdmin
+      let milestoneId = null;
+
+      // Try to get milestone ID from custom_id
+      try {
+        if (transaction.custom_id) {
+          const customData = JSON.parse(transaction.custom_id);
+          milestoneId = customData.milestoneId;
+        }
+      } catch (e) {
+        console.warn('Error parsing custom_id for milestone:', e);
+      }
+
+      // Find the milestone to update
+      let milestoneQuery = supabaseAdmin
         .from('commission_milestones')
-        .select('id')
-        .eq('commission_id', transaction.commission_id)
-        .eq('payment_status', 'unpaid')
-        .order('milestone_number', { ascending: true })
-        .limit(1)
-        .single();
+        .select('id, milestone_number');
+
+      if (milestoneId) {
+        // Use specific milestone ID if provided
+        milestoneQuery = milestoneQuery.eq('id', milestoneId);
+      } else {
+        // Fallback: find first unpaid milestone
+        milestoneQuery = milestoneQuery
+          .eq('commission_id', transaction.commission_id)
+          .eq('payment_status', 'unpaid')
+          .order('milestone_number', { ascending: true })
+          .limit(1);
+      }
+
+      const { data: milestone } = await milestoneQuery.single();
 
       if (milestone) {
         await supabaseAdmin
