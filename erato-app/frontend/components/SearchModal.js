@@ -13,7 +13,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -36,6 +36,8 @@ const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - spacing.md * 2) / NUM_COLUMNS;
 
 export default function SearchModal({ visible, onClose }) {
+  const insets = useSafeAreaInsets();
+
   const {
     query,
     artworks,
@@ -50,10 +52,10 @@ export default function SearchModal({ visible, onClose }) {
     searchArtistsWithFilters,
     clearSearch,
   } = useSearchStore();
-  
+
   const { token, user } = useAuthStore();
   const isArtist = user?.user_type === 'artist' || (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
-  
+
   const [localQuery, setLocalQuery] = useState(query);
   const [showFilters, setShowFilters] = useState(false);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
@@ -417,86 +419,43 @@ export default function SearchModal({ visible, onClose }) {
             </View>
           )}
 
-          {/* Popular on Verro section - Pinterest style masonry - Only show on Artworks tab */}
-          {popularArtworks.length > 0 && activeTab === 'artworks' && (
-            <View style={styles.discoverySection}>
-              <Text style={[styles.discoverySectionTitle, styles.centeredSectionTitle]}>Popular on Verro</Text>
-              <View style={styles.masonryContainer}>
-                {/* Left Column */}
-                <View style={styles.masonryColumn}>
-                  {popularArtworks.filter((_, index) => index % 2 === 0).map((artwork, index) => {
-                    const heights = [160, 210, 180, 200, 175, 190];
-                    // Get first 2 tags or use title as fallback
-                    const displayText = artwork.tags && artwork.tags.length > 0
-                      ? artwork.tags.slice(0, 2).join(' • ')
-                      : artwork.title;
+          {/* Ideas for you section - top trending tags */}
+          {localQuery.length === 0 && activeTab === 'artworks' && popularArtworks.length > 0 && (
+            <View style={styles.ideasSection}>
+              <Text style={styles.ideasTitle}>Ideas for you</Text>
+              <View style={styles.ideasGrid}>
+                {popularArtworks.slice(0, 10).map((artwork) => {
+                  const searchTerm = artwork.tags && artwork.tags.length > 0
+                    ? artwork.tags[0]
+                    : artwork.title;
 
-                    return (
-                      <TouchableOpacity
-                        key={artwork.id}
-                        style={[styles.categoryTile, { height: heights[index % heights.length] }]}
-                        onPress={() => {
-                          router.push(`/artwork/${artwork.id}`);
-                          handleClose();
-                        }}
-                        activeOpacity={0.95}
-                      >
-                        <Image
-                          source={{ uri: artwork.thumbnail_url || artwork.image_url }}
-                          style={styles.categoryTileImage}
-                          contentFit="cover"
-                        />
-                        <LinearGradient
-                          colors={['transparent', 'rgba(0,0,0,0.8)']}
-                          style={styles.categoryTileOverlay}
-                        >
-                          <Text style={styles.categoryTileText} numberOfLines={2}>
-                            {displayText}
-                          </Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {/* Right Column */}
-                <View style={styles.masonryColumn}>
-                  {popularArtworks.filter((_, index) => index % 2 === 1).map((artwork, index) => {
-                    const heights = [220, 170, 195, 185, 205, 180];
-                    // Get first 2 tags or use title as fallback
-                    const displayText = artwork.tags && artwork.tags.length > 0
-                      ? artwork.tags.slice(0, 2).join(' • ')
-                      : artwork.title;
-
-                    return (
-                      <TouchableOpacity
-                        key={artwork.id}
-                        style={[styles.categoryTile, { height: heights[index % heights.length] }]}
-                        onPress={() => {
-                          router.push(`/artwork/${artwork.id}`);
-                          handleClose();
-                        }}
-                        activeOpacity={0.95}
-                      >
-                        <Image
-                          source={{ uri: artwork.thumbnail_url || artwork.image_url }}
-                          style={styles.categoryTileImage}
-                          contentFit="cover"
-                        />
-                        <LinearGradient
-                          colors={['transparent', 'rgba(0,0,0,0.8)']}
-                          style={styles.categoryTileOverlay}
-                        >
-                          <Text style={styles.categoryTileText} numberOfLines={2}>
-                            {displayText}
-                          </Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                  return (
+                    <TouchableOpacity
+                      key={artwork.id}
+                      style={styles.ideaCard}
+                      onPress={() => {
+                        setLocalQuery(searchTerm);
+                        setActiveTab('artworks');
+                      }}
+                      activeOpacity={0.95}
+                    >
+                      <Image
+                        source={{ uri: artwork.thumbnail_url || artwork.image_url }}
+                        style={styles.ideaCardImage}
+                        contentFit="cover"
+                      />
+                      <View style={styles.ideaCardOverlay}>
+                        <Text style={styles.ideaCardText} numberOfLines={2}>
+                          {searchTerm}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           )}
+
 
           {/* Loading state */}
           {loadingRecommendations && (
@@ -537,7 +496,7 @@ export default function SearchModal({ visible, onClose }) {
       presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={[]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -545,7 +504,7 @@ export default function SearchModal({ visible, onClose }) {
         >
           <View style={styles.container}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleClose}
@@ -716,10 +675,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
     gap: spacing.md,
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
@@ -728,16 +687,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   searchContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    height: 48,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.md + 2,
+    height: 50,
     gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
@@ -747,27 +716,29 @@ const styles = StyleSheet.create({
   },
   tabs: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
   },
   tab: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     alignItems: 'center',
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: colors.primary,
+    borderBottomColor: colors.error,
   },
   tabText: {
     ...typography.button,
     color: colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '500',
   },
   activeTabText: {
-    color: colors.primary,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontWeight: '700',
   },
   content: {
     flex: 1,
@@ -1101,5 +1072,50 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.text.primary,
     fontSize: 14,
+  },
+  // Ideas for you section
+  ideasSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  ideasTitle: {
+    ...typography.h2,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  ideasGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  ideaCard: {
+    width: (width - spacing.lg * 2 - spacing.sm) / 2,
+    height: 180,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
+  },
+  ideaCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  ideaCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    justifyContent: 'flex-end',
+    padding: spacing.md,
+  },
+  ideaCardText: {
+    ...typography.h3,
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });

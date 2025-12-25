@@ -955,20 +955,16 @@ export default function CommissionDashboard() {
           </View>
         </View>
 
-        {/* Quick Actions Section */}
+        {/* Quick Actions Section - Pinterest Grid Style */}
         <View style={styles.actionsSection}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.actionsScrollContent}
-          >
+          <View style={styles.actionsGrid}>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => router.push('/commission-requests')}
             >
-              <Ionicons name="list-outline" size={20} color={colors.primary} />
+              <Ionicons name="search-outline" size={22} color={colors.primary} />
               <Text style={styles.actionButtonText}>
-                {isArtist ? 'Quest Board' : 'Requests'}
+                {isArtist ? 'Browse' : 'Requests'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -979,16 +975,16 @@ export default function CommissionDashboard() {
                 loadAllTransactions();
               }}
             >
-              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-              <Text style={styles.actionButtonText}>Transactions</Text>
+              <Ionicons name="wallet-outline" size={22} color={colors.primary} />
+              <Text style={styles.actionButtonText}>Payments</Text>
             </TouchableOpacity>
             {isArtist && (
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => setShowTemplatesModal(true)}
               >
-                <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.primary} />
-                <Text style={styles.actionButtonText}>Templates</Text>
+                <Ionicons name="chatbubbles-outline" size={22} color={colors.primary} />
+                <Text style={styles.actionButtonText}>Messages</Text>
               </TouchableOpacity>
             )}
             {isArtist && (
@@ -996,8 +992,8 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => router.push('/commission-management')}
               >
-                <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
-                <Text style={styles.actionButtonText}>Manage</Text>
+                <Ionicons name="options-outline" size={22} color={colors.primary} />
+                <Text style={styles.actionButtonText}>Settings</Text>
               </TouchableOpacity>
             )}
             {!isArtist && (
@@ -1005,11 +1001,11 @@ export default function CommissionDashboard() {
                 style={styles.actionButton}
                 onPress={() => router.push('/commission/create')}
               >
-                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-                <Text style={styles.actionButtonText}>New Request</Text>
+                <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                <Text style={styles.actionButtonText}>Create</Text>
               </TouchableOpacity>
             )}
-          </ScrollView>
+          </View>
         </View>
 
         {/* Pinterest-style Filter Tabs */}
@@ -1095,13 +1091,32 @@ export default function CommissionDashboard() {
           }
           ListEmptyComponent={() => (
             <View style={styles.emptyState}>
-              <Ionicons name="briefcase-outline" size={64} color={colors.text.disabled} />
-              <Text style={styles.emptyTitle}>No Commissions</Text>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="sparkles-outline" size={48} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {isArtist ? 'Your commission journey starts here' : 'Ready to bring your ideas to life?'}
+              </Text>
               <Text style={styles.emptyText}>
                 {isArtist
-                  ? 'You haven\'t received any requests yet.'
-                  : 'You haven\'t sent any requests yet.'}
+                  ? 'When clients request your work, you\'ll see it here. Make sure your portfolio is up to date!'
+                  : 'Browse talented artists and request custom artwork. Your commissions will appear here.'}
               </Text>
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={() => {
+                  if (isArtist) {
+                    router.push('/commission-requests');
+                  } else {
+                    router.push('/(tabs)/home');
+                  }
+                }}
+              >
+                <Ionicons name={isArtist ? "search-outline" : "compass-outline"} size={20} color={colors.text.primary} />
+                <Text style={styles.emptyActionText}>
+                  {isArtist ? 'Browse Requests' : 'Explore Artists'}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
           showsVerticalScrollIndicator={false}
@@ -2443,18 +2458,22 @@ const styles = StyleSheet.create({
   },
   // List Styles
   listContent: {
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm + 4,
     paddingBottom: spacing.xxl,
     paddingHorizontal: spacing.lg,
   },
   commissionCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: 18,
     padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
-    ...shadows.small,
+    marginBottom: spacing.sm + 4,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   pendingCommissionCard: {
     backgroundColor: colors.surface,
@@ -2462,6 +2481,7 @@ const styles = StyleSheet.create({
   selectedCommissionCard: {
     borderColor: colors.primary,
     borderWidth: 2,
+    shadowOpacity: 0.08,
   },
   selectionIndicator: {
     position: 'absolute',
@@ -2597,21 +2617,57 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xl,
     paddingHorizontal: spacing.lg,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md + 2,
   },
   emptyTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 24,
-    marginTop: spacing.lg,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
     marginBottom: spacing.sm,
+    lineHeight: 26,
+    letterSpacing: -0.3,
   },
   emptyText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 15,
+    fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+    maxWidth: 280,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg + spacing.sm,
+    borderRadius: borderRadius.full,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  emptyActionText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   // Modal Styles
   modalOverlay: {
@@ -3131,31 +3187,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Quick Insight Section
+  insightSection: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm + 2,
+  },
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '08',
+    borderRadius: 14,
+    padding: spacing.md,
+    gap: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.primary + '15',
+  },
+  insightIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightContent: {
+    flex: 1,
+  },
+  insightText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    letterSpacing: -0.1,
+  },
   // Pinterest-style Filter Bar
   pinterestFilterBar: {
     backgroundColor: colors.background,
-    paddingVertical: spacing.md,
-    paddingTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm + 4,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15',
+    borderBottomColor: colors.border + '10',
   },
   pinterestFilterContent: {
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.xs - 2,
   },
   pinterestFilterItem: {
-    marginRight: spacing.xl,
-    paddingVertical: spacing.sm,
+    marginRight: spacing.lg + spacing.md,
+    paddingVertical: spacing.sm + 1,
     paddingHorizontal: spacing.xs,
     position: 'relative',
   },
   pinterestFilterText: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    letterSpacing: -0.2,
+    letterSpacing: -0.15,
   },
   pinterestFilterTextActive: {
     color: colors.text.primary,
@@ -3166,9 +3257,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 2,
+    height: 2.5,
     backgroundColor: colors.primary,
-    borderRadius: 1,
+    borderRadius: 1.5,
   },
   // Pinterest-style Card Elements
   pinterestCardHeader: {
@@ -3235,15 +3326,15 @@ const styles = StyleSheet.create({
   // Compact Header Styles
   compactHeader: {
     backgroundColor: colors.background,
-    paddingBottom: spacing.xs,
+    paddingBottom: 0,
   },
   compactHeaderTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
+    paddingTop: 0,
+    paddingBottom: spacing.xs + 2,
   },
   headerTitleContainer: {
     flex: 1,
@@ -3251,11 +3342,11 @@ const styles = StyleSheet.create({
   headerDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
-    marginTop: spacing.xs,
-    lineHeight: IS_SMALL_SCREEN ? 20 : 22,
-    fontWeight: '400', // Pinterest-style lighter weight
-    letterSpacing: -0.2,
+    fontSize: IS_SMALL_SCREEN ? 13 : 14,
+    marginTop: spacing.xs - 2,
+    lineHeight: IS_SMALL_SCREEN ? 18 : 20,
+    fontWeight: '400',
+    letterSpacing: -0.1,
   },
   statsSection: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
@@ -3323,43 +3414,52 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm + 2,
+    paddingTop: spacing.sm - 2,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm + 2,
   },
   actionsScrollContent: {
-    gap: spacing.md,
+    gap: spacing.sm + 2,
     paddingRight: spacing.md,
   },
   actionButton: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md + 2 : spacing.lg,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.sm + 2 : spacing.md,
+    justifyContent: 'center',
+    gap: spacing.xs - 2,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    minWidth: IS_SMALL_SCREEN ? 90 : 100,
+    borderRadius: 16,
+    flex: 1,
+    minWidth: IS_SMALL_SCREEN ? 70 : 75,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
     borderWidth: 0,
   },
   actionButtonText: {
     ...typography.body,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
+    fontSize: IS_SMALL_SCREEN ? 12 : 13,
     fontWeight: '600',
+    letterSpacing: -0.1,
+    textAlign: 'center',
   },
   compactTitle: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 28 : 32,
-    fontWeight: '700', // Pinterest-style bold
-    letterSpacing: -0.6,
-    marginBottom: spacing.xs,
-    lineHeight: IS_SMALL_SCREEN ? 34 : 38,
+    fontSize: IS_SMALL_SCREEN ? 26 : 30,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: spacing.xs - 2,
+    lineHeight: IS_SMALL_SCREEN ? 32 : 36,
   },
   compactHeaderActions: {
     flexDirection: 'row',
@@ -3922,11 +4022,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     height: '92%',
     paddingTop: spacing.sm,
-    shadowColor: colors.text.primary,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   pinterestHeader: {
     flexDirection: 'row',
@@ -4020,30 +4120,32 @@ const styles = StyleSheet.create({
   // Pinterest-Style Stats Cards
   pinterestStatsSection: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm + 2,
     paddingBottom: spacing.sm,
   },
   pinterestStatsRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs + 2,
   },
   pinterestStatCard: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: spacing.md,
-    paddingVertical: spacing.lg,
+    borderRadius: 16,
+    padding: spacing.sm + 2,
+    paddingVertical: spacing.md - 2,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
     borderWidth: 0,
+    minHeight: 90,
   },
   pinterestStatIconCircle: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4052,17 +4154,19 @@ const styles = StyleSheet.create({
   pinterestStatValue: {
     ...typography.h1,
     color: colors.text.primary,
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    marginBottom: 2,
-    letterSpacing: -0.4,
+    marginBottom: 3,
+    letterSpacing: -0.5,
+    lineHeight: 32,
   },
   pinterestStatLabel: {
     ...typography.small,
     color: colors.text.secondary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     textTransform: 'capitalize',
+    letterSpacing: -0.1,
   },
 
   // Pinterest-Style Commission Cards

@@ -71,20 +71,34 @@ export default function BoardDetailScreen() {
   // Fetch user's boards for moving artworks
   const fetchUserBoards = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/users/${user.id}/boards`, {
+      // Use /boards endpoint which includes full artwork data
+      const response = await axios.get(`${API_URL}/boards`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Fetched boards:', response.data);
+      console.log('Fetched boards with artworks:', response.data);
+
       // Filter out the current board and system boards
       const filteredBoards = response.data.filter(b =>
         b.id !== id && b.name !== 'Liked' && b.board_type !== 'created'
       );
       console.log('Filtered boards for modal:', filteredBoards);
+
+      // Log the full structure for debugging
+      filteredBoards.forEach(b => {
+        console.log('Board:', b.name);
+        console.log('  - artworks:', b.artworks);
+        console.log('  - board_artworks:', b.board_artworks);
+        if (b.board_artworks?.[0]) {
+          console.log('  - first board_artwork:', b.board_artworks[0]);
+          console.log('  - first artwork details:', b.board_artworks[0].artworks);
+        }
+      });
+
       setUserBoards(filteredBoards);
     } catch (error) {
       console.error('Error fetching user boards:', error);
     }
-  }, [user?.id, token, id]);
+  }, [token, id]);
 
   // Toggle edit mode
   const toggleEditMode = () => {
@@ -433,7 +447,7 @@ export default function BoardDetailScreen() {
       <Modal
         visible={showBoardSelector}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowBoardSelector(false)}
       >
         <View style={styles.boardSelectorContainer}>
@@ -462,28 +476,47 @@ export default function BoardDetailScreen() {
                   contentContainerStyle={styles.boardListContent}
                   showsVerticalScrollIndicator={false}
                 >
-                  {userBoards.map((targetBoard) => (
-                    <TouchableOpacity
-                      key={targetBoard.id}
-                      style={styles.boardOption}
-                      onPress={() => handleMoveToBoard(targetBoard.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.boardThumbnail}>
-                        <View style={styles.boardThumbnailPlaceholder}>
-                          <Ionicons name="images-outline" size={24} color={colors.text.disabled} />
+                  {userBoards.map((targetBoard) => {
+                    // Get thumbnail from first artwork in board
+                    const firstArtwork = targetBoard.board_artworks?.[0]?.artworks;
+                    const thumbnailUrl = firstArtwork?.thumbnail_url || firstArtwork?.image_url;
+                    const artworkCount = targetBoard.artworks?.[0]?.count || targetBoard.board_artworks?.length || 0;
+
+                    console.log(`Rendering board: ${targetBoard.name}`);
+                    console.log(`  Thumbnail URL: ${thumbnailUrl}`);
+                    console.log(`  Artwork count: ${artworkCount}`);
+
+                    return (
+                      <TouchableOpacity
+                        key={targetBoard.id}
+                        style={styles.boardOption}
+                        onPress={() => handleMoveToBoard(targetBoard.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.boardThumbnail}>
+                          {thumbnailUrl ? (
+                            <Image
+                              source={{ uri: thumbnailUrl }}
+                              style={styles.boardThumbnailImage}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <View style={styles.boardThumbnailPlaceholder}>
+                              <Ionicons name="images-outline" size={28} color={colors.text.disabled} />
+                            </View>
+                          )}
                         </View>
-                      </View>
-                      <View style={styles.boardInfo}>
-                        <Text style={styles.boardName} numberOfLines={1}>
-                          {targetBoard.name}
-                        </Text>
-                        <Text style={styles.boardMeta}>
-                          {targetBoard.artwork_count || 0} pins
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                        <View style={styles.boardInfo}>
+                          <Text style={styles.boardName} numberOfLines={1}>
+                            {targetBoard.name}
+                          </Text>
+                          <Text style={styles.boardMeta}>
+                            {artworkCount} {artworkCount === 1 ? 'pin' : 'pins'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               )}
             </View>
@@ -657,18 +690,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md + 2,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   actionButtonText: {
     ...typography.button,
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: -0.2,
   },
   deleteButton: {
-    borderColor: colors.status.error,
+    backgroundColor: colors.surface,
   },
   deleteButtonText: {
     color: colors.status.error,
@@ -740,18 +779,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
   },
   boardThumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.md,
+    width: 70,
+    height: 70,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
+    backgroundColor: colors.surfaceLight,
+  },
+  boardThumbnailImage: {
+    width: 70,
+    height: 70,
   },
   boardThumbnailPlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: 70,
+    height: 70,
     backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -772,7 +816,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   emptyBoardList: {
-    paddingVertical: spacing.xxl * 2,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxl * 2,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
@@ -781,7 +826,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     marginBottom: spacing.xs,
   },
   emptyBoardSubtext: {
