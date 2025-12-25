@@ -770,13 +770,38 @@ export default function CommissionRequestsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="document-text-outline" size={64} color={colors.text.disabled} />
-            <Text style={styles.emptyTitle}>No Requests Found</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="sparkles-outline" size={56} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {isArtist ? 'Your next project awaits!' : 'No Requests Yet'}
+            </Text>
             <Text style={styles.emptyText}>
               {isArtist
-                ? 'Check back later for new commission opportunities'
-                : 'Post your first commission request to find artists'}
+                ? 'Browse commission requests from clients looking for talented artists like you'
+                : 'Post your first commission request to connect with amazing artists'}
             </Text>
+            {!isArtist && (
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={() => setShowCreateModal(true)}
+              >
+                <Ionicons name="add-circle-outline" size={22} color={colors.text.primary} />
+                <Text style={styles.emptyActionText}>Create Request</Text>
+              </TouchableOpacity>
+            )}
+            {isArtist && (
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={() => {
+                  // Refresh to check for new requests
+                  loadRequests();
+                }}
+              >
+                <Ionicons name="refresh-outline" size={22} color={colors.text.primary} />
+                <Text style={styles.emptyActionText}>Refresh</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -802,7 +827,10 @@ export default function CommissionRequestsScreen() {
                 >
                   <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={styles.pinterestTitle}>Post request</Text>
+                <View style={styles.modalHeaderContent}>
+                  <Text style={styles.pinterestTitle}>Create Request</Text>
+                  <Text style={styles.pinterestSubtitle}>Tell artists what you need</Text>
+                </View>
                 <View style={{ width: 28 }} />
               </View>
 
@@ -843,7 +871,7 @@ export default function CommissionRequestsScreen() {
               <View style={styles.formSection}>
                 <Text style={styles.label}>Reference Images *</Text>
                 <Text style={styles.helperText}>
-                  Help artists visualize your idea by adding reference images
+                  Help artists bring your vision to life. Add images showing the style, mood, or concepts you have in mind.
                 </Text>
 
                 {/* Image Preview Grid */}
@@ -879,12 +907,12 @@ export default function CommissionRequestsScreen() {
                   onPress={handlePickImage}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="images-outline" size={28} color={colors.primary} />
+                  <Ionicons name="images-outline" size={32} color={colors.primary} />
                   <Text style={styles.addImageButtonText}>
                     {formData.reference_images.length === 0 ? 'Add Reference Images' : 'Add More Images'}
                   </Text>
-                  <Text style={styles.addImageButtonSubtext}>
-                    {formData.reference_images.length === 0 ? 'Required' : `${formData.reference_images.length} added`}
+                  <Text style={[styles.addImageButtonSubtext, formData.reference_images.length === 0 && { color: colors.primary }]}>
+                    {formData.reference_images.length === 0 ? 'Tap to choose images' : `${formData.reference_images.length} image${formData.reference_images.length === 1 ? '' : 's'} added`}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -917,14 +945,12 @@ export default function CommissionRequestsScreen() {
               </View>
               </View>
 
-              {/* Styles Section */}
+              {/* Styles Section - Simplified */}
               <View style={styles.formSection}>
-              <Text style={styles.label}>Preferred Styles (optional)</Text>
-              <ScrollView
-                style={styles.stylesContainer}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.stylesContent}
-              >
+                <Text style={styles.label}>Preferred Styles (optional)</Text>
+                <Text style={styles.helperText}>
+                  Select art styles you're interested in - this helps artists understand your taste
+                </Text>
                 {Object.keys(categorizedStyles).map((category) => {
                   const categoryStyles = categorizedStyles[category];
                   if (categoryStyles.length === 0) return null;
@@ -964,7 +990,6 @@ export default function CommissionRequestsScreen() {
                     </View>
                   );
                 })}
-              </ScrollView>
               </View>
               </ScrollView>
 
@@ -1532,8 +1557,8 @@ const styles = StyleSheet.create({
   },
   filtersScroll: {
     maxHeight: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: 0,
+    borderBottomColor: 'transparent',
   },
   filtersContent: {
     paddingHorizontal: spacing.md,
@@ -1901,19 +1926,58 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: spacing.xxl * 2,
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl * 1.5,
+    paddingHorizontal: spacing.lg,
+  },
+  emptyIconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg + spacing.sm,
   },
   emptyTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
-    marginTop: spacing.md,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.sm + 2,
+    letterSpacing: -0.3,
   },
   emptyText: {
     ...typography.body,
     color: colors.text.secondary,
+    fontSize: 15,
     textAlign: 'center',
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.xl,
+    lineHeight: 22,
+    marginBottom: spacing.lg + spacing.md,
+    paddingHorizontal: spacing.md,
+    maxWidth: 340,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg + spacing.md,
+    borderRadius: borderRadius.full,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  emptyActionText: {
+    ...typography.button,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   modalOverlay: {
     flex: 1,
@@ -1964,17 +2028,19 @@ const styles = StyleSheet.create({
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: spacing.xs + 2,
+    marginTop: spacing.xs,
+    letterSpacing: -0.2,
   },
   helperText: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 13,
-    marginBottom: spacing.md,
-    lineHeight: 18,
+    fontSize: 14,
+    marginBottom: spacing.sm + 2,
+    lineHeight: 20,
+    fontWeight: '400',
   },
   // Reference Images Styles
   referenceImagesGrid: {
@@ -2060,7 +2126,7 @@ const styles = StyleSheet.create({
     color: colors.text.disabled,
   },
   formSection: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg + spacing.sm,
   },
   filterSection: {
     marginBottom: spacing.xl,
@@ -2126,19 +2192,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   styleCategory: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   categoryTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 15,
-    marginBottom: spacing.sm,
-    fontWeight: '600',
+    fontSize: 14,
+    marginBottom: spacing.sm + 2,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.7,
   },
   categoryStylesList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: spacing.xs + 2,
   },
   stylesList: {
     flexDirection: 'row',
@@ -2146,21 +2215,21 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   styleOption: {
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md + 4,
+    paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     elevation: 1,
   },
   styleOptionSelected: {
     backgroundColor: colors.primary,
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 3,
@@ -2168,8 +2237,9 @@ const styles = StyleSheet.create({
   styleOptionText: {
     ...typography.caption,
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   styleOptionTextSelected: {
     color: colors.text.primary,
@@ -2250,11 +2320,16 @@ const styles = StyleSheet.create({
   },
   bidCard: {
     backgroundColor: colors.background,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    borderRadius: 18,
+    padding: spacing.md + 2,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   // Enhanced Pinterest-style bid cards
   pinterestBidCard: {
@@ -2616,19 +2691,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20', // Softer border
+    borderBottomColor: colors.border + '10', // Even softer border
+  },
+  modalHeaderContent: {
+    flex: 1,
+    alignItems: 'center',
   },
   pinterestTitle: {
     ...typography.h3,
     color: colors.text.primary,
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
   pinterestSubtitle: {
     ...typography.small,
     color: colors.text.secondary,
-    marginTop: 2,
+    marginTop: 3,
     fontSize: 13,
+    fontWeight: '400',
   },
   pinterestBody: {
     flex: 1,

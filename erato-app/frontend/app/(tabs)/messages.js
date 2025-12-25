@@ -491,7 +491,7 @@ export default function MessagesScreen() {
             style={styles.headerButton}
             onPress={() => router.push('/(tabs)/explore')}
           >
-            <Ionicons name="document-text" size={24} color={colors.text.primary} />
+            <Ionicons name="briefcase-outline" size={24} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.headerButton}

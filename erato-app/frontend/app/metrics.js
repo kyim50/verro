@@ -186,6 +186,7 @@ export default function MetricsScreen() {
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -202,183 +203,162 @@ export default function MetricsScreen() {
           </View>
         ) : (
           <>
-            {/* Commission Statistics */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Commission Statistics</Text>
-              <View style={styles.metricsCard}>
-                <View style={styles.statsGrid}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statBoxValue}>
-                      {isArtist ? commissionStats.total : (clientStats?.total_commissions || 0)}
-                    </Text>
-                    <Text style={styles.statBoxLabel}>Total</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statBoxValue}>
-                      {isArtist ? commissionStats.pending : 0}
-                    </Text>
-                    <Text style={styles.statBoxLabel}>Pending</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statBoxValue}>
-                      {isArtist ? commissionStats.in_progress : (clientStats?.active_commissions || 0)}
-                    </Text>
-                    <Text style={styles.statBoxLabel}>Active</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statBoxValue}>
-                      {isArtist ? commissionStats.completed : (clientStats?.completed_commissions || 0)}
-                    </Text>
-                    <Text style={styles.statBoxLabel}>Completed</Text>
-                  </View>
+            {/* Overview Stats */}
+            <View style={styles.overviewSection}>
+              <Text style={styles.overviewTitle}>Overview</Text>
+              <View style={styles.overviewGrid}>
+                <View style={styles.overviewCard}>
+                  <Text style={styles.overviewCardValue}>
+                    {isArtist ? commissionStats.total : (clientStats?.total_commissions || 0)}
+                  </Text>
+                  <Text style={styles.overviewCardLabel}>Commissions</Text>
                 </View>
 
-                {/* Financial Stats */}
                 {isArtist && commissionStats.totalRevenue > 0 && (
-                  <View style={styles.financialStats}>
-                    <View style={styles.financialStatRow}>
-                      <Text style={styles.financialStatLabel}>Total Revenue</Text>
-                      <Text style={styles.financialStatValue}>${commissionStats.totalRevenue.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.financialStatRow}>
-                      <Text style={styles.financialStatLabel}>Average per Commission</Text>
-                      <Text style={styles.financialStatValue}>
-                        ${commissionStats.completed > 0
-                          ? (commissionStats.totalRevenue / commissionStats.completed).toFixed(2)
-                          : '0.00'}
-                      </Text>
-                    </View>
+                  <View style={styles.overviewCard}>
+                    <Text style={styles.overviewCardValue}>${commissionStats.totalRevenue.toFixed(0)}</Text>
+                    <Text style={styles.overviewCardLabel}>Revenue</Text>
                   </View>
                 )}
+              </View>
+            </View>
+
+            {/* Status Breakdown */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Commission Status</Text>
+              <View style={styles.statusList}>
+                <View style={styles.statusRow}>
+                  <View style={styles.statusLabelContainer}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.status.warning }]} />
+                    <Text style={styles.statusLabel}>Pending</Text>
+                  </View>
+                  <Text style={[styles.statusValue, { color: colors.status.warning }]}>
+                    {isArtist ? commissionStats.pending : 0}
+                  </Text>
+                </View>
+
+                <View style={styles.statusRow}>
+                  <View style={styles.statusLabelContainer}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
+                    <Text style={styles.statusLabel}>In Progress</Text>
+                  </View>
+                  <Text style={[styles.statusValue, { color: colors.primary }]}>
+                    {isArtist ? commissionStats.in_progress : (clientStats?.active_commissions || 0)}
+                  </Text>
+                </View>
+
+                <View style={[styles.statusRow, { borderBottomWidth: 0 }]}>
+                  <View style={styles.statusLabelContainer}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.status.success }]} />
+                    <Text style={styles.statusLabel}>Completed</Text>
+                  </View>
+                  <Text style={[styles.statusValue, { color: colors.status.success }]}>
+                    {isArtist ? commissionStats.completed : (clientStats?.completed_commissions || 0)}
+                  </Text>
+                </View>
               </View>
             </View>
 
             {/* Engagement Analytics */}
             {engagementMetrics && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  {isArtist ? 'Engagement Analytics' : 'My Activity'}
-                </Text>
-                <View style={styles.metricsCard}>
-                  <View style={styles.statsGrid}>
-                    {isArtist ? (
-                      <>
-                        <View style={styles.statBox}>
-                          <Text style={styles.statBoxValue}>{engagementMetrics.total_artworks || 0}</Text>
-                          <Text style={styles.statBoxLabel}>Artworks</Text>
-                        </View>
-                        <View style={styles.statBox}>
-                          <Text style={styles.statBoxValue}>
-                            {engagementMetrics.average_engagement_score?.toFixed(1) || '0.0'}
-                          </Text>
-                          <Text style={styles.statBoxLabel}>Avg Score</Text>
-                        </View>
-                      </>
-                    ) : (
-                      <>
-                        <View style={styles.statBox}>
-                          <Text style={styles.statBoxValue}>{engagementMetrics.unique_artworks || 0}</Text>
-                          <Text style={styles.statBoxLabel}>Artworks</Text>
-                        </View>
-                        <View style={styles.statBox}>
-                          <Text style={styles.statBoxValue}>{engagementMetrics.unique_artists || 0}</Text>
-                          <Text style={styles.statBoxLabel}>Artists</Text>
-                        </View>
-                      </>
-                    )}
+                <Text style={styles.sectionTitle}>Engagement</Text>
+                <View style={styles.engagementGrid}>
+                  <View style={styles.engagementCard}>
+                    <View style={styles.engagementIconCircle}>
+                      <Ionicons name="eye-outline" size={24} color={colors.primary} />
+                    </View>
+                    <Text style={styles.engagementCardValue}>{engagementMetrics.total_views || 0}</Text>
+                    <Text style={styles.engagementCardLabel}>Views</Text>
                   </View>
-
-                  <View style={styles.engagementMetricsGrid}>
-                    <View style={styles.engagementMetricItem}>
-                      <Ionicons name="eye-outline" size={18} color={colors.text.secondary} />
-                      <Text style={styles.engagementMetricLabel}>Views</Text>
-                      <Text style={styles.engagementMetricValue}>{engagementMetrics.total_views || 0}</Text>
+                  <View style={styles.engagementCard}>
+                    <View style={styles.engagementIconCircle}>
+                      <Ionicons name="heart-outline" size={24} color={colors.error} />
                     </View>
-                    {isArtist && (
-                      <View style={styles.engagementMetricItem}>
-                        <Ionicons name="hand-left-outline" size={18} color={colors.text.secondary} />
-                        <Text style={styles.engagementMetricLabel}>Clicks</Text>
-                        <Text style={styles.engagementMetricValue}>{engagementMetrics.total_clicks || 0}</Text>
+                    <Text style={styles.engagementCardValue}>{engagementMetrics.total_likes || 0}</Text>
+                    <Text style={styles.engagementCardLabel}>Likes</Text>
+                  </View>
+                </View>
+                <View style={styles.engagementGrid}>
+                  <View style={styles.engagementCard}>
+                    <View style={styles.engagementIconCircle}>
+                      <Ionicons name="bookmark-outline" size={24} color={colors.status.warning} />
+                    </View>
+                    <Text style={styles.engagementCardValue}>{engagementMetrics.total_saves || 0}</Text>
+                    <Text style={styles.engagementCardLabel}>Saves</Text>
+                  </View>
+                  {isArtist && (
+                    <View style={styles.engagementCard}>
+                      <View style={styles.engagementIconCircle}>
+                        <Ionicons name="mail-outline" size={24} color={colors.status.success} />
                       </View>
-                    )}
-                    <View style={styles.engagementMetricItem}>
-                      <Ionicons name="heart-outline" size={18} color={colors.text.secondary} />
-                      <Text style={styles.engagementMetricLabel}>Likes</Text>
-                      <Text style={styles.engagementMetricValue}>{engagementMetrics.total_likes || 0}</Text>
-                    </View>
-                    <View style={styles.engagementMetricItem}>
-                      <Ionicons name="bookmark-outline" size={18} color={colors.text.secondary} />
-                      <Text style={styles.engagementMetricLabel}>Saves</Text>
-                      <Text style={styles.engagementMetricValue}>{engagementMetrics.total_saves || 0}</Text>
-                    </View>
-                    {isArtist && (
-                      <View style={styles.engagementMetricItem}>
-                        <Ionicons name="share-social-outline" size={18} color={colors.text.secondary} />
-                        <Text style={styles.engagementMetricLabel}>Shares</Text>
-                        <Text style={styles.engagementMetricValue}>{engagementMetrics.total_shares || 0}</Text>
-                      </View>
-                    )}
-                    <View style={styles.engagementMetricItem}>
-                      <Ionicons name="mail-outline" size={18} color={colors.text.secondary} />
-                      <Text style={styles.engagementMetricLabel}>Inquiries</Text>
-                      <Text style={styles.engagementMetricValue}>
+                      <Text style={styles.engagementCardValue}>
                         {engagementMetrics.total_commission_inquiries || 0}
                       </Text>
-                    </View>
-                  </View>
-
-                  {/* Top Artworks */}
-                  {engagementMetrics.top_artworks && engagementMetrics.top_artworks.length > 0 && (
-                    <View style={styles.topArtworksSection}>
-                      <Text style={styles.topArtworksTitle}>
-                        {isArtist ? 'Top Performing Artworks' : 'Most Engaged Artworks'}
-                      </Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.topArtworksScroll}
-                      >
-                        {engagementMetrics.top_artworks.slice(0, 5).map((artwork, index) => (
-                          <TouchableOpacity
-                            key={artwork.artwork_id || index}
-                            style={styles.topArtworkCard}
-                            onPress={() => router.push(`/artwork/${artwork.artwork_id}`)}
-                          >
-                            <Image
-                              source={{ uri: artwork.image_url }}
-                              style={styles.topArtworkImage}
-                              contentFit="cover"
-                            />
-                            <View style={styles.topArtworkOverlay}>
-                              <Text style={styles.topArtworkTitle} numberOfLines={1}>
-                                {artwork.title || `#${index + 1}`}
-                              </Text>
-                              <View style={styles.topArtworkStats}>
-                                {isArtist ? (
-                                  <>
-                                    <View style={styles.topArtworkStat}>
-                                      <Ionicons name="eye" size={12} color="#fff" />
-                                      <Text style={styles.topArtworkStatText}>{artwork.total_views || 0}</Text>
-                                    </View>
-                                    <View style={styles.topArtworkStat}>
-                                      <Ionicons name="bookmark" size={12} color="#fff" />
-                                      <Text style={styles.topArtworkStatText}>{artwork.total_saves || 0}</Text>
-                                    </View>
-                                  </>
-                                ) : (
-                                  <View style={styles.topArtworkStat}>
-                                    <Ionicons name="heart" size={12} color="#fff" />
-                                    <Text style={styles.topArtworkStatText}>{artwork.engagement_count || 0}</Text>
-                                  </View>
-                                )}
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
+                      <Text style={styles.engagementCardLabel}>Inquiries</Text>
                     </View>
                   )}
                 </View>
+
+                {isArtist && (
+                  <View style={styles.portfolioStats}>
+                    <View style={styles.portfolioStatCard}>
+                      <Text style={styles.portfolioStatLabel}>Artworks</Text>
+                      <Text style={styles.portfolioStatValue}>{engagementMetrics.total_artworks || 0}</Text>
+                    </View>
+                    <View style={styles.portfolioStatCard}>
+                      <Text style={styles.portfolioStatLabel}>Engagement</Text>
+                      <Text style={styles.portfolioStatValue}>
+                        {engagementMetrics.average_engagement_score?.toFixed(1) || '0.0'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Top Artworks - Pinterest Style */}
+                {engagementMetrics.top_artworks && engagementMetrics.top_artworks.length > 0 && (
+                  <View style={styles.topArtworksSection}>
+                    <Text style={styles.topArtworksTitle}>Top Artworks</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.topArtworksScroll}
+                    >
+                      {engagementMetrics.top_artworks.slice(0, 5).map((artwork, index) => (
+                        <TouchableOpacity
+                          key={artwork.artwork_id || index}
+                          style={styles.topArtworkCard}
+                          onPress={() => router.push(`/artwork/${artwork.artwork_id}`)}
+                          activeOpacity={0.95}
+                        >
+                          <Image
+                            source={{ uri: artwork.image_url }}
+                            style={styles.topArtworkImage}
+                            contentFit="cover"
+                          />
+                          <View style={styles.topArtworkBadge}>
+                            <Text style={styles.topArtworkBadgeText}>#{index + 1}</Text>
+                          </View>
+                          <View style={styles.topArtworkInfo}>
+                            <Text style={styles.topArtworkInfoTitle} numberOfLines={1}>
+                              {artwork.title || 'Untitled'}
+                            </Text>
+                            <View style={styles.topArtworkMetrics}>
+                              <View style={styles.topArtworkMetricItem}>
+                                <Ionicons name="eye" size={14} color={colors.text.secondary} />
+                                <Text style={styles.topArtworkMetricText}>{artwork.total_views || 0}</Text>
+                              </View>
+                              <View style={styles.topArtworkMetricItem}>
+                                <Ionicons name="heart" size={14} color={colors.error} />
+                                <Text style={styles.topArtworkMetricText}>{artwork.total_likes || 0}</Text>
+                              </View>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             )}
           </>
@@ -401,8 +381,8 @@ const styles = StyleSheet.create({
     paddingTop: Constants.statusBarHeight + spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
+    borderBottomWidth: 0,
+    borderBottomColor: 'transparent',
   },
   headerTitle: {
     ...typography.h2,
@@ -411,6 +391,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xxl + spacing.xl,
   },
   loadingContainer: {
     flex: 1,
@@ -424,25 +407,29 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   section: {
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xl + spacing.lg,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 18 : 20,
+    fontSize: IS_SMALL_SCREEN ? 16 : 18,
     fontWeight: '700',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg + spacing.sm,
     letterSpacing: -0.3,
   },
   metricsCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
-    ...shadows.small,
+    borderRadius: 20,
+    padding: spacing.lg + spacing.sm,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -452,12 +439,17 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
     backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
+    borderRadius: 16,
+    paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border + '20',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   statBoxValue: {
     ...typography.h2,
@@ -474,10 +466,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   financialStats: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
+    borderTopColor: colors.border + '10',
   },
   financialStatRow: {
     flexDirection: 'row',
@@ -523,62 +515,244 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   topArtworksSection: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
+    marginTop: spacing.xl + spacing.lg,
+    paddingTop: spacing.xl,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
   topArtworksTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: IS_SMALL_SCREEN ? 14 : 15,
-    fontWeight: '600',
-    marginBottom: spacing.md,
-    letterSpacing: -0.2,
+    fontSize: IS_SMALL_SCREEN ? 14 : 16,
+    fontWeight: '700',
+    marginBottom: spacing.lg + spacing.sm,
+    letterSpacing: -0.3,
   },
   topArtworksScroll: {
-    gap: spacing.md,
+    gap: spacing.lg,
+    paddingRight: spacing.xl,
   },
   topArtworkCard: {
-    width: width * 0.4,
-    height: width * 0.5,
-    borderRadius: borderRadius.md,
+    width: width * 0.5,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceLight,
-    ...shadows.small,
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   topArtworkImage: {
     width: '100%',
-    height: '100%',
+    height: width * 0.62,
   },
-  topArtworkOverlay: {
+  topArtworkBadge: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: spacing.sm,
+    top: spacing.sm,
+    left: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  topArtworkTitle: {
+  topArtworkBadgeText: {
     ...typography.caption,
-    color: '#fff',
     fontSize: 12,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  topArtworkInfo: {
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  topArtworkInfoTitle: {
+    ...typography.bodyBold,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: spacing.xs / 2,
+    color: colors.text.primary,
+    marginBottom: spacing.xs + 2,
+    letterSpacing: -0.2,
   },
-  topArtworkStats: {
+  topArtworkMetrics: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
-  topArtworkStat: {
+  topArtworkMetricItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs / 2,
+    gap: spacing.xs,
   },
-  topArtworkStatText: {
+  topArtworkMetricText: {
     ...typography.caption,
-    color: '#fff',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  // New Modern Styles
+  overviewSection: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  overviewTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontSize: IS_SMALL_SCREEN ? 16 : 18,
+    fontWeight: '700',
+    marginBottom: spacing.lg + spacing.sm,
+    letterSpacing: -0.3,
+  },
+  overviewGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  overviewCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: spacing.xl,
+    paddingVertical: spacing.xl + spacing.sm,
+    alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+    overflow: 'visible',
+  },
+  overviewCardValue: {
+    ...typography.h1,
+    fontSize: IS_SMALL_SCREEN ? 36 : 44,
+    fontWeight: '800',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    letterSpacing: -1.2,
+    lineHeight: IS_SMALL_SCREEN ? 44 : 52,
+  },
+  overviewCardLabel: {
+    ...typography.body,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    letterSpacing: 0.2,
+  },
+  statusList: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '08',
+  },
+  statusLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusLabel: {
+    ...typography.body,
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.text.primary,
+    letterSpacing: -0.2,
+  },
+  statusValue: {
+    ...typography.h3,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  engagementGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  engagementCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: spacing.xl + spacing.sm,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+    minHeight: 140,
+  },
+  engagementIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  engagementCardValue: {
+    ...typography.h2,
+    fontSize: IS_SMALL_SCREEN ? 28 : 32,
+    fontWeight: '800',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.8,
+  },
+  engagementCardLabel: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  portfolioStats: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  portfolioStatCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: spacing.lg + spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  portfolioStatLabel: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  portfolioStatValue: {
+    ...typography.h2,
+    fontSize: IS_SMALL_SCREEN ? 24 : 28,
+    fontWeight: '800',
+    color: colors.text.primary,
+    letterSpacing: -0.5,
   },
 });

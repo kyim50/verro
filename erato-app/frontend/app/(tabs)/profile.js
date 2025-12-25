@@ -1088,20 +1088,6 @@ export default function ProfileScreen() {
                   <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.quickActionItem}
-                  onPress={() => router.push('/metrics')}
-                >
-                  <View style={styles.quickActionIcon}>
-                    <Ionicons name="analytics" size={24} color={colors.primary} />
-                  </View>
-                  <View style={styles.quickActionText}>
-                    <Text style={styles.quickActionTitle}>Metrics & Analytics</Text>
-                    <Text style={styles.quickActionSubtitle}>View stats & activity</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-                </TouchableOpacity>
-
                 {clientCommissions.length > 0 && (
                   <TouchableOpacity
                     style={styles.quickActionItem}
