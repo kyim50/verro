@@ -622,6 +622,60 @@ router.patch('/:id/status', authenticate, async (req, res) => {
 
     // Send notifications based on status
     if (finalStatus === 'in_progress' && isArtist) {
+      // Generate milestone payment plan when commission is accepted
+      if (commission.final_price) {
+        try {
+          // Get milestone templates
+          const { data: templates, error: templatesError } = await supabaseAdmin
+            .from('milestone_stage_templates')
+            .select('*')
+            .order('typical_order', { ascending: true });
+
+          if (!templatesError && templates && templates.length > 0) {
+            // Generate milestones based on templates
+            const totalPrice = parseFloat(commission.final_price);
+            const milestones = templates.map((template, index) => {
+              const percentage = parseFloat(template.default_percentage);
+              const amount = (totalPrice * percentage) / 100;
+
+              return {
+                commission_id: req.params.id,
+                milestone_number: index + 1,
+                stage: template.stage,
+                title: template.display_name,
+                description: template.description,
+                amount: amount.toFixed(2),
+                percentage: percentage.toFixed(2),
+                payment_status: 'unpaid',
+                payment_required_before_work: true,
+                is_locked: index === 0 ? false : true // Only first milestone is unlocked
+              };
+            });
+
+            // Insert milestones
+            const { data: createdMilestones, error: insertError } = await supabaseAdmin
+              .from('commission_milestones')
+              .insert(milestones)
+              .select();
+
+            if (!insertError && createdMilestones && createdMilestones.length > 0) {
+              // Set the first milestone as current
+              await supabaseAdmin
+                .from('commissions')
+                .update({ current_milestone_id: createdMilestones[0].id })
+                .eq('id', req.params.id);
+
+              console.log(`✓ Generated ${createdMilestones.length} milestones for commission ${req.params.id}`);
+            } else {
+              console.error('Error creating milestones:', insertError);
+            }
+          }
+        } catch (milestoneError) {
+          console.error('Error generating milestones:', milestoneError);
+          // Don't fail the commission acceptance if milestones fail
+        }
+      }
+
       // Commission accepted - notify client
       await NotificationService.publish(commission.client_id, {
         type: 'commission_accepted',
