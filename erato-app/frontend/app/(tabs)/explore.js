@@ -240,6 +240,8 @@ export default function CommissionDashboard() {
   const [commissionFiles, setCommissionFiles] = useState([]); // Store reference images for Details tab
   const [selectedImageIndex, setSelectedImageIndex] = useState(null); // For image viewer
   const [showImageViewer, setShowImageViewer] = useState(false);
+  const [milestones, setMilestones] = useState([]); // Store milestones for payment options
+  const [hasMilestonePaymentSelected, setHasMilestonePaymentSelected] = useState(false); // Track if client selected milestone payment
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -386,6 +388,24 @@ export default function CommissionDashboard() {
       { id: '2', title: 'More Info', message: 'Thanks for your interest! Could you provide more details about what you\'re looking for?' },
       { id: '3', title: 'Declined', message: 'Thank you for reaching out, but I\'m unable to take on this project at this time.' },
     ]);
+  };
+
+  const loadMilestones = async (commissionId) => {
+    if (!token || !commissionId) {
+      setMilestones([]);
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `${API_URL}/milestones/commission/${commissionId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMilestones(response.data.milestones || []);
+    } catch (error) {
+      console.error('Error fetching milestones:', error);
+      setMilestones([]);
+    }
   };
 
   const calculateTotalSpent = async () => {
@@ -574,6 +594,7 @@ export default function CommissionDashboard() {
         console.log('Closing modal...');
         setShowCommissionModal(false);
         setSelectedCommission(null);
+        setHasMilestonePaymentSelected(false); // Reset milestone payment selection
       }
 
       // Clear updating status
@@ -820,9 +841,10 @@ export default function CommissionDashboard() {
             setSelectedCommission(item);
             setShowCommissionModal(true);
             setCommissionFiles([]); // Reset files
+            setMilestones([]); // Reset milestones
             // Then fetch full commission details in background
             try {
-              const [commissionResponse, filesResponse] = await Promise.all([
+              const [commissionResponse, filesResponse, milestonesResponse] = await Promise.all([
                 axios.get(`${API_URL}/commissions/${item.id}`, {
                   headers: { Authorization: `Bearer ${token}` }
                 }),
@@ -831,14 +853,23 @@ export default function CommissionDashboard() {
                 }).catch(err => {
                   console.error('Error fetching files:', err);
                   return { data: { files: [] } };
+                }),
+                axios.get(`${API_URL}/milestones/commission/${item.id}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                }).catch(err => {
+                  console.error('Error fetching milestones:', err);
+                  return { data: { milestones: [] } };
                 })
               ]);
               console.log('Files loaded for Details tab:', filesResponse.data.files);
+              console.log('Milestones loaded:', milestonesResponse.data.milestones);
               setSelectedCommission(commissionResponse.data);
               setCommissionFiles(filesResponse.data.files || []);
+              setMilestones(milestonesResponse.data.milestones || []);
             } catch (error) {
               console.error('Error fetching commission details:', error);
               setCommissionFiles([]);
+              setMilestones([]);
             }
           }
         }}
@@ -1367,12 +1398,26 @@ export default function CommissionDashboard() {
             setShowPaymentOptions(false);
           }}
           commission={selectedCommission}
+          milestones={milestones}
           onProceed={(paymentData) => {
             console.log('✅ Payment proceed:', paymentData);
-            const amount = paymentData.paymentType === 'deposit' 
+
+            // If milestone payment is selected, mark it and show milestones section
+            if (paymentData.paymentType === 'milestone') {
+              setHasMilestonePaymentSelected(true);
+              setShowPaymentOptions(false);
+              Toast.show({
+                type: 'info',
+                text1: 'Milestone Payments',
+                text2: 'Scroll down to pay for each stage',
+              });
+              return;
+            }
+
+            const amount = paymentData.paymentType === 'deposit'
               ? (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget) * (paymentData.depositPercentage / 100)
               : (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget);
-            
+
             setPaymentData({
               ...paymentData,
               commissionId: selectedCommission.id,
@@ -1398,6 +1443,7 @@ export default function CommissionDashboard() {
           commissionId={paymentData.commissionId}
           amount={paymentData.amount}
           paymentType={paymentData.paymentType}
+          milestoneId={paymentData.milestoneId}
           onSuccess={async (data) => {
             setShowPayPalCheckout(false);
             setPaymentData(null);
@@ -1606,7 +1652,9 @@ export default function CommissionDashboard() {
 
                   {/* Pricing - Always Show */}
                   <View style={styles.detailPricingCard}>
-                    <Text style={styles.detailPricingLabel}>Total</Text>
+                    <Text style={styles.detailPricingLabel}>
+                      {selectedCommission.final_price ? 'Final Price' : 'Total'}
+                    </Text>
                     {selectedCommission.final_price || selectedCommission.budget || selectedCommission.price ? (
                       <Text style={styles.detailPriceText}>
                         ${selectedCommission.final_price || selectedCommission.price || selectedCommission.budget}
@@ -1817,7 +1865,9 @@ export default function CommissionDashboard() {
                   )}
 
                   {/* Milestone Tracker/Manager */}
-                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
+                  {/* Show for artists always, but for clients only after they select milestone payment */}
+                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') &&
+                   (isArtist || hasMilestonePaymentSelected) && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
                       {isArtist ? (

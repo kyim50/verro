@@ -172,6 +172,8 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
   const isPlanConfirmed = commission?.milestone_plan_confirmed;
   const totalPercentage = milestones.reduce((sum, m) => sum + parseFloat(m.percentage || 0), 0);
   const isValidTotal = Math.abs(totalPercentage - 100) < 0.01;
+  const hasAnyPaidMilestone = milestones.some(m => m.payment_status === 'paid');
+  const isLocked = isPlanConfirmed || hasAnyPaidMilestone;
 
   if (milestones.length === 0) {
     return (
@@ -259,7 +261,7 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
                 {isPaid ? (
                   <Ionicons name="checkmark-circle" size={24} color={colors.status.success} />
                 ) : (
-                  !isPlanConfirmed && (
+                  !isLocked && (
                     <TouchableOpacity
                       onPress={() => handleEditMilestone(milestone)}
                       style={styles.editButton}
@@ -290,16 +292,26 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
       </ScrollView>
 
       {/* Actions */}
-      {!isPlanConfirmed && (
+      {!isLocked && (
         <View style={styles.actionsContainer}>
           <TouchableOpacity
-            style={[styles.actionButton, !isValidTotal && styles.actionButtonDisabled]}
+            style={[styles.actionButton, (!isValidTotal || hasAnyPaidMilestone) && styles.actionButtonDisabled]}
             onPress={handleRequestConfirmation}
-            disabled={!isValidTotal}
+            disabled={!isValidTotal || hasAnyPaidMilestone}
           >
             <Ionicons name="checkmark-done-outline" size={20} color={colors.text.primary} />
             <Text style={styles.actionButtonText}>Ready for Client Confirmation</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Show locked message if any milestone is paid */}
+      {hasAnyPaidMilestone && !isPlanConfirmed && (
+        <View style={styles.lockedNotice}>
+          <Ionicons name="lock-closed" size={16} color={colors.text.disabled} />
+          <Text style={styles.lockedText}>
+            Milestones are locked after first payment
+          </Text>
         </View>
       )}
 
@@ -441,30 +453,34 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h3,
     color: colors.text.primary,
+    fontSize: 20,
+    fontWeight: '700',
   },
   confirmedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     backgroundColor: colors.status.success + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   confirmedText: {
     ...typography.caption,
     color: colors.status.success,
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '600',
   },
   totalBadge: {
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
   },
   totalText: {
     ...typography.bodyBold,
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '700',
   },
   warningBox: {
     flexDirection: 'row',
@@ -486,25 +502,23 @@ const styles = StyleSheet.create({
   },
   milestoneCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 0,
   },
   milestoneCardPaid: {
-    borderColor: colors.status.success,
     backgroundColor: colors.status.success + '10',
   },
   milestoneHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   milestoneNumber: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primary + '20',
     justifyContent: 'center',
@@ -513,7 +527,8 @@ const styles = StyleSheet.create({
   milestoneNumberText: {
     ...typography.bodyBold,
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 18,
+    fontWeight: '700',
   },
   milestoneInfo: {
     flex: 1,
@@ -522,30 +537,35 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.text.primary,
     marginBottom: spacing.xs,
+    fontSize: 17,
+    fontWeight: '600',
   },
   milestoneDescription: {
     ...typography.caption,
     color: colors.text.secondary,
   },
   editButton: {
-    padding: spacing.xs,
+    padding: spacing.sm,
   },
   milestoneFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+    borderTopWidth: 0,
   },
   milestoneAmount: {
     ...typography.h3,
     color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
   },
   milestonePercentage: {
     ...typography.caption,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+    fontSize: 14,
+    fontWeight: '500',
   },
   paidInfo: {
     flexDirection: 'row',
@@ -557,18 +577,17 @@ const styles = StyleSheet.create({
     color: colors.status.success,
   },
   actionsContainer: {
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingTop: spacing.lg,
+    borderTopWidth: 0,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.full,
   },
   actionButtonDisabled: {
     opacity: 0.5,
@@ -576,6 +595,20 @@ const styles = StyleSheet.create({
   actionButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
+  },
+  lockedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+  },
+  lockedText: {
+    ...typography.caption,
+    color: colors.text.disabled,
   },
   // Modal styles
   modalOverlay: {
@@ -593,70 +626,78 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: spacing.xl,
+    borderBottomWidth: 0,
   },
   modalTitle: {
     ...typography.h3,
     color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
   },
   modalBody: {
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   inputGroup: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   inputLabel: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    fontSize: 15,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
     ...typography.body,
     color: colors.text.primary,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 0,
+    fontSize: 16,
   },
   textArea: {
-    minHeight: 80,
+    minHeight: 100,
     textAlignVertical: 'top',
   },
   calculatedAmount: {
     ...typography.caption,
     color: colors.primary,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalFooter: {
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    padding: spacing.xl,
+    borderTopWidth: 0,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   cancelButtonText: {
     ...typography.bodyBold,
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   saveButton: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   saveButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

@@ -11,35 +11,38 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
 
-const PAYMENT_TYPES = [
-  {
-    id: 'full',
-    name: 'Full Payment',
-    description: 'Pay the full amount upfront',
-    icon: 'card-outline',
-  },
-  {
-    id: 'deposit',
-    name: 'Deposit + Final',
-    description: 'Pay 50% now, 50% on completion',
-    icon: 'wallet-outline',
-  },
-  {
-    id: 'milestone',
-    name: 'Milestone Payments',
-    description: 'Pay in stages as work progresses (use milestone tracker)',
-    icon: 'layers-outline',
-    disabled: true, // Milestone payments should be done through MilestoneTracker
-  },
-];
-
 export default function PaymentOptions({
   visible,
   onClose,
   commission,
   onSelectPaymentType,
   onProceed,
+  milestones = [], // Accept milestones as a prop
 }) {
+  // Build payment types dynamically based on whether milestones exist
+  const PAYMENT_TYPES = [
+    {
+      id: 'full',
+      name: 'Full Payment',
+      description: 'Pay the full amount upfront',
+      icon: 'card-outline',
+    },
+    {
+      id: 'deposit',
+      name: 'Deposit + Final',
+      description: 'Pay 50% now, 50% on completion',
+      icon: 'wallet-outline',
+    },
+    {
+      id: 'milestone',
+      name: 'Milestone Payments',
+      description: milestones.length > 0
+        ? `Pay in ${milestones.length} stages as work progresses`
+        : 'Artist has not created milestones yet',
+      icon: 'layers-outline',
+      disabled: milestones.length === 0, // Only enable if milestones exist
+    },
+  ];
   const [selectedType, setSelectedType] = useState(null);
   const [depositPercentage, setDepositPercentage] = useState(50);
 
@@ -101,7 +104,11 @@ export default function PaymentOptions({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody}>
+          <ScrollView
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalBodyContent}
+            showsVerticalScrollIndicator={false}
+          >
             <Text style={styles.description}>
               Choose how you'd like to pay for this commission
             </Text>
@@ -215,7 +222,7 @@ export default function PaymentOptions({
                 )}
                 {selectedType === 'milestone' && (
                   <Text style={styles.milestoneNote}>
-                    Milestone amounts will be set by the artist
+                    Artist will set milestone amounts
                   </Text>
                 )}
               </View>
@@ -265,8 +272,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   modalBody: {
-    padding: spacing.lg,
     maxHeight: '70%',
+  },
+  modalBodyContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   description: {
     ...typography.body,
@@ -370,6 +380,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    paddingBottom: spacing.lg,
     marginBottom: spacing.md,
   },
   breakdownTitle: {
@@ -413,6 +424,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    lineHeight: 20,
+    fontSize: 14,
   },
   modalFooter: {
     flexDirection: 'row',

@@ -814,7 +814,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     // Allow status update only when accepting a commission
     if (status !== undefined) {
       if (status === 'accepted' && commission.status === 'pending') {
-        updates.status = status;
+        updates.status = 'in_progress'; // Set to in_progress instead of accepted
       } else if (status !== 'accepted') {
         return res.status(400).json({ error: 'Can only update status to accepted via this endpoint' });
       }
