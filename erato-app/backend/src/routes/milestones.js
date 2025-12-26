@@ -39,7 +39,7 @@ router.post('/commission/:commissionId/generate', authenticate, async (req, res)
     // Verify commission exists and user is the artist
     const { data: commission, error: commissionError } = await supabaseAdmin
       .from('commissions')
-      .select('id, artist_id, client_id, final_price, package_id, status')
+      .select('id, artist_id, client_id, final_price, budget, package_id, status')
       .eq('id', commissionId)
       .single();
 
@@ -51,8 +51,10 @@ router.post('/commission/:commissionId/generate', authenticate, async (req, res)
       return res.status(403).json({ error: 'Only the artist can generate milestones' });
     }
 
-    if (!commission.final_price) {
-      return res.status(400).json({ error: 'Commission must have a final price set' });
+    // Use final_price if set, otherwise use budget
+    const price = commission.final_price || commission.budget;
+    if (!price) {
+      return res.status(400).json({ error: 'Commission must have a price or budget set' });
     }
 
     // Check if milestones already exist
@@ -74,7 +76,7 @@ router.post('/commission/:commissionId/generate', authenticate, async (req, res)
     if (templatesError) throw templatesError;
 
     // Generate milestones based on templates
-    const totalPrice = parseFloat(commission.final_price);
+    const totalPrice = parseFloat(price);
     const milestones = templates.map((template, index) => {
       const percentage = parseFloat(template.default_percentage);
       const amount = (totalPrice * percentage) / 100;
