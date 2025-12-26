@@ -781,12 +781,12 @@ router.patch('/:id/status', authenticate, async (req, res) => {
 // Update commission details (artist only - for price/deadline)
 router.patch('/:id', authenticate, async (req, res) => {
   try {
-    const { price, deadline } = req.body;
+    const { price, deadline, final_price, status } = req.body;
 
     // Get commission to verify artist
     const { data: commission } = await supabaseAdmin
       .from('commissions')
-      .select('artist_id')
+      .select('artist_id, status as current_status')
       .eq('id', req.params.id)
       .single();
 
@@ -801,6 +801,16 @@ router.patch('/:id', authenticate, async (req, res) => {
     const updates = { updated_at: new Date().toISOString() };
     if (price !== undefined) updates.price = price;
     if (deadline !== undefined) updates.deadline = deadline;
+    if (final_price !== undefined) updates.final_price = final_price;
+
+    // Allow status update only when accepting a commission
+    if (status !== undefined) {
+      if (status === 'accepted' && commission.current_status === 'pending') {
+        updates.status = status;
+      } else if (status !== 'accepted') {
+        return res.status(400).json({ error: 'Can only update status to accepted via this endpoint' });
+      }
+    }
 
     const { data: updated, error } = await supabaseAdmin
       .from('commissions')

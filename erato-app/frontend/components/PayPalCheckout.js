@@ -201,9 +201,9 @@ export default function PayPalCheckout({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Pay with PayPal</Text>
+            <Text style={styles.modalTitle}>Secure Payment</Text>
             <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text.primary} />
+              <Ionicons name="close-circle" size={28} color={colors.text.disabled} />
             </TouchableOpacity>
           </View>
 
@@ -211,30 +211,29 @@ export default function PayPalCheckout({
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.loadingText}>
-                {approvalUrl ? 'Processing payment...' : 'Initializing payment...'}
+                {approvalUrl ? 'Processing...' : 'Setting up payment...'}
               </Text>
             </View>
           ) : approvalUrl ? (
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <View style={styles.amountContainer}>
-                <Text style={styles.amountLabel}>Amount</Text>
+                <Text style={styles.amountLabel}>Total Amount</Text>
                 <Text style={styles.amountValue}>${amount.toFixed(2)}</Text>
-              </View>
-
-              <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={20} color={colors.status.info} />
-                <Text style={styles.infoText}>
-                  Complete your payment in PayPal, then return here and tap "Check Payment Status" to confirm.
-                </Text>
               </View>
 
               <TouchableOpacity
                 style={styles.payPalButton}
                 onPress={() => handleOpenPayPal()}
               >
-                <Ionicons name="logo-paypal" size={24} color={colors.text.primary} />
+                <Ionicons name="logo-paypal" size={28} color="#FFFFFF" />
                 <Text style={styles.payPalButtonText}>Continue to PayPal</Text>
               </TouchableOpacity>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>After completing payment</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
               <TouchableOpacity
                 style={[styles.checkStatusButton, (loading || isPolling) && styles.checkStatusButtonDisabled]}
@@ -244,38 +243,38 @@ export default function PayPalCheckout({
                 {loading || isPolling ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <Ionicons name="refresh" size={20} color={colors.primary} />
+                  <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
                 )}
                 <Text style={styles.checkStatusButtonText}>
-                  {loading || isPolling ? 'Checking...' : 'Check Payment Status'}
+                  {loading || isPolling ? 'Checking...' : 'Confirm Payment'}
                 </Text>
               </TouchableOpacity>
 
               <View style={styles.securityNote}>
-                <Ionicons name="shield-checkmark" size={16} color={colors.status.success} />
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.status.success} />
                 <Text style={styles.securityText}>
-                  Your payment is secure and encrypted
+                  Secured by PayPal encryption
                 </Text>
               </View>
             </ScrollView>
           ) : (
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <View style={styles.amountContainer}>
-                <Text style={styles.amountLabel}>Amount</Text>
+                <Text style={styles.amountLabel}>Total Amount</Text>
                 <Text style={styles.amountValue}>${amount.toFixed(2)}</Text>
               </View>
 
               <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={20} color={colors.status.info} />
+                <Ionicons name="information-circle" size={20} color={colors.primary} />
                 <Text style={styles.infoText}>
-                  You will be redirected to PayPal to complete your payment securely.
+                  You'll be redirected to PayPal to complete your payment securely.
                 </Text>
               </View>
 
               <View style={styles.securityNote}>
-                <Ionicons name="shield-checkmark" size={16} color={colors.status.success} />
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.status.success} />
                 <Text style={styles.securityText}>
-                  Your payment is secure and encrypted
+                  Secured by PayPal encryption
                 </Text>
               </View>
             </ScrollView>
@@ -292,10 +291,10 @@ export default function PayPalCheckout({
                 disabled={loading}
               >
                 {loading ? (
-                  <ActivityIndicator color={colors.text.primary} />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <>
-                    <Ionicons name="lock-closed" size={18} color={colors.text.primary} />
+                    <Ionicons name="card-outline" size={20} color="#FFFFFF" />
                     <Text style={styles.payButtonText}>Pay ${amount.toFixed(2)}</Text>
                   </>
                 )}
@@ -318,63 +317,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
-    height: '90%',
+    paddingBottom: spacing.xl,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 0,
   },
   modalTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 24,
   },
   modalBody: {
-    padding: spacing.md,
-    maxHeight: '70%',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
   },
   loadingContainer: {
     alignItems: 'center',
-    paddingVertical: spacing.xxl,
-    flex: 1,
+    paddingVertical: spacing.xxl * 2,
     justifyContent: 'center',
   },
   loadingText: {
     ...typography.body,
     color: colors.text.secondary,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+    fontSize: 15,
   },
   payPalButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
     backgroundColor: '#0070ba',
-    borderRadius: borderRadius.md,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.lg,
+    shadowColor: '#0070ba',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   payPalButtonText: {
     ...typography.bodyBold,
-    color: colors.text.primary,
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   checkStatusButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    marginTop: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 0,
+    marginTop: spacing.md,
   },
   checkStatusButtonDisabled: {
     opacity: 0.5,
@@ -383,81 +388,114 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.primary,
     fontSize: 16,
+    fontWeight: '600',
   },
   amountContainer: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
     alignItems: 'center',
   },
   amountLabel: {
     ...typography.caption,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
+    color: colors.text.disabled,
+    marginBottom: spacing.sm,
+    fontSize: 13,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   amountValue: {
     ...typography.h1,
     color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 42,
   },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.status.info + '20',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    gap: spacing.md,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
   },
   infoText: {
-    ...typography.caption,
+    ...typography.body,
     color: colors.text.secondary,
     flex: 1,
+    lineHeight: 20,
+    fontSize: 14,
   },
   securityNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
   },
   securityText: {
     ...typography.caption,
-    color: colors.text.secondary,
+    color: colors.text.disabled,
+    fontSize: 13,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.xl,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    ...typography.caption,
+    color: colors.text.disabled,
+    paddingHorizontal: spacing.md,
+    fontSize: 12,
+    fontWeight: '500',
   },
   modalFooter: {
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: 0,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   cancelButtonText: {
     ...typography.bodyBold,
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   payButton: {
-    flex: 1,
+    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
   },
   payButtonDisabled: {
     opacity: 0.5,
   },
   payButtonText: {
     ...typography.bodyBold,
-    color: colors.text.primary,
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
 });
 

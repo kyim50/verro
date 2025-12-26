@@ -27,8 +27,9 @@ const PAYMENT_TYPES = [
   {
     id: 'milestone',
     name: 'Milestone Payments',
-    description: 'Pay in stages as work progresses',
+    description: 'Pay in stages as work progresses (use milestone tracker)',
     icon: 'layers-outline',
+    disabled: true, // Milestone payments should be done through MilestoneTracker
   },
 ];
 
@@ -112,8 +113,10 @@ export default function PaymentOptions({
                   style={[
                     styles.optionCard,
                     selectedType === type.id && styles.optionCardSelected,
+                    type.disabled && styles.optionCardDisabled,
                   ]}
-                  onPress={() => handleSelect(type.id)}
+                  onPress={() => !type.disabled && handleSelect(type.id)}
+                  disabled={type.disabled}
                 >
                   <View style={styles.optionHeader}>
                     <View style={[
@@ -284,6 +287,10 @@ const styles = StyleSheet.create({
   optionCardSelected: {
     borderColor: colors.primary,
     backgroundColor: colors.primary + '10',
+  },
+  optionCardDisabled: {
+    opacity: 0.5,
+    backgroundColor: colors.surface,
   },
   optionHeader: {
     flexDirection: 'row',
