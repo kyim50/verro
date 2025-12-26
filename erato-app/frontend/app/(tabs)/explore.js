@@ -1052,15 +1052,13 @@ export default function CommissionDashboard() {
               style={[styles.batchActionButton, styles.acceptBatchButton]}
               onPress={() => handleBatchAction('accepted')}
             >
-              <Ionicons name="checkmark" size={18} color={colors.text.primary} />
-              <Text style={styles.batchActionText}>Accept</Text>
+              <Ionicons name="checkmark" size={26} color={colors.text.primary} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.batchActionButton, styles.declineBatchButton]}
               onPress={() => handleBatchAction('declined')}
             >
-              <Ionicons name="close" size={18} color={colors.text.primary} />
-              <Text style={styles.batchActionText}>Decline</Text>
+              <Ionicons name="close" size={26} color={colors.status.error} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1457,7 +1455,7 @@ export default function CommissionDashboard() {
                   style={styles.pinterestSubmitButton}
                   onPress={saveNote}
                 >
-                  <Text style={styles.pinterestSubmitButtonText}>Save Note</Text>
+                  <Ionicons name="checkmark-circle" size={26} color={colors.text.primary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1955,12 +1953,9 @@ export default function CommissionDashboard() {
                       disabled={updatingStatus.has(selectedCommission.id)}
                     >
                       {updatingStatus.has(selectedCommission.id) ? (
-                        <ActivityIndicator size="small" color={colors.text.primary} />
+                        <ActivityIndicator size="small" color={colors.status.error} />
                       ) : (
-                        <>
-                          <Ionicons name="close-circle-outline" size={20} color={colors.text.primary} />
-                          <Text style={styles.detailDeclineButtonText}>Decline</Text>
-                        </>
+                        <Ionicons name="close" size={26} color={colors.status.error} />
                       )}
                     </TouchableOpacity>
 
@@ -2008,10 +2003,7 @@ export default function CommissionDashboard() {
                       {updatingStatus.has(selectedCommission.id) ? (
                         <ActivityIndicator size="small" color={colors.text.primary} />
                       ) : (
-                        <>
-                          <Ionicons name="checkmark-circle-outline" size={20} color={colors.text.primary} />
-                          <Text style={styles.detailAcceptButtonText}>Accept</Text>
-                        </>
+                        <Ionicons name="checkmark" size={26} color={colors.text.primary} />
                       )}
                     </TouchableOpacity>
                   </View>
@@ -2065,13 +2057,14 @@ export default function CommissionDashboard() {
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowImageViewer(false)}
+        statusBarTranslucent
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)' }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }}>
           <TouchableOpacity
-            style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}
+            style={{ position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 8 }}
             onPress={() => setShowImageViewer(false)}
           >
-            <Ionicons name="close" size={32} color="#fff" />
+            <Ionicons name="close-circle" size={36} color="#fff" />
           </TouchableOpacity>
           {commissionFiles.length > 0 && selectedImageIndex !== null && (
             <FlatList
@@ -2079,19 +2072,27 @@ export default function CommissionDashboard() {
               horizontal
               pagingEnabled
               initialScrollIndex={selectedImageIndex}
+              showsHorizontalScrollIndicator={false}
               getItemLayout={(data, index) => ({
                 length: width,
                 offset: width * index,
                 index,
               })}
               renderItem={({ item }) => (
-                <View style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
+                <ScrollView
+                  style={{ width, height }}
+                  contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }}
+                  maximumZoomScale={3}
+                  minimumZoomScale={1}
+                  showsVerticalScrollIndicator={false}
+                >
                   <Image
                     source={{ uri: item.file_url }}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: width, height: height * 0.9 }}
                     contentFit="contain"
+                    transition={200}
                   />
-                </View>
+                </ScrollView>
               )}
               keyExtractor={(item) => item.id}
             />
@@ -2194,7 +2195,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
-    borderBottomWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -2336,8 +2336,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '15',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.04,
@@ -2355,18 +2353,17 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   batchActionButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg + 4,
-    paddingVertical: spacing.sm + 2,
+    justifyContent: 'center',
+    width: 52,
+    height: 52,
     borderRadius: borderRadius.full,
   },
   acceptBatchButton: {
     backgroundColor: colors.status.success,
   },
   declineBatchButton: {
-    backgroundColor: colors.status.error,
+    backgroundColor: colors.surface,
   },
   batchActionText: {
     ...typography.bodyBold,
@@ -2572,7 +2569,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: spacing.sm,
-    borderTopWidth: 0,
   },
   metaChips: {
     flexDirection: 'row',
@@ -2688,8 +2684,6 @@ const styles = StyleSheet.create({
   detailTabBar: {
     backgroundColor: colors.background,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15', // Soft Pinterest border
   },
   detailTabContent: {
     paddingHorizontal: spacing.lg,
@@ -2728,8 +2722,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
     backgroundColor: colors.background,
   },
   detailModalHeaderLeft: {
@@ -2772,8 +2764,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
   },
   modalTitle: {
     ...typography.h2,
@@ -3003,7 +2993,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    borderTopWidth: 0,
     backgroundColor: colors.background,
   },
   commissionDetailContent: {
@@ -3015,13 +3004,11 @@ const styles = StyleSheet.create({
   },
   detailDeclineButton: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
-    paddingVertical: spacing.md + 2,
+    minHeight: 52,
     borderRadius: borderRadius.full,
-    gap: spacing.sm,
     borderWidth: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -3040,13 +3027,11 @@ const styles = StyleSheet.create({
   },
   detailAcceptButton: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.status.success,
-    paddingVertical: spacing.md + 2,
+    minHeight: 52,
     borderRadius: borderRadius.full,
-    gap: spacing.sm,
   },
   detailAcceptButtonDisabled: {
     opacity: 0.5,
@@ -3124,8 +3109,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   quickAcceptButton: {
     flex: 1,
@@ -3227,8 +3210,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingVertical: spacing.sm,
     paddingTop: spacing.sm + 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '10',
   },
   pinterestFilterContent: {
     paddingHorizontal: spacing.lg,
@@ -3610,8 +3591,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   statCardRowWithBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
   },
   statCardLabel: {
     ...typography.body,
@@ -3870,8 +3849,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '40',
     marginBottom: spacing.md,
   },
   transactionAmountLabel: {
@@ -3918,8 +3895,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '20',
   },
   transactionItemLeft: {
     flexDirection: 'row',
@@ -4034,8 +4009,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20', // Softer border
   },
   pinterestTitle: {
     ...typography.h3,
@@ -4060,16 +4033,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     paddingBottom: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '30',
     backgroundColor: colors.background,
   },
   pinterestSubmitButton: {
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md + 2,
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     ...shadows.small,
   },
   pinterestSubmitButtonDisabled: {

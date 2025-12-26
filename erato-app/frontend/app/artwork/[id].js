@@ -20,7 +20,7 @@ import Constants from 'expo-constants';
 import { useAuthStore, useBoardStore, useFeedStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import { useEngagementTracking } from '../../hooks/useEngagementTracking';
-import SaveToBoardModal from '../../components/SaveToBoardModal';
+import SaveToCanvasModal from '../../components/SaveToCanvasModal';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -611,8 +611,8 @@ export default function ArtworkDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Save to Board Modal */}
-      <SaveToBoardModal
+      {/* Save to Canvas Modal */}
+      <SaveToCanvasModal
         visible={showSaveModal}
         onClose={() => setShowSaveModal(false)}
         boards={boards}
