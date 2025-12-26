@@ -28,6 +28,7 @@ export default function PayPalCheckout({
   commissionId,
   amount,
   paymentType,
+  milestoneId,
   onSuccess,
   onError,
 }) {
@@ -65,13 +66,20 @@ export default function PayPalCheckout({
   const createPayPalOrder = async () => {
     try {
       setLoading(true);
+      const requestBody = {
+        commissionId,
+        paymentType: paymentType || 'full',
+        amount,
+      };
+
+      // Include milestoneId if this is a milestone payment
+      if (milestoneId) {
+        requestBody.milestoneId = milestoneId;
+      }
+
       const response = await axios.post(
         `${API_URL}/payments/create-order`,
-        {
-          commissionId,
-          paymentType: paymentType || 'full',
-          amount,
-        },
+        requestBody,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
