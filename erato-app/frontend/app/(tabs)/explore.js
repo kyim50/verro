@@ -2127,12 +2127,20 @@ export default function CommissionDashboard() {
                 Client's proposed budget: ${selectedCommission?.budget?.toFixed(2) || '0.00'}
               </Text>
               <Text style={styles.priceModalSubtext}>
-                Set the final agreed price. This amount will be used for milestone payments.
+                Set the final agreed price. This amount will be used for milestone payments and cannot exceed the budget.
               </Text>
 
               <View style={styles.priceInputContainer}>
                 <Text style={styles.priceInputLabel}>Final Price</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: borderRadius.lg, paddingLeft: spacing.lg }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: colors.surface,
+                  borderRadius: borderRadius.lg,
+                  paddingLeft: spacing.lg,
+                  borderWidth: finalPrice && parseFloat(finalPrice) > (selectedCommission?.budget || 0) ? 2 : 0,
+                  borderColor: colors.status.error,
+                }}>
                   <Text style={{ ...typography.h2, color: colors.text.primary, fontSize: 28, fontWeight: '700' }}>$</Text>
                   <TextInput
                     style={[styles.priceInput, { flex: 1, paddingLeft: spacing.sm }]}
@@ -2144,6 +2152,11 @@ export default function CommissionDashboard() {
                     autoFocus
                   />
                 </View>
+                {finalPrice && parseFloat(finalPrice) > (selectedCommission?.budget || 0) && (
+                  <Text style={{ ...typography.caption, color: colors.status.error, marginTop: spacing.xs }}>
+                    Price exceeds budget by ${(parseFloat(finalPrice) - (selectedCommission?.budget || 0)).toFixed(2)}
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -2158,6 +2171,8 @@ export default function CommissionDashboard() {
                 style={styles.priceAcceptButton}
                 onPress={async () => {
                   const price = parseFloat(finalPrice);
+                  const budget = selectedCommission?.budget || 0;
+
                   if (isNaN(price) || price <= 0) {
                     Toast.show({
                       type: 'error',
@@ -2167,9 +2182,23 @@ export default function CommissionDashboard() {
                     return;
                   }
 
+                  if (price > budget) {
+                    Toast.show({
+                      type: 'error',
+                      text1: 'Price Too High',
+                      text2: `Final price cannot exceed the client's budget of $${budget.toFixed(2)}`,
+                    });
+                    return;
+                  }
+
                   setShowPriceModal(false);
 
                   try {
+                    console.log('Accepting commission:', pendingAcceptCommissionId);
+                    console.log('API URL:', `${API_URL}/commissions/${pendingAcceptCommissionId}`);
+                    console.log('Final price:', price);
+                    console.log('Budget:', budget);
+
                     // Update commission with final_price and accept it
                     await axios.patch(
                       `${API_URL}/commissions/${pendingAcceptCommissionId}`,
@@ -2191,6 +2220,10 @@ export default function CommissionDashboard() {
                     await loadCommissions();
                   } catch (error) {
                     console.error('Error accepting commission:', error);
+                    console.error('Error response:', error.response);
+                    console.error('Status:', error.response?.status);
+                    console.error('Data:', error.response?.data);
+
                     Toast.show({
                       type: 'error',
                       text1: 'Error',
