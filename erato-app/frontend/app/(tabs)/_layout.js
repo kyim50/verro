@@ -51,7 +51,7 @@ function MessagesTabIcon({ color }) {
 
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="chatbubble" size={22} color={color} />
+      <Ionicons name="chatbubble" size={20} color={color} />
       {unreadCount > 0 && (
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>{Math.min(unreadCount, 9)}{unreadCount > 9 ? '+' : ''}</Text>
@@ -99,7 +99,7 @@ function CommissionsTabIcon({ color }) {
 
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="briefcase-outline" size={26} color={color} />
+      <Ionicons name="briefcase-outline" size={23} color={color} />
       {pendingCount > 0 && (
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>{Math.min(pendingCount, 9)}{pendingCount > 9 ? '+' : ''}</Text>
@@ -113,7 +113,7 @@ function BoardsTabIcon({ color }) {
   // Boards tab should not show any notifications - it's just for saved boards
   return (
     <View style={{ position: 'relative' }}>
-      <Ionicons name="albums" size={26} color={color} />
+      <Ionicons name="albums" size={23} color={color} />
     </View>
   );
 }
@@ -124,10 +124,10 @@ export default function TabsLayout() {
   const isArtist = user?.user_type === 'artist' || 
                    (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
-  // Calculate tab bar height with safe area insets
-  const tabBarHeight = Platform.OS === 'ios' 
-    ? 88 + Math.max(0, insets.bottom - 28) // iOS default + extra bottom inset
-    : 65 + Math.max(0, insets.bottom - 8); // Android default + extra bottom inset
+  // Calculate tab bar height with safe area insets - more compact
+  const tabBarHeight = Platform.OS === 'ios'
+    ? 60 + Math.max(0, insets.bottom - 20) // iOS more compact
+    : 50 + Math.max(0, insets.bottom - 6); // Android more compact
 
   return (
     <Tabs
@@ -139,10 +139,10 @@ export default function TabsLayout() {
           styles.tabBar,
           {
             height: tabBarHeight,
-            paddingBottom: Platform.OS === 'ios' 
-              ? Math.max(28, insets.bottom) 
-              : Math.max(8, insets.bottom),
-            paddingTop: 8,
+            paddingBottom: Platform.OS === 'ios'
+              ? Math.max(20, insets.bottom)
+              : Math.max(6, insets.bottom),
+            paddingTop: 6,
             paddingHorizontal: 0,
           }
         ],
@@ -167,7 +167,7 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <Ionicons name="grid-outline" size={26} color={color} />
+            <Ionicons name="grid-outline" size={23} color={color} />
           ),
         }}
       />
@@ -184,10 +184,10 @@ export default function TabsLayout() {
         options={{
           title: '',
           tabBarIcon: ({ focused, color }) => (
-            <Ionicons 
-              name={isArtist ? "add" : "search"} 
-              size={28} 
-              color={color} 
+            <Ionicons
+              name={isArtist ? "add" : "search"}
+              size={24}
+              color={color}
             />
           ),
           tabBarLabel: () => null,
@@ -225,9 +225,9 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: colors.background,
     borderTopWidth: 0, // No border for ultra-minimal look
-    height: Platform.OS === 'ios' ? 88 : 65,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-    paddingTop: 8,
+    height: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 6,
+    paddingTop: 6,
     paddingHorizontal: 0,
     shadowOpacity: 0, // No shadow
     elevation: 0,

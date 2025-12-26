@@ -27,7 +27,6 @@ import { useAuthStore } from '../../store';
 import ReviewModal from '../../components/ReviewModal';
 import ProgressTracker from '../../components/ProgressTracker';
 import MilestoneTracker from '../../components/MilestoneTracker';
-import MilestoneManager from '../../components/MilestoneManager';
 import EscrowStatus from '../../components/EscrowStatus';
 import PayPalCheckout from '../../components/PayPalCheckout';
 import PaymentOptions from '../../components/PaymentOptions';
@@ -228,9 +227,6 @@ export default function CommissionDashboard() {
   const [showTransactionHistoryModal, setShowTransactionHistoryModal] = useState(false);
   const [transactionHistoryCommissionId, setTransactionHistoryCommissionId] = useState(null);
   const [allTransactions, setAllTransactions] = useState([]);
-  const [showPriceModal, setShowPriceModal] = useState(false);
-  const [finalPrice, setFinalPrice] = useState('');
-  const [pendingAcceptCommissionId, setPendingAcceptCommissionId] = useState(null);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [detailTab, setDetailTab] = useState('details'); // details, progress, files
   const [updatingStatus, setUpdatingStatus] = useState(new Set()); // Track which commissions are being updated
@@ -240,8 +236,6 @@ export default function CommissionDashboard() {
   const [commissionFiles, setCommissionFiles] = useState([]); // Store reference images for Details tab
   const [selectedImageIndex, setSelectedImageIndex] = useState(null); // For image viewer
   const [showImageViewer, setShowImageViewer] = useState(false);
-  const [milestones, setMilestones] = useState([]); // Store milestones for payment options
-  const [hasMilestonePaymentSelected, setHasMilestonePaymentSelected] = useState(false); // Track if client selected milestone payment
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -388,24 +382,6 @@ export default function CommissionDashboard() {
       { id: '2', title: 'More Info', message: 'Thanks for your interest! Could you provide more details about what you\'re looking for?' },
       { id: '3', title: 'Declined', message: 'Thank you for reaching out, but I\'m unable to take on this project at this time.' },
     ]);
-  };
-
-  const loadMilestones = async (commissionId) => {
-    if (!token || !commissionId) {
-      setMilestones([]);
-      return;
-    }
-
-    try {
-      const response = await axios.get(
-        `${API_URL}/milestones/commission/${commissionId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMilestones(response.data.milestones || []);
-    } catch (error) {
-      console.error('Error fetching milestones:', error);
-      setMilestones([]);
-    }
   };
 
   const calculateTotalSpent = async () => {
@@ -594,7 +570,6 @@ export default function CommissionDashboard() {
         console.log('Closing modal...');
         setShowCommissionModal(false);
         setSelectedCommission(null);
-        setHasMilestonePaymentSelected(false); // Reset milestone payment selection
       }
 
       // Clear updating status
@@ -643,10 +618,11 @@ export default function CommissionDashboard() {
       return;
     }
 
-    Alert.alert(
-      `${action} ${selectedCommissions.size} commissions?`,
-      'This action will be applied to all selected commissions.',
-      [
+    showAlert({
+      title: `${action} ${selectedCommissions.size} commissions?`,
+      message: 'This action will be applied to all selected commissions.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm',
@@ -682,7 +658,7 @@ export default function CommissionDashboard() {
           }
         }
       ]
-    );
+    });
   };
 
   const toggleCommissionSelection = (id) => {
@@ -841,10 +817,9 @@ export default function CommissionDashboard() {
             setSelectedCommission(item);
             setShowCommissionModal(true);
             setCommissionFiles([]); // Reset files
-            setMilestones([]); // Reset milestones
             // Then fetch full commission details in background
             try {
-              const [commissionResponse, filesResponse, milestonesResponse] = await Promise.all([
+              const [commissionResponse, filesResponse] = await Promise.all([
                 axios.get(`${API_URL}/commissions/${item.id}`, {
                   headers: { Authorization: `Bearer ${token}` }
                 }),
@@ -853,23 +828,14 @@ export default function CommissionDashboard() {
                 }).catch(err => {
                   console.error('Error fetching files:', err);
                   return { data: { files: [] } };
-                }),
-                axios.get(`${API_URL}/milestones/commission/${item.id}`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                }).catch(err => {
-                  console.error('Error fetching milestones:', err);
-                  return { data: { milestones: [] } };
                 })
               ]);
               console.log('Files loaded for Details tab:', filesResponse.data.files);
-              console.log('Milestones loaded:', milestonesResponse.data.milestones);
               setSelectedCommission(commissionResponse.data);
               setCommissionFiles(filesResponse.data.files || []);
-              setMilestones(milestonesResponse.data.milestones || []);
             } catch (error) {
               console.error('Error fetching commission details:', error);
               setCommissionFiles([]);
-              setMilestones([]);
             }
           }
         }}
@@ -1398,26 +1364,12 @@ export default function CommissionDashboard() {
             setShowPaymentOptions(false);
           }}
           commission={selectedCommission}
-          milestones={milestones}
           onProceed={(paymentData) => {
             console.log('✅ Payment proceed:', paymentData);
-
-            // If milestone payment is selected, mark it and show milestones section
-            if (paymentData.paymentType === 'milestone') {
-              setHasMilestonePaymentSelected(true);
-              setShowPaymentOptions(false);
-              Toast.show({
-                type: 'info',
-                text1: 'Milestone Payments',
-                text2: 'Scroll down to pay for each stage',
-              });
-              return;
-            }
-
-            const amount = paymentData.paymentType === 'deposit'
+            const amount = paymentData.paymentType === 'deposit' 
               ? (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget) * (paymentData.depositPercentage / 100)
               : (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget);
-
+            
             setPaymentData({
               ...paymentData,
               commissionId: selectedCommission.id,
@@ -1443,7 +1395,6 @@ export default function CommissionDashboard() {
           commissionId={paymentData.commissionId}
           amount={paymentData.amount}
           paymentType={paymentData.paymentType}
-          milestoneId={paymentData.milestoneId}
           onSuccess={async (data) => {
             setShowPayPalCheckout(false);
             setPaymentData(null);
@@ -1652,9 +1603,7 @@ export default function CommissionDashboard() {
 
                   {/* Pricing - Always Show */}
                   <View style={styles.detailPricingCard}>
-                    <Text style={styles.detailPricingLabel}>
-                      {selectedCommission.final_price ? 'Final Price' : 'Total'}
-                    </Text>
+                    <Text style={styles.detailPricingLabel}>Total</Text>
                     {selectedCommission.final_price || selectedCommission.budget || selectedCommission.price ? (
                       <Text style={styles.detailPriceText}>
                         ${selectedCommission.final_price || selectedCommission.price || selectedCommission.budget}
@@ -1864,45 +1813,24 @@ export default function CommissionDashboard() {
                     </View>
                   )}
 
-                  {/* Milestone Tracker/Manager */}
-                  {/* Show for artists always, but for clients only after they select milestone payment */}
-                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') &&
-                   (isArtist || hasMilestonePaymentSelected) && (
+                  {/* Milestone Tracker */}
+                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
-                      {isArtist ? (
-                        <MilestoneManager
-                          commissionId={selectedCommission.id}
-                          commission={selectedCommission}
-                          onUpdate={async () => {
-                            // Refresh commission data
-                            await loadCommissions();
-                            try {
-                              const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
-                                headers: { Authorization: `Bearer ${token}` }
-                              });
-                              setSelectedCommission(response.data);
-                            } catch (err) {
-                              console.error('Error refreshing commission:', err);
-                            }
-                          }}
-                        />
-                      ) : (
-                        <MilestoneTracker
-                          commissionId={selectedCommission.id}
-                          isClient={!isArtist}
-                          onPayMilestone={async (milestone) => {
-                            setPaymentData({
-                              commissionId: selectedCommission.id,
-                              amount: milestone.amount,
-                              paymentType: 'milestone',
-                              milestoneId: milestone.id,
-                            });
-                            setShowCommissionModal(false);
-                            setShowPayPalCheckout(true);
-                          }}
-                        />
-                      )}
+                      <MilestoneTracker
+                        commissionId={selectedCommission.id}
+                        isClient={!isArtist}
+                        onPayMilestone={async (milestone) => {
+                          setPaymentData({
+                            commissionId: selectedCommission.id,
+                            amount: milestone.amount,
+                            paymentType: 'milestone',
+                            milestoneId: milestone.id,
+                          });
+                          setShowCommissionModal(false);
+                          setShowPayPalCheckout(true);
+                        }}
+                      />
                     </View>
                   )}
 
@@ -2041,16 +1969,39 @@ export default function CommissionDashboard() {
                       onPress={() => {
                         console.log('🟢 ACCEPT BUTTON CLICKED');
                         console.log('Commission ID:', selectedCommission.id);
+                        console.log('Updating status has commission?', updatingStatus.has(selectedCommission.id));
 
                         if (updatingStatus.has(selectedCommission.id)) {
                           console.log('⚠️ Skipping - update already in progress');
                           return;
                         }
 
-                        // Set default price to budget
-                        setFinalPrice(selectedCommission.budget?.toString() || '');
-                        setPendingAcceptCommissionId(selectedCommission.id);
-                        setShowPriceModal(true);
+                        const commissionId = selectedCommission.id;
+                        console.log('📢 Showing accept alert...');
+
+                        Alert.alert(
+                          'Accept Commission',
+                          'Accept this request?',
+                          [
+                            {
+                              text: 'Cancel',
+                              style: 'cancel',
+                              onPress: () => console.log('Accept cancelled'),
+                            },
+                            {
+                              text: 'Accept',
+                              onPress: async () => {
+                                console.log('Accept confirmed, calling handleUpdateStatus...');
+                                try {
+                                  await handleUpdateStatus(commissionId, 'accepted', true);
+                                  console.log('handleUpdateStatus completed successfully');
+                                } catch (error) {
+                                  console.error('handleUpdateStatus failed:', error);
+                                }
+                              },
+                            },
+                          ]
+                        );
                       }}
                       disabled={updatingStatus.has(selectedCommission.id)}
                     >
@@ -2073,26 +2024,21 @@ export default function CommissionDashboard() {
                       if (updatingStatus.has(selectedCommission.id)) return;
                       const commissionId = selectedCommission.id;
 
-                      Alert.alert(
-                        'Complete Commission',
-                        'Mark this commission as completed?',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Complete',
-                            style: 'default',
-                            onPress: () => {
-                              // Close modal immediately
-                              setShowCommissionModal(false);
-                              setSelectedCommission(null);
-                              // Handle async operation after UI updates
-                              setTimeout(() => {
-                                handleUpdateStatus(commissionId, 'completed', false);
-                              }, 50);
-                            }
-                          }
-                        ]
-                      );
+                      showAlert({
+                        title: 'Complete Commission',
+                        message: 'Mark this commission as completed?',
+                        type: 'success',
+                        showCancel: true,
+                        onConfirm: () => {
+                          // Close modal immediately
+                          setShowCommissionModal(false);
+                          setSelectedCommission(null);
+                          // Handle async operation after UI updates
+                          setTimeout(() => {
+                            handleUpdateStatus(commissionId, 'completed', false);
+                          }, 50);
+                        },
+                      });
                     }}
                     disabled={updatingStatus.has(selectedCommission.id)}
                   >
@@ -2151,142 +2097,6 @@ export default function CommissionDashboard() {
             />
           )}
         </View>
-      </Modal>
-
-      {/* Set Final Price Modal */}
-      <Modal
-        visible={showPriceModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPriceModal(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.priceModalContent}>
-            <View style={styles.priceModalHeader}>
-              <Text style={styles.priceModalTitle}>Set Final Price</Text>
-              <TouchableOpacity onPress={() => setShowPriceModal(false)}>
-                <Ionicons name="close-circle" size={28} color={colors.text.disabled} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.priceModalBody}>
-              <Text style={styles.priceModalLabel}>
-                Client's proposed budget: ${selectedCommission?.budget?.toFixed(2) || '0.00'}
-              </Text>
-              <Text style={styles.priceModalSubtext}>
-                Set the final agreed price. This amount will be used for milestone payments and cannot exceed the budget.
-              </Text>
-
-              <View style={styles.priceInputContainer}>
-                <Text style={styles.priceInputLabel}>Final Price</Text>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.surface,
-                  borderRadius: borderRadius.lg,
-                  paddingLeft: spacing.lg,
-                  borderWidth: finalPrice && parseFloat(finalPrice) > (selectedCommission?.budget || 0) ? 2 : 0,
-                  borderColor: colors.status.error,
-                }}>
-                  <Text style={{ ...typography.h2, color: colors.text.primary, fontSize: 28, fontWeight: '700' }}>$</Text>
-                  <TextInput
-                    style={[styles.priceInput, { flex: 1, paddingLeft: spacing.sm }]}
-                    value={finalPrice}
-                    onChangeText={setFinalPrice}
-                    keyboardType="decimal-pad"
-                    placeholder="0.00"
-                    placeholderTextColor={colors.text.disabled}
-                    autoFocus
-                  />
-                </View>
-                {finalPrice && parseFloat(finalPrice) > (selectedCommission?.budget || 0) && (
-                  <Text style={{ ...typography.caption, color: colors.status.error, marginTop: spacing.xs }}>
-                    Price exceeds budget by ${(parseFloat(finalPrice) - (selectedCommission?.budget || 0)).toFixed(2)}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.priceModalFooter}>
-              <TouchableOpacity
-                style={styles.priceCancelButton}
-                onPress={() => setShowPriceModal(false)}
-              >
-                <Text style={styles.priceCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.priceAcceptButton}
-                onPress={async () => {
-                  const price = parseFloat(finalPrice);
-                  const budget = selectedCommission?.budget || 0;
-
-                  if (isNaN(price) || price <= 0) {
-                    Toast.show({
-                      type: 'error',
-                      text1: 'Invalid Price',
-                      text2: 'Please enter a valid price',
-                    });
-                    return;
-                  }
-
-                  if (price > budget) {
-                    Toast.show({
-                      type: 'error',
-                      text1: 'Price Too High',
-                      text2: `Final price cannot exceed the client's budget of $${budget.toFixed(2)}`,
-                    });
-                    return;
-                  }
-
-                  setShowPriceModal(false);
-
-                  try {
-                    console.log('Accepting commission:', pendingAcceptCommissionId);
-                    console.log('API URL:', `${API_URL}/commissions/${pendingAcceptCommissionId}`);
-                    console.log('Final price:', price);
-                    console.log('Budget:', budget);
-
-                    // Update commission with final_price and accept it
-                    await axios.patch(
-                      `${API_URL}/commissions/${pendingAcceptCommissionId}`,
-                      {
-                        status: 'accepted',
-                        final_price: price
-                      },
-                      { headers: { Authorization: `Bearer ${token}` } }
-                    );
-
-                    Toast.show({
-                      type: 'success',
-                      text1: 'Commission Accepted',
-                      text2: `Final price set to $${price.toFixed(2)}`,
-                    });
-
-                    setShowCommissionModal(false);
-                    setSelectedCommission(null);
-                    await loadCommissions();
-                  } catch (error) {
-                    console.error('Error accepting commission:', error);
-                    console.error('Error response:', error.response);
-                    console.error('Status:', error.response?.status);
-                    console.error('Data:', error.response?.data);
-
-                    Toast.show({
-                      type: 'error',
-                      text1: 'Error',
-                      text2: error.response?.data?.error || 'Failed to accept commission',
-                    });
-                  }
-                }}
-              >
-                <Text style={styles.priceAcceptButtonText}>Accept Commission</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
       </Modal>
 
       <ReviewModal
@@ -4443,93 +4253,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     paddingTop: 2,
-  },
-  priceModalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
-  priceModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  priceModalTitle: {
-    ...typography.h2,
-    color: colors.text.primary,
-    fontWeight: '700',
-    fontSize: 24,
-  },
-  priceModalBody: {
-    marginBottom: spacing.xl,
-  },
-  priceModalLabel: {
-    ...typography.body,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
-    fontSize: 14,
-  },
-  priceModalSubtext: {
-    ...typography.caption,
-    color: colors.text.disabled,
-    marginBottom: spacing.xl,
-    lineHeight: 18,
-  },
-  priceInputContainer: {
-    marginBottom: spacing.sm,
-  },
-  priceInputLabel: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  priceInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    ...typography.h2,
-    color: colors.text.primary,
-    borderWidth: 0,
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'left',
-  },
-  priceModalFooter: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.md,
-  },
-  priceCancelButton: {
-    flex: 1,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-  },
-  priceCancelButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.secondary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  priceAcceptButton: {
-    flex: 2,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-  },
-  priceAcceptButtonText: {
-    ...typography.bodyBold,
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });

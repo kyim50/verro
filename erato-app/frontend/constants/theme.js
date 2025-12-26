@@ -50,54 +50,54 @@ export const colors = {
 
 export const typography = {
   h1: {
-    fontSize: 32,
-    fontWeight: '700',
-    lineHeight: 40,
-  },
-  h2: {
     fontSize: 24,
     fontWeight: '700',
-    lineHeight: 32,
+    lineHeight: 30,
+  },
+  h2: {
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 26,
   },
   h3: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '600',
-    lineHeight: 28,
+    lineHeight: 22,
   },
   body: {
-    fontSize: 16,
-    fontWeight: '400',
-    lineHeight: 24,
-  },
-  bodyBold: {
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 24,
-  },
-  caption: {
     fontSize: 14,
     fontWeight: '400',
     lineHeight: 20,
   },
-  small: {
+  bodyBold: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  caption: {
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
   },
+  small: {
+    fontSize: 11,
+    fontWeight: '400',
+    lineHeight: 14,
+  },
   button: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    lineHeight: 24,
+    lineHeight: 20,
   },
 };
 
 export const spacing = {
   xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
+  sm: 6,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 28,
 };
 
 export const borderRadius = {
@@ -105,8 +105,50 @@ export const borderRadius = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24,
+  xl: 20,
   full: 9999,
+};
+
+// Unified border widths for consistency
+export const borderWidth = {
+  thin: 1,
+  medium: 1.5,
+  thick: 2,
+};
+
+// Common component styles for consistency across the app
+export const components = {
+  // Input fields (TextInput, etc.)
+  input: {
+    height: 40,
+    borderWidth: borderWidth.thin,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    fontSize: typography.body.fontSize,
+    backgroundColor: colors.surface,
+  },
+  // Buttons
+  button: {
+    height: 40,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonSmall: {
+    height: 32,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Cards and containers
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+  },
 };
 
 export const shadows = {
@@ -134,8 +176,8 @@ export const shadows = {
 };
 
 export const layout = {
-  tabBarHeight: 80,
-  headerHeight: 60,
+  tabBarHeight: 60,
+  headerHeight: 50,
   screenPadding: spacing.md,
 };
 
