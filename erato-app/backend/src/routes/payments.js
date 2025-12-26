@@ -304,6 +304,12 @@ router.post('/create-order', authenticate, async (req, res) => {
     console.log('- Return URL:', returnUrl);
     console.log('- Cancel URL:', cancelUrl);
     
+    // Note: PayPal's custom_id has a 127 character limit, so we use a compact format
+    // We'll store full metadata in our database transaction record instead
+    const customIdData = milestoneId
+      ? `${commissionId}|${paymentType}|${milestoneId}`
+      : `${commissionId}|${paymentType}`;
+
     request.requestBody({
       intent: 'CAPTURE',
       purchase_units: [{
@@ -315,13 +321,7 @@ router.post('/create-order', authenticate, async (req, res) => {
           currency_code: 'USD',
           value: calculatedAmount.toFixed(2)
         },
-        custom_id: JSON.stringify({
-          commissionId,
-          clientId: userId,
-          artistId: commission.artist_id,
-          paymentType,
-          milestoneId: milestoneId || null
-        })
+        custom_id: customIdData
       }],
       application_context: {
         brand_name: 'Verro',
@@ -338,14 +338,15 @@ router.post('/create-order', authenticate, async (req, res) => {
     const platformFee = calculatedAmount * PLATFORM_FEE_PERCENTAGE;
     const artistPayout = calculatedAmount - platformFee;
 
-    // Create transaction record
-    const customIdData = {
+    // Create transaction record with full metadata
+    const transactionMetadata = {
       commissionId,
       clientId: userId,
       artistId: commission.artist_id,
-      paymentType
+      paymentType,
+      milestoneId: milestoneId || null
     };
-    
+
     const { data: transaction, error: transactionError } = await supabaseAdmin
       .from('payment_transactions')
       .insert({
@@ -358,8 +359,10 @@ router.post('/create-order', authenticate, async (req, res) => {
         recipient_id: commission.artist_id,
         platform_fee: platformFee,
         artist_payout: artistPayout,
-        custom_id: JSON.stringify(customIdData), // Store payment metadata
-        description: `${paymentType.charAt(0).toUpperCase() + paymentType.slice(1)} payment for commission`
+        custom_id: JSON.stringify(transactionMetadata), // Store payment metadata including milestoneId
+        description: milestone
+          ? `Milestone ${milestone.milestone_number} payment - ${milestone.title}`
+          : `${paymentType.charAt(0).toUpperCase() + paymentType.slice(1)} payment for commission`
       })
       .select()
       .single();
@@ -797,6 +800,9 @@ router.post('/tip', authenticate, async (req, res) => {
     }
 
     // Create PayPal Order for tip
+    // Note: PayPal's custom_id has a 127 character limit, so we use a compact format
+    const customIdData = `${commissionId}|tip`;
+
     const request = new OrdersCreateRequest();
     request.prefer("return=representation");
     request.requestBody({
@@ -808,12 +814,7 @@ router.post('/tip', authenticate, async (req, res) => {
           currency_code: 'USD',
           value: amount.toFixed(2)
         },
-        custom_id: JSON.stringify({
-          commissionId,
-          clientId: userId,
-          artistId: commission.artist_id,
-          paymentType: 'tip'
-        })
+        custom_id: customIdData
       }],
       application_context: {
         brand_name: 'Verro',
