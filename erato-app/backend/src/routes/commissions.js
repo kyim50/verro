@@ -783,12 +783,20 @@ router.patch('/:id', authenticate, async (req, res) => {
   try {
     const { price, deadline, final_price, status } = req.body;
 
+    console.log('PATCH /:id called');
+    console.log('Commission ID:', req.params.id);
+    console.log('User ID:', req.user.id);
+    console.log('Body:', { price, deadline, final_price, status });
+
     // Get commission to verify artist
-    const { data: commission } = await supabaseAdmin
+    const { data: commission, error: commissionError } = await supabaseAdmin
       .from('commissions')
       .select('artist_id, status as current_status')
       .eq('id', req.params.id)
       .single();
+
+    console.log('Commission query result:', commission);
+    console.log('Commission query error:', commissionError);
 
     if (!commission) {
       return res.status(404).json({ error: 'Commission not found' });
