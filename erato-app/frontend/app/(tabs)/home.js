@@ -29,11 +29,32 @@ import Toast from 'react-native-toast-message';
 import { showAlert } from '../../components/StyledAlert';
 import SaveToBoardModal from '../../components/SaveToBoardModal';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing as baseSpacing, typography as baseTypography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 import ArtistFilters from '../../components/ArtistFilters';
 import CreateBoardModal from '../../components/CreateBoardModal';
+
+// Override typography and spacing for home page to keep original larger sizes
+const typography = {
+  h1: { fontSize: 32, fontWeight: '700', lineHeight: 40 },
+  h2: { fontSize: 24, fontWeight: '700', lineHeight: 32 },
+  h3: { fontSize: 20, fontWeight: '600', lineHeight: 28 },
+  body: { fontSize: 16, fontWeight: '400', lineHeight: 24 },
+  bodyBold: { fontSize: 16, fontWeight: '600', lineHeight: 24 },
+  caption: { fontSize: 14, fontWeight: '400', lineHeight: 20 },
+  small: { fontSize: 12, fontWeight: '400', lineHeight: 16 },
+  button: { fontSize: 16, fontWeight: '600', lineHeight: 24 },
+};
+
+const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+};
 
 const { width, height } = Dimensions.get('window');
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
