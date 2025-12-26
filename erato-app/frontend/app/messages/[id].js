@@ -1690,12 +1690,23 @@ export default function ConversationScreen() {
         onClose={() => setShowPaymentOptions(false)}
         commission={commission}
         onProceed={(paymentData) => {
+          // Handle milestone payment type - user should use MilestoneTracker instead
+          if (paymentData.paymentType === 'milestone') {
+            setShowPaymentOptions(false);
+            showAlert({
+              type: 'info',
+              title: 'Milestone Payments',
+              message: 'Please use the milestone tracker in the commission details to pay individual milestones.',
+            });
+            return;
+          }
+
           // Calculate amount based on payment type
           let amount = commission.final_price || commission.total_price || 0;
           if (paymentData.paymentType === 'deposit' && paymentData.depositPercentage) {
             amount = amount * (paymentData.depositPercentage / 100);
           }
-          
+
           setPaymentData({
             ...paymentData,
             commissionId: commission.id,
@@ -1717,6 +1728,7 @@ export default function ConversationScreen() {
           commissionId={paymentData.commissionId}
           amount={paymentData.amount}
           paymentType={paymentData.paymentType}
+          milestoneId={paymentData.milestoneId}
           onSuccess={(data) => {
             setShowPayPalCheckout(false);
             setPaymentData(null);
