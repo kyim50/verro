@@ -18,7 +18,7 @@ import { Image } from 'expo-image';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
 import Toast from 'react-native-toast-message';
 
-export default function SaveToBoardModal({
+export default function SaveToCanvasModal({
   visible,
   onClose,
   boards,
@@ -26,30 +26,30 @@ export default function SaveToBoardModal({
   artworkId,
   loading = false,
 }) {
-  const [selectedBoardId, setSelectedBoardId] = useState(null);
+  const [selectedCanvasId, setSelectedCanvasId] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setSelectedBoardId(null);
+      setSelectedCanvasId(null);
       setSaving(false);
     }
   }, [visible]);
 
-  const handleBoardSelect = async (board) => {
-    setSelectedBoardId(board.id);
+  const handleCanvasSelect = async (canvas) => {
+    setSelectedCanvasId(canvas.id);
     setSaving(true);
     try {
-      await onSaveToBoard(board.id, artworkId);
+      await onSaveToBoard(canvas.id, artworkId);
       onClose();
       Toast.show({
         type: 'success',
         text1: 'Saved!',
-        text2: 'Artwork added to board',
+        text2: 'Artwork added to canvas',
         visibilityTime: 2000,
       });
     } catch (error) {
-      console.error('Error saving to board:', error);
+      console.error('Error saving to canvas:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -61,20 +61,20 @@ export default function SaveToBoardModal({
     }
   };
 
-  const renderBoard = (board) => {
-    const firstArtworks = board.board_artworks?.slice(0, 4) || [];
-    const artworkCount = board.board_artworks?.length || board.artworks?.[0]?.count || 0;
+  const renderCanvas = (canvas) => {
+    const firstArtworks = canvas.board_artworks?.slice(0, 4) || [];
+    const artworkCount = canvas.board_artworks?.length || canvas.artworks?.[0]?.count || 0;
 
     return (
       <TouchableOpacity
-        key={board.id}
-        style={styles.saveBoardOption}
-        onPress={() => handleBoardSelect(board)}
+        key={canvas.id}
+        style={styles.saveCanvasOption}
+        onPress={() => handleCanvasSelect(canvas)}
         activeOpacity={0.7}
         disabled={saving}
       >
-        {/* Board Thumbnail - Pinterest Grid Style */}
-        <View style={styles.saveBoardThumbnail}>
+        {/* Canvas Thumbnail - Pinterest Grid Style */}
+        <View style={styles.saveCanvasThumbnail}>
           {firstArtworks.length > 0 ? (
             <View style={styles.saveThumbnailGrid}>
               {/* Left large image */}
@@ -108,12 +108,12 @@ export default function SaveToBoardModal({
           )}
         </View>
 
-        {/* Board Info */}
-        <View style={styles.saveBoardInfo}>
-          <Text style={styles.saveBoardName} numberOfLines={1}>
-            {board.name}
+        {/* Canvas Info */}
+        <View style={styles.saveCanvasInfo}>
+          <Text style={styles.saveCanvasName} numberOfLines={1}>
+            {canvas.name}
           </Text>
-          <Text style={styles.saveBoardMeta}>
+          <Text style={styles.saveCanvasMeta}>
             {artworkCount} {artworkCount === 1 ? 'pin' : 'pins'}
           </Text>
         </View>
@@ -129,7 +129,7 @@ export default function SaveToBoardModal({
       style={{ zIndex: 9999 }}
       onRequestClose={onClose}
     >
-      <View style={styles.saveBoardModalOverlay}>
+      <View style={styles.saveCanvasModalOverlay}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1, justifyContent: 'flex-end' }}
@@ -137,11 +137,11 @@ export default function SaveToBoardModal({
           <TouchableWithoutFeedback onPress={onClose}>
             <View style={{ flex: 1 }} />
           </TouchableWithoutFeedback>
-          <View style={styles.saveBoardModalContent}>
+          <View style={styles.saveCanvasModalContent}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={{ flex: 1 }}>
                 {/* Header with Safe Area */}
-                <View style={styles.saveBoardHeader}>
+                <View style={styles.saveCanvasHeader}>
                   <TouchableOpacity
                     onPress={onClose}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -149,14 +149,14 @@ export default function SaveToBoardModal({
                   >
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                   </TouchableOpacity>
-                  <Text style={styles.saveBoardTitle}>Save to board</Text>
+                  <Text style={styles.saveCanvasTitle}>Save to Canvas</Text>
                   <View style={{ width: 28 }} />
                 </View>
 
-                {/* Board List */}
+                {/* Canvas List */}
                 <ScrollView
-                  style={styles.saveBoardList}
-                  contentContainerStyle={styles.saveBoardListContent}
+                  style={styles.saveCanvasList}
+                  contentContainerStyle={styles.saveCanvasListContent}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
@@ -166,11 +166,11 @@ export default function SaveToBoardModal({
                       <Text style={styles.loadingText}>Loading canvases...</Text>
                     </View>
                   ) : boards && boards.length > 0 ? (
-                    boards.map(renderBoard)
+                    boards.map(renderCanvas)
                   ) : (
                     <View style={styles.emptyContainer}>
                       <Ionicons name="images-outline" size={48} color={colors.text.disabled} />
-                      <Text style={styles.emptyTitle}>No canvases yet</Text>
+                      <Text style={styles.emptyTitle}>No Canvases Yet</Text>
                       <Text style={styles.emptySubtitle}>
                         Create your first canvas to start organizing your saved artworks
                       </Text>
@@ -188,18 +188,18 @@ export default function SaveToBoardModal({
 
 const styles = StyleSheet.create({
   // Modal overlay styles from home.js
-  saveBoardModalOverlay: {
+  saveCanvasModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer Pinterest overlay
   },
-  saveBoardModalContent: {
+  saveCanvasModalContent: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 24, // Pinterest-style soft rounding
     borderTopRightRadius: 24,
     height: '92%',
     paddingTop: spacing.lg,
   },
-  saveBoardHeader: {
+  saveCanvasHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -208,21 +208,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '15', // Soft border
   },
-  saveBoardTitle: {
+  saveCanvasTitle: {
     ...typography.h3,
     color: colors.text.primary,
     fontWeight: '700', // Pinterest-style
     fontSize: 22,
     letterSpacing: -0.3,
   },
-  saveBoardList: {
+  saveCanvasList: {
     flex: 1,
   },
-  saveBoardListContent: {
+  saveCanvasListContent: {
     padding: spacing.md,
     paddingBottom: spacing.xxl,
   },
-  saveBoardOption: {
+  saveCanvasOption: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.md,
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  saveBoardThumbnail: {
+  saveCanvasThumbnail: {
     width: 64,
     height: 64,
     borderRadius: 12, // Softer rounding
@@ -274,19 +274,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  saveBoardInfo: {
+  saveCanvasInfo: {
     flex: 1,
     marginLeft: spacing.md,
     justifyContent: 'center',
   },
-  saveBoardName: {
+  saveCanvasName: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 17,
     fontWeight: '600', // Pinterest-style
     marginBottom: 3,
   },
-  saveBoardMeta: {
+  saveCanvasMeta: {
     ...typography.small,
     color: colors.text.secondary,
     fontSize: 14,

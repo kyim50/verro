@@ -25,7 +25,7 @@ const SPACING = width < 400 ? 3 : 4;
 const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - spacing.md * 2) / NUM_COLUMNS;
 
-export default function BoardDetailScreen() {
+export default function CanvasDetailScreen() {
   const { id } = useLocalSearchParams();
   const { token, user } = useAuthStore();
   const [board, setBoard] = useState(null);
@@ -125,7 +125,7 @@ export default function BoardDetailScreen() {
   const handleDeleteSelected = () => {
     Alert.alert(
       'Delete Artworks',
-      `Are you sure you want to remove ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'} from this board?`,
+      `Are you sure you want to remove ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'} from this canvas?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -194,7 +194,7 @@ export default function BoardDetailScreen() {
         type: 'success',
         text1: 'Success',
         text2: isLikedBoard
-          ? `Added ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'} to board`
+          ? `Added ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'} to canvas`
           : `Moved ${selectedArtworks.size} ${selectedArtworks.size === 1 ? 'artwork' : 'artworks'}`,
         visibilityTime: 2000,
       });
@@ -212,7 +212,7 @@ export default function BoardDetailScreen() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: isLikedBoard ? 'Failed to add artworks to board' : 'Failed to move artworks',
+        text2: isLikedBoard ? 'Failed to add artworks to canvas' : 'Failed to move artworks',
         visibilityTime: 3000,
       });
     }
@@ -323,7 +323,7 @@ export default function BoardDetailScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>
-            {editMode ? `${selectedArtworks.size} Selected` : board?.name || 'Board'}
+            {editMode ? `${selectedArtworks.size} Selected` : board?.name || 'Canvas'}
           </Text>
           {!editMode && (
             <Text style={styles.headerSubtitle}>
@@ -353,7 +353,7 @@ export default function BoardDetailScreen() {
           >
             <Ionicons name="folder-outline" size={20} color={colors.primary} />
             <Text style={styles.actionButtonText}>
-              {isLikedBoard ? 'Add to Board' : 'Move to Board'}
+              {isLikedBoard ? 'Add to Canvas' : 'Move to Canvas'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -370,7 +370,7 @@ export default function BoardDetailScreen() {
         <View style={styles.emptyState}>
           <Ionicons name="images-outline" size={64} color={colors.text.disabled} />
           <Text style={styles.emptyTitle}>No Artworks Yet</Text>
-          <Text style={styles.emptyText}>Save artworks to this board to see them here</Text>
+          <Text style={styles.emptyText}>Save artworks to this canvas to see them here</Text>
         </View>
       ) : (
         <ScrollView
@@ -462,13 +462,13 @@ export default function BoardDetailScreen() {
                 <Ionicons name="close" size={28} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.boardSelectorTitle}>Move to Board</Text>
+            <Text style={styles.boardSelectorTitle}>Move to Canvas</Text>
             <View style={styles.boardListContainer}>
               {userBoards.length === 0 ? (
                 <View style={styles.emptyBoardList}>
                   <Ionicons name="folder-outline" size={48} color={colors.text.disabled} />
-                  <Text style={styles.emptyBoardText}>No boards available</Text>
-                  <Text style={styles.emptyBoardSubtext}>Create a board first to move artworks</Text>
+                  <Text style={styles.emptyBoardText}>No canvases available</Text>
+                  <Text style={styles.emptyBoardSubtext}>Create a canvas first to move artworks</Text>
                 </View>
               ) : (
                 <ScrollView
@@ -557,11 +557,14 @@ const styles = StyleSheet.create({
   headerCenter: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: spacing.md, // Add padding to prevent clash with buttons
   },
   headerTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 20,
+    fontSize: 18, // Slightly smaller to fit better
+    textAlign: 'center',
+    numberOfLines: 1,
   },
   headerSubtitle: {
     ...typography.caption,

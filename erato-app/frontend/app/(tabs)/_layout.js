@@ -109,8 +109,8 @@ function CommissionsTabIcon({ color }) {
   );
 }
 
-function BoardsTabIcon({ color }) {
-  // Boards tab should not show any notifications - it's just for saved boards
+function CanvasTabIcon({ color }) {
+  // Canvas tab should not show any notifications - it's just for saved canvases
   return (
     <View style={{ position: 'relative' }}>
       <Ionicons name="albums" size={23} color={color} />
@@ -206,7 +206,7 @@ export default function TabsLayout() {
         name="boards"
         options={{
           title: 'Library',
-          tabBarIcon: ({ color, size }) => <BoardsTabIcon color={color} />,
+          tabBarIcon: ({ color, size }) => <CanvasTabIcon color={color} />,
         }}
       />
       <Tabs.Screen

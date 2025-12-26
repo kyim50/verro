@@ -774,7 +774,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingVertical: spacing.sm,
     paddingTop: spacing.md,
-    borderBottomWidth: 0, // Remove border for cleaner look
   },
   tabsScrollContent: {
     paddingHorizontal: spacing.lg,
@@ -1003,8 +1002,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
   },
   modalCloseButton: {
     padding: spacing.xs,

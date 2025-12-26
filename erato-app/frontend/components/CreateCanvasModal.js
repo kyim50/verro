@@ -15,12 +15,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
 
-export default function CreateBoardModal({
+export default function CreateCanvasModal({
   visible,
   onClose,
-  onCreateBoard,
-  boardName,
-  setBoardName,
+  onCreateCanvas,
+  canvasName,
+  setCanvasName,
   isPublic,
   setIsPublic,
 }) {
@@ -50,7 +50,7 @@ export default function CreateBoardModal({
                   >
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                   </TouchableOpacity>
-                  <Text style={styles.modalTitle}>Create canvas</Text>
+                  <Text style={styles.modalTitle}>Create Canvas</Text>
                   <View style={{ width: 28 }} />
                 </View>
 
@@ -71,13 +71,13 @@ export default function CreateBoardModal({
 
                   {/* Canvas Name Input */}
                   <View style={styles.inputSection}>
-                    <Text style={styles.label}>Canvas name</Text>
+                    <Text style={styles.label}>Canvas Name</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="Name your canvas"
                       placeholderTextColor={colors.text.disabled}
-                      value={boardName}
-                      onChangeText={setBoardName}
+                      value={canvasName}
+                      onChangeText={setCanvasName}
                       autoFocus
                     />
                   </View>
@@ -113,9 +113,9 @@ export default function CreateBoardModal({
                   {/* Action Button */}
                   <View style={styles.footer}>
                     <TouchableOpacity
-                      style={[styles.createButton, !boardName.trim() && styles.createButtonDisabled]}
-                      onPress={onCreateBoard}
-                      disabled={!boardName.trim()}
+                      style={[styles.createButton, !canvasName.trim() && styles.createButtonDisabled]}
+                      onPress={onCreateCanvas}
+                      disabled={!canvasName.trim()}
                       activeOpacity={0.8}
                     >
                       <Text style={styles.createButtonText}>Create</Text>

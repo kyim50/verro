@@ -48,46 +48,62 @@ export const colors = {
   },
 };
 
+// Pinterest-style font family (system font for cross-platform)
+export const fontFamily = {
+  regular: 'System',
+  medium: 'System',
+  semibold: 'System',
+  bold: 'System',
+};
+
 export const typography = {
   h1: {
     fontSize: 24,
     fontWeight: '700',
     lineHeight: 30,
+    fontFamily: fontFamily.bold,
   },
   h2: {
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 26,
+    fontFamily: fontFamily.bold,
   },
   h3: {
     fontSize: 17,
     fontWeight: '600',
     lineHeight: 22,
+    fontFamily: fontFamily.semibold,
   },
   body: {
     fontSize: 14,
     fontWeight: '400',
     lineHeight: 20,
+    fontFamily: fontFamily.regular,
   },
   bodyBold: {
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
+    fontFamily: fontFamily.semibold,
   },
   caption: {
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
+    fontFamily: fontFamily.regular,
   },
   small: {
     fontSize: 11,
     fontWeight: '400',
     lineHeight: 14,
+    fontFamily: fontFamily.regular,
   },
   button: {
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
+    fontFamily: fontFamily.semibold,
   },
 };
 

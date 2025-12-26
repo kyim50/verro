@@ -25,21 +25,21 @@ import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import ReviewModal from '../../components/ReviewModal';
-import CreateBoardModal from '../../components/CreateBoardModal';
+import CreateCanvasModal from '../../components/CreateCanvasModal';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
-export default function BoardsScreen() {
+export default function CanvasScreen() {
   const insets = useSafeAreaInsets();
   const boardStore = useBoardStore();
   const { boards, isLoading, fetchBoards, createBoard, deleteBoard } = boardStore;
   const { user, token } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newBoardName, setNewBoardName] = useState('');
-  const [newBoardDescription, setNewBoardDescription] = useState('');
+  const [newCanvasName, setNewCanvasName] = useState('');
+  const [newCanvasDescription, setNewCanvasDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
-  const [activeTab, setActiveTab] = useState('boards'); // 'boards', 'commissions', 'liked'
+  const [activeTab, setActiveTab] = useState('canvases'); // 'canvases', 'commissions', 'liked'
   const [commissions, setCommissions] = useState([]);
   const [commissionsLoading, setCommissionsLoading] = useState(false);
   const [likedArtists, setLikedArtists] = useState([]);
@@ -61,10 +61,10 @@ export default function BoardsScreen() {
     }
   }, []);
 
-  // Safety: if any stale state sets activeTab to commissions, reset to boards
+  // Safety: if any stale state sets activeTab to commissions, reset to canvases
   useEffect(() => {
     if (activeTab === 'commissions') {
-      setActiveTab('boards');
+      setActiveTab('canvases');
     }
   }, [activeTab]);
 
@@ -254,8 +254,8 @@ const loadBoards = useCallback(async (skipCache = true) => {
     setRefreshing(false);
   }, [isArtistUser, activeTab]);
 
-  const handleCreateBoard = async () => {
-    if (!newBoardName.trim()) {
+  const handleCreateCanvas = async () => {
+    if (!newCanvasName.trim()) {
       showAlert({
         title: 'Error',
         message: 'Canvas name is required',
@@ -266,8 +266,8 @@ const loadBoards = useCallback(async (skipCache = true) => {
 
     try {
       const newBoard = await createBoard({
-        name: newBoardName.trim(),
-        description: newBoardDescription.trim() || null,
+        name: newCanvasName.trim(),
+        description: newCanvasDescription.trim() || null,
         is_public: isPublic,
         board_type: 'general',
       });
@@ -306,8 +306,8 @@ const loadBoards = useCallback(async (skipCache = true) => {
       }
 
       setShowCreateModal(false);
-      setNewBoardName('');
-      setNewBoardDescription('');
+      setNewCanvasName('');
+      setNewCanvasDescription('');
       setIsPublic(false);
 
       Toast.show({
@@ -317,8 +317,8 @@ const loadBoards = useCallback(async (skipCache = true) => {
         visibilityTime: 2000,
       });
     } catch (error) {
-      console.error('Board creation error:', error);
-      const errorMessage = error.message || error.response?.data?.error || 'Failed to create board. Please check your connection and try again.';
+      console.error('Canvas creation error:', error);
+      const errorMessage = error.message || error.response?.data?.error || 'Failed to create canvas. Please check your connection and try again.';
       showAlert({
         title: 'Error',
         message: errorMessage,
@@ -327,9 +327,9 @@ const loadBoards = useCallback(async (skipCache = true) => {
     }
   };
 
- const handleDeleteBoard = (board) => {
-  // Prevent deletion of system boards (Created, Liked)
-  if (board.board_type === 'created' || board.name === 'Liked') {
+ const handleDeleteCanvas = (canvas) => {
+  // Prevent deletion of system canvases (Created, Liked)
+  if (canvas.board_type === 'created' || canvas.name === 'Liked') {
     showAlert({
       title: 'Cannot Delete',
       message: 'This is a system canvas and cannot be deleted.',
@@ -340,13 +340,13 @@ const loadBoards = useCallback(async (skipCache = true) => {
 
   showAlert({
     title: 'Delete Canvas',
-    message: `Are you sure you want to delete "${board.name}"?`,
+    message: `Are you sure you want to delete "${canvas.name}"?`,
     type: 'error',
     showCancel: true,
     confirmText: 'Delete',
     onConfirm: async () => {
       try {
-        await deleteBoard(board.id);
+        await deleteBoard(canvas.id);
         await loadBoards(true);
       } catch (error) {
         const errorMessage = error.response?.data?.error || error.message || 'Failed to delete canvas';
@@ -386,7 +386,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
     }
   };
 
-  const renderBoard = ({ item }) => {
+  const renderCanvas = ({ item }) => {
     // Calculate artwork count - backend provides total count in artworks[0].count
     // board_artworks only includes a preview slice (up to 4), so use backend count when available
     const countFromArray = item.board_artworks?.length || 0; // preview length (<=4)
@@ -395,8 +395,8 @@ const loadBoards = useCallback(async (skipCache = true) => {
       ? countFromBackend
       : countFromArray;
     const firstArtworks = item.board_artworks?.slice(0, 4) || [];
-    const isSystemBoard = item.board_type === 'created' || item.name === 'Liked';
-    
+    const isSystemCanvas = item.board_type === 'created' || item.name === 'Liked';
+
     // Format last updated time
     const getTimeAgo = (dateString) => {
       if (!dateString) return '';
@@ -406,7 +406,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       const diffWeeks = Math.floor(diffDays / 7);
       const diffMonths = Math.floor(diffDays / 30);
-      
+
       if (diffDays === 0) return 'Today';
       if (diffDays === 1) return '1d';
       if (diffDays < 7) return `${diffDays}d`;
@@ -415,18 +415,18 @@ const loadBoards = useCallback(async (skipCache = true) => {
       if (diffMonths === 1) return '1mo';
       return `${diffMonths}mo`;
     };
-    
+
     const lastUpdated = getTimeAgo(item.updated_at || item.created_at);
 
     // Show canvas delete confirmation directly
-    const showBoardOptions = (e) => {
+    const showCanvasOptions = (e) => {
       e.stopPropagation(); // Prevent navigation
-      handleDeleteBoard(item);
+      handleDeleteCanvas(item);
     };
 
     return (
       <TouchableOpacity
-        style={styles.boardCard}
+        style={styles.canvasCard}
         onPress={() => router.push(`/board/${item.id}`)}
         activeOpacity={0.9}
         delayPressIn={50}
@@ -443,7 +443,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
                   contentFit="cover"
                 />
               </View>
-              
+
               {/* Smaller images on right */}
               <View style={styles.gridItemSmall}>
                 {firstArtworks.slice(1, 4).map((ba, index) => (
@@ -467,19 +467,19 @@ const loadBoards = useCallback(async (skipCache = true) => {
           )}
         </View>
 
-        {/* Board Info - Pinterest style */}
-        <View style={styles.boardInfo}>
-          <View style={styles.boardTitleRow}>
-            <Text style={styles.boardName} numberOfLines={1}>
+        {/* Canvas Info - Pinterest style */}
+        <View style={styles.canvasInfo}>
+          <View style={styles.canvasTitleRow}>
+            <Text style={styles.canvasName} numberOfLines={1}>
               {item.name}
             </Text>
-            
-            {/* Options button (three dots) - Show for all except "created" board */}
-            {!isSystemBoard && (
+
+            {/* Options button (three dots) - Show for all except "created" canvas */}
+            {!isSystemCanvas && (
               <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation();
-                  showBoardOptions(e);
+                  showCanvasOptions(e);
                 }}
                 style={styles.optionsButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -487,12 +487,12 @@ const loadBoards = useCallback(async (skipCache = true) => {
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.secondary} />
               </TouchableOpacity>
             )}
-            
+
             {!item.is_public && (
               <Ionicons name="lock-closed" size={14} color={colors.text.secondary} style={styles.lockIcon} />
             )}
           </View>
-          <Text style={styles.boardMeta}>
+          <Text style={styles.canvasMeta}>
             {artworkCount} {artworkCount === 1 ? 'Pin' : 'Pins'}{lastUpdated ? ` • ${lastUpdated}` : ''}
           </Text>
         </View>
@@ -604,7 +604,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
     return (
       <View style={styles.emptyState}>
         <Ionicons name="albums-outline" size={64} color={colors.text.disabled} />
-        <Text style={styles.emptyTitle}>No Collections Yet</Text>
+        <Text style={styles.emptyTitle}>No Canvases Yet</Text>
         <Text style={styles.emptyText}>
           Create canvases to save and organize artworks you love!
         </Text>
@@ -619,18 +619,18 @@ const loadBoards = useCallback(async (skipCache = true) => {
   };
 
   const renderTabContent = () => {
-    if (activeTab === 'boards') {
+    if (activeTab === 'canvases') {
       return (
         <FlatList
-          key="boards-list"
+          key="canvases-list"
           data={boards.sort((a, b) => {
-            // Pin "Created" board at top
+            // Pin "Created" canvas at top
             if (a.board_type === 'created') return -1;
             if (b.board_type === 'created') return 1;
             // Sort rest by creation date (newest first)
             return new Date(b.created_at) - new Date(a.created_at);
           })}
-          renderItem={renderBoard}
+          renderItem={renderCanvas}
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={styles.row}
@@ -717,13 +717,13 @@ const loadBoards = useCallback(async (skipCache = true) => {
             <View style={styles.tabsContainer}>
               <TouchableOpacity
                 style={styles.tab}
-                onPress={() => setActiveTab('boards')}
+                onPress={() => setActiveTab('canvases')}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.tabText, activeTab === 'boards' && styles.tabTextActive]}>
+                <Text style={[styles.tabText, activeTab === 'canvases' && styles.tabTextActive]}>
                   Library
                 </Text>
-                {activeTab === 'boards' && <View style={styles.tabUnderline} />}
+                {activeTab === 'canvases' && <View style={styles.tabUnderline} />}
               </TouchableOpacity>
               {!isArtistUser && (
                 <TouchableOpacity
@@ -755,17 +755,17 @@ const loadBoards = useCallback(async (skipCache = true) => {
       {/* Content */}
       {renderTabContent()}
 
-      {/* Create Board Modal - Shared Component */}
-      <CreateBoardModal
+      {/* Create Canvas Modal - Shared Component */}
+      <CreateCanvasModal
         visible={showCreateModal}
         onClose={() => {
           setShowCreateModal(false);
-          setNewBoardName('');
+          setNewCanvasName('');
           setIsPublic(false);
         }}
-        onCreateBoard={handleCreateBoard}
-        boardName={newBoardName}
-        setBoardName={setNewBoardName}
+        onCreateCanvas={handleCreateCanvas}
+        canvasName={newCanvasName}
+        setCanvasName={setNewCanvasName}
         isPublic={isPublic}
         setIsPublic={setIsPublic}
       />
@@ -1004,8 +1004,6 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '20',
   },
   header: {
     flexDirection: 'row',
@@ -1149,7 +1147,7 @@ const styles = StyleSheet.create({
   row: {
     justifyContent: 'space-between',
   },
-  boardCard: {
+  canvasCard: {
     width: '48%',
     marginBottom: spacing.md + 4,
   },
@@ -1181,8 +1179,6 @@ const styles = StyleSheet.create({
   },
   smallGridItem: {
     flex: 1,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.background,
   },
   emptySmallGrid: {
     backgroundColor: colors.surfaceLight,
@@ -1198,16 +1194,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surfaceLight,
   },
-  boardInfo: {
+  canvasInfo: {
     paddingHorizontal: spacing.xs,
   },
-  boardTitleRow: {
+  canvasTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
     gap: spacing.xs,
   },
-  boardName: {
+  canvasName: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 16,
@@ -1221,7 +1217,7 @@ const styles = StyleSheet.create({
   optionsButton: {
     padding: 4,
   },
-  boardMeta: {
+  canvasMeta: {
     ...typography.caption,
     color: colors.text.secondary,
     fontSize: 13,
@@ -1429,8 +1425,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '10',
   },
   modalTitle: {
     fontSize: 22,
@@ -1532,8 +1526,6 @@ const styles = StyleSheet.create({
   modalFooter: {
     padding: spacing.lg,
     paddingBottom: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '10',
   },
   saveButton: {
     width: '100%',
@@ -1590,8 +1582,6 @@ const styles = StyleSheet.create({
   },
   createBoardNameInput: {
     backgroundColor: 'transparent',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border,
     paddingVertical: spacing.md,
     paddingHorizontal: 0,
     color: colors.text.primary,

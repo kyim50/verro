@@ -1296,8 +1296,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15', // Softer border
   },
   modalCloseButton: {
     width: 40,
@@ -1379,8 +1377,6 @@ const styles = StyleSheet.create({
   modalFooter: {
     padding: spacing.lg,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '15', // Softer border
   },
   artistInfoCard: {
     flexDirection: 'row',
@@ -1457,8 +1453,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15', // Softer border
   },
   instructionsTitle: {
     ...typography.h2,

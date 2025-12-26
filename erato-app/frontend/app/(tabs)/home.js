@@ -27,13 +27,13 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { showAlert } from '../../components/StyledAlert';
-import SaveToBoardModal from '../../components/SaveToBoardModal';
+import SaveToCanvasModal from '../../components/SaveToCanvasModal';
 import { useFeedStore, useBoardStore, useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing as baseSpacing, typography as baseTypography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
 import SearchModal from '../../components/SearchModal';
 import StylePreferenceQuiz from '../../components/StylePreferenceQuiz';
 import ArtistFilters from '../../components/ArtistFilters';
-import CreateBoardModal from '../../components/CreateBoardModal';
+import CreateCanvasModal from '../../components/CreateCanvasModal';
 
 // Override typography and spacing for home page to keep original larger sizes
 const typography = {
@@ -86,7 +86,7 @@ export default function HomeScreen() {
   const [columns, setColumns] = useState([[], []]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [selectedArtwork, setSelectedArtwork] = useState(null);
-  const [showCreateBoard, setShowCreateBoard] = useState(false);
+  const [showCreateCanvas, setShowCreateCanvas] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardIsPublic, setNewBoardIsPublic] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -717,7 +717,7 @@ export default function HomeScreen() {
 
       // Close modal first
       setShowSaveModal(false);
-      setShowCreateBoard(false);
+      setShowCreateCanvas(false);
       setNewBoardName('');
 
       // Small delay to ensure modal is closed before showing alert
@@ -733,7 +733,7 @@ export default function HomeScreen() {
       
       // Close modal immediately
       setShowSaveModal(false);
-      setShowCreateBoard(false);
+      setShowCreateCanvas(false);
       setNewBoardName('');
       
       // Extract error message from various possible locations
@@ -762,7 +762,7 @@ export default function HomeScreen() {
     if (!newBoardName.trim()) {
       showAlert({
         title: 'Error',
-        message: 'Board name is required',
+        message: 'Canvas name is required',
         type: 'error',
       });
       return;
@@ -774,7 +774,7 @@ export default function HomeScreen() {
       // saveArtworkToBoard updates the board count in local state
       await saveArtworkToBoard(newBoard.id, selectedArtwork.id);
 
-      setShowCreateBoard(false);
+      setShowCreateCanvas(false);
       setShowSaveModal(false);
       setNewBoardName('');
       showAlert({
@@ -786,18 +786,18 @@ export default function HomeScreen() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: error.response?.data?.error || 'Failed to create board',
+        text2: error.response?.data?.error || 'Failed to create canvas',
         visibilityTime: 3000,
       });
     }
   };
 
-  // Handle create board from modal (used by CreateBoardModal)
-  const handleCreateBoard = async () => {
+  // Handle create canvas from modal (used by CreateCanvasModal)
+  const handleCreateCanvas = async () => {
     if (!newBoardName.trim()) {
       showAlert({
         title: 'Error',
-        message: 'Board name is required',
+        message: 'Canvas name is required',
         type: 'error',
       });
       return;
@@ -817,7 +817,7 @@ export default function HomeScreen() {
       }
 
       // Close modals and reset state
-      setShowCreateBoard(false);
+      setShowCreateCanvas(false);
       setShowSaveModal(false);
       setNewBoardName('');
       setNewBoardIsPublic(false);
@@ -833,7 +833,7 @@ export default function HomeScreen() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: error.response?.data?.error || 'Failed to create board',
+        text2: error.response?.data?.error || 'Failed to create canvas',
         visibilityTime: 3000,
       });
     }
@@ -1803,12 +1803,12 @@ export default function HomeScreen() {
         </Animated.View>
       </View>
 
-      {/* Save to Board Modal */}
-      <SaveToBoardModal
+      {/* Save to Canvas Modal */}
+      <SaveToCanvasModal
         visible={showSaveModal}
         onClose={() => {
           setShowSaveModal(false);
-          setShowCreateBoard(false);
+          setShowCreateCanvas(false);
           setNewBoardName('');
           setNewBoardIsPublic(false);
         }}
@@ -1996,17 +1996,17 @@ export default function HomeScreen() {
         </>
       )}
 
-      {/* Create Board Modal */}
-      <CreateBoardModal
-        visible={showCreateBoard}
+      {/* Create Canvas Modal */}
+      <CreateCanvasModal
+        visible={showCreateCanvas}
         onClose={() => {
-          setShowCreateBoard(false);
+          setShowCreateCanvas(false);
           setNewBoardName('');
           setNewBoardIsPublic(false);
         }}
-        onCreateBoard={handleCreateBoard}
-        boardName={newBoardName}
-        setBoardName={setNewBoardName}
+        onCreateCanvas={handleCreateCanvas}
+        canvasName={newBoardName}
+        setCanvasName={setNewBoardName}
         isPublic={newBoardIsPublic}
         setIsPublic={setNewBoardIsPublic}
       />
@@ -2770,8 +2770,6 @@ const styles = StyleSheet.create({
   },
   activeFiltersBar: {
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15', // Softer border
     paddingVertical: spacing.md,
   },
   filtersScroll: {
@@ -2806,8 +2804,6 @@ const styles = StyleSheet.create({
   // Discover Artists Section
   discoverSection: {
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15', // Softer border
     paddingVertical: spacing.lg,
   },
   discoverHeader: {
@@ -2894,8 +2890,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.md, // Extra padding for notch
-    paddingBottom: spacing.md,
+    paddingTop: spacing.xl + spacing.sm, // Moderately compact
+    paddingBottom: spacing.sm,
     backgroundColor: colors.background,
   },
   tabContainer: {
@@ -2988,8 +2984,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15', // Softer border
     marginBottom: spacing.md,
   },
   modalTitle: {
@@ -3031,8 +3025,6 @@ const styles = StyleSheet.create({
   },
   createBoardSection: {
     padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '15', // Softer border
   },
   createBoardButton: {
     flexDirection: 'row',
@@ -3092,8 +3084,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.xl,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '15', // Softer border
   },
   cancelButton: {
     flex: 1,
@@ -3150,8 +3140,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '30',
   },
   pinterestTitle: {
     ...typography.h3,
@@ -3176,8 +3164,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     paddingBottom: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border + '30',
     backgroundColor: colors.background,
   },
   pinterestSubmitButton: {
