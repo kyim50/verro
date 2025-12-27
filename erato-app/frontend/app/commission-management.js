@@ -40,6 +40,7 @@ export default function CommissionManagement() {
   // Settings State
   const [queueSlots, setQueueSlots] = useState('3');
   const [waitlistEnabled, setWaitlistEnabled] = useState(false);
+  const [autoPromoteWaitlist, setAutoPromoteWaitlist] = useState(false);
   const [commissionsPaused, setCommissionsPaused] = useState(false);
   const [willDraw, setWillDraw] = useState('');
   const [wontDraw, setWontDraw] = useState('');
@@ -94,6 +95,7 @@ export default function CommissionManagement() {
 
       setQueueSlots(settings.max_queue_slots?.toString() || settings.queue_slots?.toString() || '5');
       setWaitlistEnabled(settings.allow_waitlist || settings.waitlist_enabled || false);
+      setAutoPromoteWaitlist(settings.auto_promote_waitlist || false);
       setCommissionsPaused(!settings.is_open || settings.commissions_paused || false);
       setWillDraw(Array.isArray(settings.will_draw) ? settings.will_draw.join(', ') : (settings.will_draw || ''));
       setWontDraw(Array.isArray(settings.wont_draw) ? settings.wont_draw.join(', ') : (settings.wont_draw || ''));
@@ -130,6 +132,7 @@ export default function CommissionManagement() {
       const settings = {
         max_queue_slots: parseInt(queueSlots) || 5,
         allow_waitlist: waitlistEnabled,
+        auto_promote_waitlist: autoPromoteWaitlist,
         is_open: !commissionsPaused,
         will_draw: willDraw.trim() ? willDraw.split(',').map(s => s.trim()).filter(Boolean) : [],
         wont_draw: wontDraw.trim() ? wontDraw.split(',').map(s => s.trim()).filter(Boolean) : [],
@@ -714,6 +717,30 @@ export default function CommissionManagement() {
                   <View style={[styles.switchThumb, waitlistEnabled && styles.switchThumbActive]} />
                 </TouchableOpacity>
               </View>
+
+              {/* Auto-Promote Waitlist */}
+              {waitlistEnabled && (
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}>Auto-Promote from Waitlist</Text>
+                    <Text style={styles.settingDescription}>
+                      Automatically move waitlisted commissions to active when slots open
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.switch, autoPromoteWaitlist && styles.switchActive]}
+                    onPress={() => {
+                      setAutoPromoteWaitlist(!autoPromoteWaitlist);
+                      setTimeout(() => {
+                        saveSettings(false);
+                      }, 300);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.switchThumb, autoPromoteWaitlist && styles.switchThumbActive]} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
 

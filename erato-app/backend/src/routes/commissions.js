@@ -1417,20 +1417,7 @@ router.get('/queue/artist/:artistId', authenticate, async (req, res) => {
         created_at,
         updated_at,
         final_price,
-        current_milestone_id,
-        client:users!commissions_client_id_fkey(
-          id,
-          username,
-          full_name,
-          avatar_url
-        ),
-        current_milestone:commission_milestones!commissions_current_milestone_id_fkey(
-          id,
-          milestone_number,
-          title,
-          stage,
-          payment_status
-        )
+        current_milestone_id
       `)
       .eq('artist_id', artistId)
       .in('status', ['pending', 'in_progress', 'accepted'])
@@ -1438,6 +1425,25 @@ router.get('/queue/artist/:artistId', authenticate, async (req, res) => {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
+
+    // Fetch client data for each commission
+    if (commissions && commissions.length > 0) {
+      const clientIds = [...new Set(commissions.map(c => c.client_id))];
+      const { data: clients } = await supabaseAdmin
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', clientIds);
+
+      // Attach client data to each commission
+      const clientMap = {};
+      clients?.forEach(client => {
+        clientMap[client.id] = client;
+      });
+
+      commissions.forEach(commission => {
+        commission.client = clientMap[commission.client_id];
+      });
+    }
 
     // Separate active queue from pending/waitlist
     const activeQueue = commissions?.filter(c =>
