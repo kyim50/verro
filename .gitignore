@@ -1,31 +1,50 @@
+# =====================================================
+# Project-specific docs / configs
+# =====================================================
 erato-app/API_ENDPOINTS_QUEUE.md
 erato-app/COMMISSION_QUEUE_IMPLEMENTATION.md
 
-# Dependencies
+# =====================================================
+# Node.js dependencies
+# =====================================================
 node_modules/
 .pnp
 .pnp.js
+yarn.lock
+package-lock.json
 
+# =====================================================
 # Environment variables
+# =====================================================
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
+# =====================================================
 # Testing
+# =====================================================
 coverage/
 
-# Production
+# =====================================================
+# Build / Production
+# =====================================================
 build/
 dist/
-
-# Expo
-.expo/
-.expo-shared/
 web-build/
 
-# Native
+# =====================================================
+# Expo
+# =====================================================
+.expo/
+.expo-shared/
+
+# =====================================================
+# React Native / iOS / Android
+# =====================================================
+ios/Pods/
+ios/build/
+android/.gradle/
+android/app/build/
 *.orig.*
 *.jks
 *.p8
@@ -35,36 +54,49 @@ web-build/
 *.ipa
 *.apk
 
-# macOS
+# =====================================================
+# macOS / OS files
+# =====================================================
 .DS_Store
+Thumbs.db
 
-# IDEs
+# =====================================================
+# Editors / IDEs
+# =====================================================
 .vscode/
 .idea/
+*.iml
 *.swp
 *.swo
 *~
 
+# =====================================================
 # Logs
+# =====================================================
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Misc
+# =====================================================
+# Cache / temp
+# =====================================================
 .cache/
 tmp/
 temp/
 
-# EC2/Deployment artifacts
+# =====================================================
+# Deployment / secrets
+# =====================================================
 *ubuntu@*
 *@3.18.213.189*
 *.pem
 *.ppk
-
-# Deployment configuration (contains sensitive info)
 deploy.config
-
 .verro.pem
 
+# =====================================================
+# Optional: keep template/example files
+# =====================================================
+!*.example
