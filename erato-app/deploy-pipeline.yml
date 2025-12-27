@@ -1,15 +1,17 @@
-name: Erato Backend CI/CD
+name: Erato CI/CD
 
 on:
   push:
     branches: [ main, develop ]
     paths:
       - 'backend/**'
+      - 'erato-app/frontend/**'
       - '.github/workflows/**'
   pull_request:
     branches: [ main ]
     paths:
       - 'backend/**'
+      - 'erato-app/frontend/**'
 
 env:
   REGISTRY: ghcr.io
@@ -17,9 +19,9 @@ env:
 
 jobs:
   # ===============================
-  # Testing and Linting
+  # Backend Test & Lint
   # ===============================
-  test:
+  backend-test:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -68,11 +70,11 @@ jobs:
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3
         with:
-          directory: ./backend/coverage
+          directory: ./coverage
           fail_ci_if_error: false
 
   # ===============================
-  # Security scanning
+  # Backend Security Scan
   # ===============================
   security:
     runs-on: ubuntu-latest
@@ -111,10 +113,47 @@ jobs:
           args: --file=package.json
 
   # ===============================
-  # Build and push Docker image
+  # Frontend Test & Build
+  # ===============================
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./erato-app/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('erato-app/frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend lint
+        run: npm run lint
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+  # ===============================
+  # Docker Build & Push
   # ===============================
   build:
-    needs: [test, security]
+    needs: [backend-test, security, frontend-test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
 
@@ -153,7 +192,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ===============================
-  # Deploy to staging
+  # Deploy to Staging
   # ===============================
   deploy-staging:
     needs: build
@@ -184,7 +223,7 @@ jobs:
             --parameters 'commands=["cd /home/ec2-user/erato-app && docker-compose pull && docker-compose up -d"]'
 
   # ===============================
-  # Deploy to production
+  # Deploy to Production
   # ===============================
   deploy-production:
     needs: build
@@ -204,8 +243,8 @@ jobs:
 
       - name: Deploy to production
         run: |
-          # Your blue-green deployment commands here
           echo "Deploy to production using blue-green strategy"
+          # Keep your existing AWS ELB / Auto Scaling commands here
 
   # ===============================
   # Rollback (manual)
@@ -227,7 +266,7 @@ jobs:
           echo "Rollback commands here"
 
   # ===============================
-  # Health check
+  # Post-deployment Health Check
   # ===============================
   health-check:
     needs: [deploy-staging, deploy-production]
@@ -246,10 +285,10 @@ jobs:
           fi
 
   # ===============================
-  # Slack notification
+  # Slack Notification
   # ===============================
   notify:
-    needs: [test, security, build, deploy-staging, deploy-production, health-check]
+    needs: [backend-test, security, frontend-test, build, deploy-staging, deploy-production, health-check]
     runs-on: ubuntu-latest
     if: always()
 
