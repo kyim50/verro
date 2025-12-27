@@ -10,6 +10,7 @@ import {
   Alert,
   Switch,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
@@ -17,10 +18,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { useAuthStore, useProfileStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../../constants/theme';
 import BannerImagePicker from '../../components/BannerImagePicker';
 
 export default function EditProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { user, token, fetchUser: fetchUserData, setUser } = useAuthStore();
   const { fetchProfile } = useProfileStore();
   const [loading, setLoading] = useState(false);
@@ -318,7 +320,7 @@ export default function EditProfileScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -563,8 +565,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '15',
     backgroundColor: colors.background,
@@ -585,8 +586,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   saveButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   saveText: {
     ...typography.button,
@@ -595,7 +596,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   content: {
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   bannerSection: {
     position: 'relative',
@@ -616,20 +617,20 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     paddingTop: 0, // Remove top padding since avatar is now above
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '40',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   section: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -673,7 +674,7 @@ const styles = StyleSheet.create({
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -685,26 +686,12 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   input: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    color: colors.text.primary,
-    fontSize: 15,
-    lineHeight: 20,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
-    minHeight: 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    ...components.input,
   },
   textArea: {
     minHeight: 100,
-    paddingTop: spacing.sm + 2,
-    paddingBottom: spacing.sm + 2,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   characterCount: {
     ...typography.caption,
@@ -715,8 +702,8 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
   halfWidth: {
     flex: 1,
@@ -727,8 +714,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    paddingVertical: spacing.md + 2,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -736,54 +723,39 @@ const styles = StyleSheet.create({
   },
   switchLabel: {
     flex: 1,
-    marginRight: spacing.md,
+    marginRight: spacing.lg,
     justifyContent: 'center',
   },
   iconInputContainer: {
+    ...components.input,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    height: components.input.height,
+    paddingVertical: 0,
   },
   inputIcon: {
-    marginRight: spacing.sm,
+    marginRight: spacing.lg,
   },
   iconInput: {
     flex: 1,
     ...typography.body,
     color: colors.text.primary,
     fontSize: 15,
-    paddingVertical: spacing.xs,
+    paddingVertical: 0,
   },
   socialInputContainer: {
+    ...components.input,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
-    paddingHorizontal: spacing.md + 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    height: components.input.height,
+    paddingVertical: 0,
   },
   socialIcon: {
-    marginRight: spacing.sm,
+    marginRight: spacing.lg,
   },
   socialInput: {
     flex: 1,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: 0,
     color: colors.text.primary,
     fontSize: 15,
     lineHeight: 20,

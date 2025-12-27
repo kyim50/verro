@@ -20,7 +20,7 @@ import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../store';
 import { uploadImage, validateImage } from '../../utils/imageUpload';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../../constants/theme';
 
 export default function UploadArtworkScreen() {
   const { token, user } = useAuthStore();
@@ -177,7 +177,7 @@ export default function UploadArtworkScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
@@ -412,13 +412,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   uploadButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
+    ...components.buttonSmall,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
     minWidth: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   uploadButtonDisabled: {
     backgroundColor: colors.surface,
@@ -434,7 +430,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   content: {
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   imagePickerContainer: {
     width: '100%',
@@ -460,7 +456,7 @@ const styles = StyleSheet.create({
     right: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
     paddingHorizontal: spacing.md + 2,
     paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.full,
@@ -511,15 +507,15 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   form: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   inputGroup: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl + spacing.sm,
   },
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -528,21 +524,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   input: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: spacing.lg,
+    ...components.input,
     color: colors.text.primary,
     ...typography.body,
     fontSize: 16,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   textArea: {
-    minHeight: 120,
+    minHeight: 100,
+    maxHeight: 140,
     paddingTop: spacing.lg,
     textAlignVertical: 'top',
   },
@@ -665,7 +654,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   section: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   sectionLabel: {
     ...typography.bodyBold,

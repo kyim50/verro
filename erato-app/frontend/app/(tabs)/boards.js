@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useBoardStore, useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR, components } from '../../constants/theme';
 import ReviewModal from '../../components/ReviewModal';
 import CreateCanvasModal from '../../components/CreateCanvasModal';
 
@@ -643,7 +643,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
           }
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: Math.max(insets.bottom, 20) + 80 }
+            { paddingBottom: Math.max(insets.bottom, spacing.lg) + 80 }
           ]}
           ListEmptyComponent={!isLoading && renderEmpty}
           showsVerticalScrollIndicator={false}
@@ -672,7 +672,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
           }
           contentContainerStyle={[
             styles.listContent,
-            { paddingHorizontal: spacing.md, paddingBottom: Math.max(insets.bottom, 20) + 80 }
+            { paddingHorizontal: spacing.lg, paddingBottom: Math.max(insets.bottom, spacing.lg) + 80 }
           ]}
           ListEmptyComponent={!likedLoading && (
             <View style={styles.emptyState}>
@@ -1009,9 +1009,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md + spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -1135,8 +1135,8 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
   },
   listContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: 100,
   },
   row: {
@@ -1144,7 +1144,7 @@ const styles = StyleSheet.create({
   },
   canvasCard: {
     width: '48%',
-    marginBottom: spacing.md + 4,
+    marginBottom: spacing.lg,
   },
   coverGrid: {
     width: '100%',
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create({
   commissionCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
-    padding: spacing.lg,
+    padding: spacing.xl,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1373,7 +1373,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.xxl,
     paddingTop: 100,
   },
   emptyTitle: {
@@ -1389,10 +1389,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   createButton: {
+    ...components.button,
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.xxl,
   },
   createButtonText: {
     ...typography.button,
@@ -1440,18 +1439,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   input: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: spacing.md + 2,
+    ...components.input,
     color: colors.text.primary,
-    ...typography.body,
-    borderWidth: 1,
-    borderColor: colors.border + '30',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
   },
   textArea: {
     height: 80,
@@ -1523,11 +1512,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   saveButton: {
+    ...components.button,
     width: '100%',
-    padding: spacing.md + 2,
-    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
-    alignItems: 'center',
   },
   saveButtonDisabled: {
     backgroundColor: colors.surface,
@@ -1610,12 +1597,12 @@ const styles = StyleSheet.create({
   artistCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    ...shadows.sm,
+    marginBottom: spacing.lg,
+    ...shadows.small,
   },
   artistCardContent: {
     flexDirection: 'row',
-    padding: spacing.md,
+    padding: spacing.lg,
     alignItems: 'center',
   },
   artistCardAvatar: {
@@ -1664,7 +1651,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   commissionDetailContent: {
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   detailSection: {
     marginBottom: spacing.xl,

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { colors, spacing, typography, borderRadius } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../constants/theme';
 
 const FIELD_TYPES = [
   { id: 'text', label: 'Text Input', icon: 'text-outline' },
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
+    padding: spacing.xl,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -461,16 +461,15 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.lg,
   },
   templateButton: {
+    ...components.buttonSmall,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   templateButtonText: {
     ...typography.body,
@@ -479,12 +478,9 @@ const styles = StyleSheet.create({
   },
   addButton: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: 'transparent',
   },
   addButtonText: {
     ...typography.body,
@@ -495,8 +491,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fieldsContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxxl,
   },
   emptyState: {
     alignItems: 'center',
@@ -506,18 +502,20 @@ const styles = StyleSheet.create({
   emptyText: {
     ...typography.h3,
     color: colors.text.secondary,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
   },
   emptySubtext: {
     ...typography.body,
     color: colors.text.disabled,
-    marginTop: spacing.xs,
+    marginTop: spacing.lg,
   },
   fieldCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   fieldCardHeader: {
     flexDirection: 'row',

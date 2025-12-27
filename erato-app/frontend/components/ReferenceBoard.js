@@ -22,7 +22,7 @@ import { Image as ExpoImage } from 'expo-image';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
-import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, components } from '../constants/theme';
 import { uploadImage } from '../utils/imageUpload';
 import { useAuthStore } from '../store';
 
@@ -361,7 +361,7 @@ export default function ReferenceBoard({ commissionId, onReferenceAdded, onRefer
         )}
         <Text style={styles.title}>References</Text>
         <TouchableOpacity style={styles.addButton} onPress={handleAddReference}>
-          <Ionicons name="add" size={24} color={colors.background} />
+          <Ionicons name="add" size={24} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
 
@@ -735,7 +735,7 @@ function ColorPaletteBuilder({ colors: paletteColors, onChange }) {
           autoCapitalize="none"
         />
         <TouchableOpacity style={styles.addColorButton} onPress={addColor}>
-          <Ionicons name="add" size={20} color={colors.primary} />
+          <Ionicons name="add" size={20} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
 
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
     borderRadius: borderRadius.full,
   },
   pinterestFilterBar: {
@@ -1033,19 +1033,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
     letterSpacing: 0.2,
   },
   input: {
-    backgroundColor: 'transparent',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md + 2,
-    ...typography.body,
+    ...components.input,
     color: colors.text.primary,
-    fontSize: 15,
-    borderWidth: 1.5,
-    borderColor: colors.border + '60',
-    minHeight: 52,
+    backgroundColor: colors.background,
   },
   textarea: {
     minHeight: 100,
@@ -1062,16 +1056,17 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     paddingVertical: spacing.md + 4,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: colors.border + '60',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   cancelButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 15,
+    fontWeight: '700',
   },
   submitButton: {
     flex: 1,
@@ -1085,8 +1080,9 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     ...typography.bodyBold,
-    color: colors.background,
+    color: '#FFFFFF',
     fontSize: 15,
+    fontWeight: '700',
   },
   paletteBuilder: {
     marginTop: spacing.sm,
@@ -1098,14 +1094,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   colorPreviewContainer: {
-    width: 52,
-    height: 52,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
-    borderColor: colors.border + '60',
-    backgroundColor: 'transparent',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.background,
   },
   colorPreview: {
     width: 40,
@@ -1115,15 +1111,16 @@ const styles = StyleSheet.create({
   },
   colorInput: {
     flex: 1,
-    minHeight: 52,
   },
   addColorButton: {
-    width: 52,
-    height: 52,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
     borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   colorList: {
     marginTop: spacing.sm,
@@ -1133,11 +1130,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.background,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
-    borderColor: colors.border + '40',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     minHeight: 56,
   },
   colorText: {

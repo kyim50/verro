@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR, components } from '../../constants/theme';
 import { uploadImage } from '../../utils/imageUpload';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -254,7 +254,7 @@ export default function CreateCommissionScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
@@ -647,9 +647,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 0,
     borderBottomColor: 'transparent',
   },
@@ -665,12 +664,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   description: {
     ...typography.body,
     color: colors.text.secondary,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   packageHeader: {
     flexDirection: 'row',
@@ -834,37 +833,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   inputGroup: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   input: {
+    ...components.input,
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md + 2,
-    paddingTop: spacing.md + 2,
-    borderWidth: 0,
-    borderColor: 'transparent',
-    minHeight: 48,
     fontSize: 15,
     textAlignVertical: 'center',
     includeFontPadding: false,
     textAlign: 'left',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
   },
   textArea: {
-    minHeight: 120,
+    minHeight: 140,
     textAlignVertical: 'top',
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
     includeFontPadding: false,
     textAlign: 'left',
   },
@@ -892,10 +880,10 @@ const styles = StyleSheet.create({
   helpBox: {
     flexDirection: 'row',
     backgroundColor: `${colors.primary}15`,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.lg,
-    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.xl,
+    gap: spacing.md,
   },
   helpText: {
     ...typography.small,
@@ -956,19 +944,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border + '40',
     backgroundColor: colors.background,
   },
   submitButton: {
+    ...components.button,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.sm,
   },
   submitButtonDisabled: {
@@ -980,25 +965,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   searchContainer: {
+    ...components.input,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md + 2,
-    borderWidth: 0,
-    borderColor: 'transparent',
     gap: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    height: components.input.height,
+    paddingVertical: 0,
   },
   searchInput: {
     flex: 1,
     ...typography.body,
     color: colors.text.primary,
-    paddingVertical: spacing.md,
+    paddingVertical: 0,
   },
   searchLoadingContainer: {
     flexDirection: 'row',

@@ -110,11 +110,12 @@ export const typography = {
 
 export const spacing = {
   xs: 4,
-  sm: 6,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 28,
+  sm: 8,
+  md: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+  xxxl: 40,
 };
 
 export const borderRadius = {
@@ -135,28 +136,29 @@ export const borderWidth = {
 
 // Common component styles for consistency across the app
 export const components = {
-  // Input fields (TextInput, etc.)
+  // Input fields (TextInput, etc.) - Pinterest style with white outline
   input: {
-    height: 40,
-    borderWidth: borderWidth.thin,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
+    height: 50,
+    borderWidth: borderWidth.medium,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     fontSize: typography.body.fontSize,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   // Buttons
   button: {
-    height: 40,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
+    height: 48,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.xl,
     justifyContent: 'center',
     alignItems: 'center',
   },
   buttonSmall: {
-    height: 32,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
+    height: 36,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -164,7 +166,7 @@ export const components = {
   card: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
   },
 };
 
@@ -193,9 +195,9 @@ export const shadows = {
 };
 
 export const layout = {
-  tabBarHeight: 60,
-  headerHeight: 50,
-  screenPadding: spacing.md,
+  tabBarHeight: 70,
+  headerHeight: 60,
+  screenPadding: spacing.lg,
 };
 
 // Default avatar for users without profile pictures - simple gray circle with person icon

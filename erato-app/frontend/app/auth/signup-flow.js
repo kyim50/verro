@@ -15,8 +15,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL ||
                 process.env.EXPO_PUBLIC_API_URL ||
@@ -37,6 +38,7 @@ const useInputState = () => {
 };
 
 export default function SignupFlowScreen() {
+  const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState(STEPS.EMAIL);
   const [formData, setFormData] = useState({
     email: '',
@@ -444,7 +446,7 @@ export default function SignupFlowScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleBack}
@@ -513,13 +515,12 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.lg,
   },
   backButton: {
-    padding: spacing.sm,
+    padding: spacing.md,
   },
   headerTitle: {
     ...typography.h3,
@@ -531,8 +532,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
   },
   progressDot: {
     width: 8,
@@ -562,65 +563,55 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   stepSubtitle: {
     ...typography.body,
     color: colors.text.secondary,
     fontSize: 15,
     lineHeight: 20,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xl,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
+    ...components.input,
     color: colors.text.primary,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: spacing.md,
+    backgroundColor: components.input.backgroundColor,
+    borderWidth: components.input.borderWidth,
+    borderColor: components.input.borderColor,
+    borderRadius: components.input.borderRadius,
+    marginBottom: spacing.lg,
+    height: components.input.height,
   },
   passwordInput: {
     flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 0,
     fontSize: 16,
     color: colors.text.primary,
   },
   eyeButton: {
-    padding: spacing.md,
+    padding: spacing.lg,
   },
   userTypeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 0,
+    backgroundColor: components.input.backgroundColor,
+    borderWidth: components.input.borderWidth,
+    borderColor: components.input.borderColor,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    minHeight: 80,
   },
   userTypeButtonActive: {
     backgroundColor: '#E60023',
+    borderColor: '#E60023',
   },
   userTypeContent: {
     flexDirection: 'row',
@@ -648,21 +639,22 @@ const styles = StyleSheet.create({
   },
   error: {
     color: colors.status.error,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     textAlign: 'center',
     ...typography.body,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
   },
   footer: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
-    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxxl,
+    paddingTop: spacing.xl,
   },
   nextButton: {
+    ...components.button,
     backgroundColor: '#E60023',
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   nextButtonDisabled: {
     opacity: 0.5,

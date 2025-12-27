@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography, borderRadius } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../constants/theme';
 import { uploadImage } from '../utils/imageUpload';
 import Toast from 'react-native-toast-message';
 
@@ -454,7 +454,7 @@ function DateField({ field, value, onChange, error }) {
 
   return (
     <TouchableOpacity
-      style={[styles.input, error && styles.inputError]}
+      style={[styles.selectButton, error && styles.inputError]}
       onPress={handleDatePress}
     >
       <Text style={[styles.dateText, !value && styles.selectPlaceholder]}>
@@ -528,8 +528,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxxl,
   },
   emptyState: {
     alignItems: 'center',
@@ -539,13 +539,13 @@ const styles = StyleSheet.create({
   emptyText: {
     ...typography.body,
     color: colors.text.disabled,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
   },
   fieldContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   fieldHeader: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   fieldLabel: {
     ...typography.bodyBold,
@@ -556,41 +556,30 @@ const styles = StyleSheet.create({
     color: colors.status.error,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    ...components.input,
     ...typography.body,
     color: colors.text.primary,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   inputError: {
     borderColor: colors.status.error,
   },
   textarea: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    ...components.input,
     ...typography.body,
     color: colors.text.primary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 100,
+    minHeight: 120,
+    height: 'auto',
   },
   errorText: {
     ...typography.caption,
     color: colors.status.error,
-    marginTop: spacing.xs,
+    marginTop: spacing.lg,
   },
   selectButton: {
+    ...components.input,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   selectText: {
     ...typography.body,
@@ -602,17 +591,17 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxHeight: 200,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    maxHeight: 250,
   },
   optionButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
+    padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -629,17 +618,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   multiSelectContainer: {
-    gap: spacing.sm,
+    gap: spacing.lg,
   },
   multiSelectOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   multiSelectOptionSelected: {
     borderColor: colors.primary,
@@ -657,20 +646,20 @@ const styles = StyleSheet.create({
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.lg,
   },
   checkboxLabel: {
     ...typography.body,
     color: colors.text.primary,
   },
   radioContainer: {
-    gap: spacing.sm,
+    gap: spacing.lg,
   },
   radioOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    gap: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   radioText: {
     ...typography.body,
@@ -684,13 +673,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     borderStyle: 'dashed',
+    minHeight: 50,
   },
   fileUploadText: {
     ...typography.body,
@@ -698,16 +688,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   fileList: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
+    marginTop: spacing.lg,
+    gap: spacing.lg,
   },
   fileItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
   },
   fileUrl: {
     ...typography.caption,
@@ -715,14 +705,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   colorPickerButton: {
+    ...components.input,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: spacing.lg,
   },
   colorPreview: {
     width: 30,
@@ -738,32 +724,30 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-    paddingTop: spacing.md,
+    gap: spacing.lg,
+    marginTop: spacing.xl,
+    paddingTop: spacing.xl,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   cancelButton: {
+    ...components.button,
     flex: 1,
-    paddingVertical: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   cancelButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.secondary,
+    ...typography.button,
+    color: colors.text.primary,
   },
   submitButton: {
+    ...components.button,
     flex: 1,
-    paddingVertical: spacing.md,
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
   },
   submitButtonText: {
-    ...typography.bodyBold,
+    ...typography.button,
     color: colors.text.primary,
   },
 });

@@ -26,7 +26,7 @@ import Toast from 'react-native-toast-message';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, components, DEFAULT_AVATAR } from '../constants/theme';
 import { uploadImage } from '../utils/imageUpload';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
@@ -842,7 +842,9 @@ export default function CommissionRequestsScreen() {
               >
               {/* Title Section */}
               <View style={styles.formSection}>
-                <Text style={styles.label}>Title *</Text>
+                <Text style={styles.label}>
+                  Title <Text style={styles.required}>*</Text>
+                </Text>
               <TextInput
                 style={styles.input}
                 value={formData.title}
@@ -855,7 +857,9 @@ export default function CommissionRequestsScreen() {
 
               {/* Description Section */}
               <View style={styles.formSection}>
-              <Text style={styles.label}>Description *</Text>
+              <Text style={styles.label}>
+                Description <Text style={styles.required}>*</Text>
+              </Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={formData.description}
@@ -869,7 +873,9 @@ export default function CommissionRequestsScreen() {
 
               {/* Reference Images Section - REQUIRED */}
               <View style={styles.formSection}>
-                <Text style={styles.label}>Reference Images *</Text>
+                <Text style={styles.label}>
+                  Reference Images <Text style={styles.required}>*</Text>
+                </Text>
                 <Text style={styles.helperText}>
                   Help artists bring your vision to life. Add images showing the style, mood, or concepts you have in mind.
                 </Text>
@@ -1091,7 +1097,9 @@ export default function CommissionRequestsScreen() {
 
               {/* Bid Form */}
               <View style={styles.formSection}>
-                <Text style={styles.label}>Your Bid Amount *</Text>
+                <Text style={styles.label}>
+                  Your Bid Amount <Text style={styles.required}>*</Text>
+                </Text>
                 <View style={styles.inputWithIcon}>
                   <Ionicons name="cash" size={20} color={colors.text.secondary} style={styles.inputIcon} />
                   <TextInput
@@ -2020,6 +2028,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     letterSpacing: -0.2,
   },
+  required: {
+    color: colors.primary,
+  },
   helperText: {
     ...typography.caption,
     color: colors.text.secondary,
@@ -2078,25 +2089,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   input: {
-    backgroundColor: 'transparent',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    paddingVertical: spacing.md + 2,
+    ...components.input,
     color: colors.text.primary,
     ...typography.body,
     fontSize: 16,
-    borderWidth: 1.5,
-    borderColor: colors.border + '40',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   textArea: {
     minHeight: 100,
+    maxHeight: 140,
     textAlignVertical: 'top',
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
   },
   row: {
     flexDirection: 'row',

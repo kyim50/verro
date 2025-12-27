@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../../constants/theme';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -50,7 +50,7 @@ export default function LoginScreen() {
       style={styles.container}
     >
       {/* Back Button */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.replace('/auth/welcome')}
@@ -158,8 +158,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   backButton: {
     width: 40,
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
     justifyContent: 'center',
     maxWidth: 400,
     width: '100%',
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: spacing.xxxl + spacing.lg,
   },
   logo: {
     fontSize: 48,
@@ -190,50 +190,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text.primary,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
     letterSpacing: -0.5,
   },
   error: {
     color: colors.status.error,
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
     backgroundColor: colors.surface,
-    padding: 12,
-    borderRadius: 8,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderWidth: 0,
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    fontSize: 16,
+    ...components.input,
     color: colors.text.primary,
-    marginBottom: 12,
+    marginBottom: spacing.lg,
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 0,
-    borderRadius: 16,
-    marginBottom: 8,
+    backgroundColor: components.input.backgroundColor,
+    borderWidth: components.input.borderWidth,
+    borderColor: components.input.borderColor,
+    borderRadius: components.input.borderRadius,
+    marginBottom: spacing.md,
+    height: components.input.height,
   },
   passwordInput: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 0,
     fontSize: 16,
     color: colors.text.primary,
   },
   eyeButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg + 8,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
   },
   forgotPasswordText: {
     fontSize: 14,
@@ -241,11 +238,9 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   loginButton: {
+    ...components.button,
     backgroundColor: colors.primary,
-    borderRadius: 24,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   loginButtonDisabled: {
     opacity: 0.6,
@@ -258,7 +253,7 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: spacing.xl,
   },
   dividerLine: {
     flex: 1,
@@ -269,15 +264,14 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 14,
     fontWeight: '600',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   signupButton: {
+    ...components.button,
     backgroundColor: colors.surface,
-    borderWidth: 0,
-    borderRadius: 24,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginBottom: spacing.xl,
   },
   signupButtonText: {
     color: colors.text.primary,

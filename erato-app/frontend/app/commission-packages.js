@@ -21,7 +21,7 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, components } from '../constants/theme';
 import { showAlert } from '../components/StyledAlert';
 import { uploadImage, validateImage } from '../utils/imageUpload';
 
@@ -574,7 +574,9 @@ export default function CommissionPackagesScreen() {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Package Name *</Text>
+              <Text style={styles.inputLabel}>
+                Package Name <Text style={styles.required}>*</Text>
+              </Text>
               <TextInput
                 style={styles.input}
                 value={formData.name}
@@ -583,7 +585,9 @@ export default function CommissionPackagesScreen() {
                 placeholderTextColor={colors.text.disabled}
               />
 
-              <Text style={styles.inputLabel}>Base Price ($) *</Text>
+              <Text style={styles.inputLabel}>
+                Base Price ($) <Text style={styles.required}>*</Text>
+              </Text>
               <TextInput
                 style={styles.input}
                 value={formData.base_price}
@@ -622,7 +626,7 @@ export default function CommissionPackagesScreen() {
                 </TouchableOpacity>
               </View>
 
-              {formData.example_image_urls.length > 0 && (
+              {formData.example_image_urls.length > 0 ? (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -645,6 +649,11 @@ export default function CommissionPackagesScreen() {
                     </View>
                   ))}
                 </ScrollView>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="images-outline" size={32} color={colors.text.disabled} />
+                  <Text style={styles.imagePlaceholderText}>Add preview images to showcase your work</Text>
+                </View>
               )}
 
               {editingPackage && (
@@ -711,7 +720,7 @@ export default function CommissionPackagesScreen() {
                 </>
               )}
 
-              <Text style={styles.inputLabel}>Estimated Delivery (days)</Text>
+              <Text style={[styles.inputLabel, { marginTop: spacing.xxl }]}>Estimated Delivery (days)</Text>
               <TextInput
                 style={styles.input}
                 value={formData.estimated_delivery_days}
@@ -771,15 +780,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -790,7 +797,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   listContent: {
-    padding: spacing.md,
+    padding: spacing.lg,
   },
   emptyStateContainer: {
     flexGrow: 1,
@@ -991,32 +998,25 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     ...typography.bodyBold,
-    color: colors.text.secondary,
-    fontSize: 13,
+    color: colors.text.primary,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: spacing.xs,
-    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  required: {
+    color: colors.primary,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md + 2,
-    paddingTop: spacing.md + 2,
+    ...components.input,
     color: colors.text.primary,
     fontSize: 15,
-    borderWidth: 0,
-    minHeight: 52,
-    textAlignVertical: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
   },
   textArea: {
-    minHeight: 110,
+    minHeight: 100,
+    maxHeight: 140,
     textAlignVertical: 'top',
-    paddingTop: spacing.md + 2,
+    paddingTop: spacing.lg,
   },
   imagesHeader: {
     flexDirection: 'row',
@@ -1168,5 +1168,24 @@ const styles = StyleSheet.create({
   },
   addonInput: {
     minHeight: 44,
+  },
+  imagePlaceholder: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderStyle: 'dashed',
+  },
+  imagePlaceholderText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    fontSize: 13,
   },
 });

@@ -15,11 +15,13 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { colors, spacing, typography, borderRadius } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, spacing, typography, borderRadius, components } from '../../constants/theme';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
 export default function ForgotPasswordScreen() {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -53,7 +55,7 @@ export default function ForgotPasswordScreen() {
   if (success) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -95,7 +97,7 @@ export default function ForgotPasswordScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -169,15 +171,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxxl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.lg,
   },
   backButton: {
     padding: spacing.sm,
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl * 2,
+    paddingTop: spacing.xxl,
   },
   iconContainer: {
     alignItems: 'center',
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
   subtitle: {
@@ -210,41 +211,33 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 15,
     lineHeight: 22,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xxxl,
     textAlign: 'center',
   },
   error: {
     color: colors.status.error,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     textAlign: 'center',
     ...typography.body,
   },
   inputContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   label: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
+    ...components.input,
     color: colors.text.primary,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   resetButton: {
-    backgroundColor: '#E60023',
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+    ...components.button,
+    backgroundColor: colors.primary,
+    marginBottom: spacing.xl,
   },
   resetButtonDisabled: {
     opacity: 0.5,
@@ -257,7 +250,7 @@ const styles = StyleSheet.create({
   },
   backToLoginContainer: {
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
   },
   backToLoginText: {
     ...typography.body,
@@ -273,14 +266,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   successIcon: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xxxl,
   },
   successTitle: {
     ...typography.h1,
     color: colors.text.primary,
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
   successMessage: {
@@ -288,7 +281,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: 15,
     lineHeight: 22,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xxxl,
     textAlign: 'center',
   },
   emailText: {
@@ -296,11 +289,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   doneButton: {
-    backgroundColor: '#E60023',
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.md + 2,
-    paddingHorizontal: spacing.xl * 2,
-    alignItems: 'center',
+    ...components.button,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxxl,
   },
   doneButtonText: {
     ...typography.button,

@@ -1457,14 +1457,13 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xxl,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
@@ -1565,6 +1564,7 @@ const styles = StyleSheet.create({
   infoGrid: {
     flexDirection: 'row',
     gap: spacing.md,
+    marginTop: spacing.lg,
   },
   infoGridItem: {
     flex: 1,
@@ -1637,6 +1637,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1.5,
     borderColor: colors.border + '30',
+    marginTop: spacing.lg,
   },
   tagContainer: {
     flexDirection: 'row',
@@ -1850,7 +1851,8 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   statCard: {
     flex: 1,
@@ -1936,8 +1938,8 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
   },
   quickActionsList: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
+    marginTop: spacing.lg,
+    gap: spacing.md,
   },
   quickActionItem: {
     flexDirection: 'row',

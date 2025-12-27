@@ -34,7 +34,7 @@ import PayPalCheckout from '../../components/PayPalCheckout';
 import StripeCheckout from '../../components/StripeCheckout';
 import PaymentOptions from '../../components/PaymentOptions';
 import TransactionHistory from '../../components/TransactionHistory';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR, components } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 const IS_SMALL_SCREEN = width < 400;
@@ -2526,16 +2526,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.background,
   },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   title: {
     ...typography.h1,
@@ -2564,15 +2564,15 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    paddingRight: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    paddingRight: spacing.xl,
   },
   statCard: {
     minWidth: 110,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border + '40',
@@ -2605,17 +2605,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.xs / 2,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
+    padding: spacing.xs,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
   viewModeButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
   },
   viewModeButtonActive: {
@@ -2638,15 +2638,15 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   statusTabsContainer: {
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
   statusTab: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
-    marginRight: spacing.sm,
+    marginRight: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -2668,8 +2668,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
     backgroundColor: colors.background,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

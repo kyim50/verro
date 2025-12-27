@@ -19,7 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchStore, useAuthStore } from '../store';
-import { colors, spacing, typography, borderRadius } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, components } from '../constants/theme';
 import ArtistFilters from './ArtistFilters';
 import StylePreferenceQuiz from './StylePreferenceQuiz';
 import Constants from 'expo-constants';
@@ -504,7 +504,7 @@ export default function SearchModal({ visible, onClose }) {
         >
           <View style={styles.container}>
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+            <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleClose}
@@ -738,9 +738,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    gap: spacing.lg,
     backgroundColor: colors.background,
   },
   backButton: {
@@ -760,31 +760,27 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.lg,
-    height: 48,
-    gap: spacing.sm,
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    ...components.input,
+    height: components.input.height,
+    paddingVertical: 0,
+    gap: spacing.md,
   },
   searchInput: {
     flex: 1,
     ...typography.body,
     color: colors.text.primary,
-    height: '100%',
+    paddingVertical: 0,
   },
   tabs: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
     borderBottomWidth: 0,
   },
   tab: {
-    paddingVertical: spacing.sm + 4,
-    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
@@ -806,7 +802,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
   },
   row: {
@@ -818,7 +814,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     overflow: 'hidden',
     backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   artworkImage: {
     width: '100%',
@@ -829,7 +825,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: spacing.sm,
+    padding: spacing.md,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   artworkTitle: {
@@ -847,9 +843,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.lg,
   },
   artistAvatar: {
     width: 60,
@@ -872,13 +868,13 @@ const styles = StyleSheet.create({
   artistBio: {
     ...typography.tiny,
     color: colors.text.secondary,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   artistStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xs,
-    gap: spacing.md,
+    marginTop: spacing.sm,
+    gap: spacing.lg,
   },
   statItem: {
     flexDirection: 'row',
@@ -898,7 +894,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   loadingText: {
     ...typography.body,
@@ -914,13 +910,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
   },
   emptyText: {
     ...typography.body,
     color: colors.text.secondary,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   filterButton: {
     width: 40,
@@ -941,18 +937,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   emptyActions: {
-    marginTop: spacing.xl,
-    gap: spacing.md,
+    marginTop: spacing.xxl,
+    gap: spacing.lg,
     width: '100%',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
   },
   emptyActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     borderWidth: 1,
@@ -967,19 +963,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   discoveryContent: {
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
   },
   discoverySection: {
-    marginBottom: spacing.xl + spacing.md,
+    marginBottom: spacing.xxl,
   },
   discoverySectionTitle: {
     ...typography.h2,
     color: colors.text.primary,
     fontSize: 22,
     fontWeight: '700',
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
     letterSpacing: -0.5,
   },
   centeredSectionTitle: {
@@ -988,12 +984,12 @@ const styles = StyleSheet.create({
   // Pinterest-style masonry layout (2 columns with staggered heights)
   masonryContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
   },
   masonryColumn: {
     flex: 1,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   categoryTile: {
     width: '100%',
@@ -1013,8 +1009,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '50%',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md + 4,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
     justifyContent: 'flex-end',
   },
   categoryTileText: {
@@ -1041,7 +1037,7 @@ const styles = StyleSheet.create({
   // Homepage-style search result cards
   searchArtworkCard: {
     width: '100%',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   searchArtworkImage: {
     width: '100%',
@@ -1049,8 +1045,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   searchArtworkInfo: {
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.xs,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
   searchTitleRow: {
     flexDirection: 'row',
@@ -1063,7 +1059,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: '600',
     flex: 1,
-    marginRight: spacing.xs,
+    marginRight: spacing.sm,
   },
   searchMenuButton: {
     padding: 2,
@@ -1076,13 +1072,13 @@ const styles = StyleSheet.create({
   relatedTagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   relatedTag: {
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1095,17 +1091,17 @@ const styles = StyleSheet.create({
   // Filter and Sort Bar
   filterSortBar: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    gap: spacing.md,
     borderBottomWidth: 0,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: 'transparent',
     borderRadius: borderRadius.full,
     borderWidth: 1.5,
@@ -1121,9 +1117,9 @@ const styles = StyleSheet.create({
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.sm + 2,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: 'transparent',
     borderRadius: borderRadius.full,
     borderWidth: 1.5,

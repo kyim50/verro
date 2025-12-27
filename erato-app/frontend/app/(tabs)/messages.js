@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR, components } from '../../constants/theme';
 import { initSocket, getSocket } from '../../lib/socket';
 import { showAlert } from '../../components/StyledAlert';
 
@@ -484,7 +484,7 @@ export default function MessagesScreen() {
   return (
     <View style={styles.container}>
       {/* Header - Always render */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -744,9 +744,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
-    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.md + spacing.md : Constants.statusBarHeight + spacing.md + 4 + spacing.md,
-    paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.background,
   },
   headerTitle: {
@@ -766,9 +765,8 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     backgroundColor: colors.background,
-    paddingVertical: spacing.sm,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md, // Add more bottom padding
+    paddingVertical: spacing.lg,
+    paddingBottom: spacing.md,
   },
   tabsScrollContent: {
     paddingHorizontal: spacing.lg,
@@ -777,10 +775,10 @@ const styles = StyleSheet.create({
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginRight: spacing.lg,
-    paddingVertical: spacing.sm, // Increased from spacing.xs - 2 for better spacing
-    paddingBottom: spacing.sm + 4, // Extra bottom padding for underline spacing
+    gap: spacing.sm,
+    marginRight: spacing.xl,
+    paddingVertical: spacing.lg,
+    paddingBottom: spacing.lg,
     position: 'relative',
   },
   tabText: {
@@ -824,18 +822,18 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   listContent: {
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
   },
   conversationCard: {
-    marginHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    marginBottom: IS_SMALL_SCREEN ? spacing.xs + 4 : spacing.sm + 4,
-    backgroundColor: colors.background, // Pinterest-style clean background
-    borderRadius: 16, // Pinterest soft rounding
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, // Very soft shadow
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -844,11 +842,11 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flexDirection: 'row',
-    padding: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    padding: spacing.lg,
     alignItems: 'center',
   },
   avatarContainer: {
-    marginRight: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
+    marginRight: spacing.lg,
   },
   avatarWrapper: {
     position: 'relative',
@@ -968,8 +966,8 @@ const styles = StyleSheet.create({
   emptyState: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.xxxl,
   },
   emptyTitle: {
     ...typography.h3,
@@ -996,8 +994,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   modalCloseButton: {
     padding: spacing.xs,
@@ -1011,15 +1009,15 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border + '40',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   searchIcon: {
     marginRight: spacing.sm,
@@ -1038,18 +1036,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.xl * 2,
+    paddingVertical: spacing.xxxl,
   },
   searchResultsContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   artistResultCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -1082,8 +1080,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.xxxl,
   },
   emptySearchTitle: {
     ...typography.h3,

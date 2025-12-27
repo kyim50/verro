@@ -22,7 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../store';
-import { colors, spacing, typography, borderRadius, shadows } from '../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, components } from '../constants/theme';
 import { showAlert } from '../components/StyledAlert';
 import { uploadImage, validateImage } from '../utils/imageUpload';
 
@@ -817,9 +817,21 @@ export default function CommissionManagement() {
                 <Ionicons name="pricetag-outline" size={64} color={colors.text.disabled} />
                 <Text style={styles.emptyTitle}>No packages yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  Create commission packages to let clients know what you offer and your pricing
+                  Create your first commission package to let clients know what you offer and your pricing
                 </Text>
               </View>
+            }
+            ListFooterComponent={
+              <TouchableOpacity
+                style={styles.createPackageButton}
+                onPress={() => {
+                  resetForm();
+                  setShowCreateModal(true);
+                }}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={colors.text.primary} />
+                <Text style={styles.createPackageButtonText}>Create New Package</Text>
+              </TouchableOpacity>
             }
             refreshControl={
               <RefreshControl
@@ -830,17 +842,6 @@ export default function CommissionManagement() {
               />
             }
           />
-
-          {/* Create Button */}
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => {
-              resetForm();
-              setShowCreateModal(true);
-            }}
-          >
-            <Ionicons name="add" size={28} color={colors.text.primary} />
-          </TouchableOpacity>
         </View>
       )}
 
@@ -871,7 +872,9 @@ export default function CommissionManagement() {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Package Name *</Text>
+              <Text style={styles.inputLabel}>
+                Package Name <Text style={styles.required}>*</Text>
+              </Text>
               <TextInput
                 style={styles.input}
                 value={formData.name}
@@ -880,7 +883,9 @@ export default function CommissionManagement() {
                 placeholderTextColor={colors.text.disabled}
               />
 
-              <Text style={styles.inputLabel}>Base Price ($) *</Text>
+              <Text style={styles.inputLabel}>
+                Base Price ($) <Text style={styles.required}>*</Text>
+              </Text>
               <TextInput
                 style={styles.input}
                 value={formData.base_price}
@@ -919,7 +924,7 @@ export default function CommissionManagement() {
                 </TouchableOpacity>
               </View>
 
-              {formData.example_image_urls.length > 0 && (
+              {formData.example_image_urls.length > 0 ? (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -942,6 +947,11 @@ export default function CommissionManagement() {
                     </View>
                   ))}
                 </ScrollView>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="images-outline" size={32} color={colors.text.disabled} />
+                  <Text style={styles.imagePlaceholderText}>Add preview images to showcase your work</Text>
+                </View>
               )}
 
               {editingPackage && (
@@ -1008,7 +1018,7 @@ export default function CommissionManagement() {
                 </>
               )}
 
-              <Text style={styles.inputLabel}>Estimated Delivery (days)</Text>
+              <Text style={[styles.inputLabel, { marginTop: spacing.xxl }]}>Estimated Delivery (days)</Text>
               <TextInput
                 style={styles.input}
                 value={formData.estimated_delivery_days}
@@ -1074,18 +1084,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: Constants.statusBarHeight + spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: Constants.statusBarHeight + spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15',
+    borderBottomWidth: 0,
     backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1101,8 +1108,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     gap: spacing.sm,
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border + '15',
   },
   tab: {
     flex: 1,
@@ -1137,7 +1142,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl + spacing.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1193,24 +1198,12 @@ const styles = StyleSheet.create({
     marginVertical: spacing.md,
   },
   numberInput: {
-    ...typography.h3,
-    color: colors.text.primary,
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.border + '40',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    ...components.input,
     width: 70,
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
-    minHeight: 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    color: colors.text.primary,
   },
   inputLabel: {
     ...typography.bodyBold,
@@ -1218,6 +1211,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: spacing.xs,
+  },
+  required: {
+    color: colors.primary,
   },
   inputHint: {
     ...typography.caption,
@@ -1227,35 +1223,24 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   multilineInput: {
-    ...typography.body,
+    ...components.input,
     color: colors.text.primary,
-    backgroundColor: colors.background,
-    borderWidth: 0,
-    borderRadius: 16,
-    padding: spacing.lg,
-    paddingTop: spacing.md,
     fontSize: 15,
     lineHeight: 22,
-    minHeight: 120,
+    minHeight: 100,
+    maxHeight: 140,
     textAlignVertical: 'top',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    paddingTop: spacing.lg,
   },
   largeMultilineInput: {
-    ...typography.body,
+    ...components.input,
     color: colors.text.primary,
-    backgroundColor: colors.background,
-    borderWidth: 0,
-    borderRadius: 16,
-    padding: spacing.lg,
-    paddingTop: spacing.md,
     fontSize: 15,
     lineHeight: 22,
-    minHeight: 200,
+    minHeight: 140,
+    maxHeight: 200,
     textAlignVertical: 'top',
+    paddingTop: spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -1468,17 +1453,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  createButton: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.lg + 20,
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
+  createPackageButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    ...shadows.large,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  createPackageButtonText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
@@ -1516,22 +1509,16 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   input: {
-    backgroundColor: 'transparent',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md + 2,
-    paddingTop: spacing.md + 2,
+    ...components.input,
     color: colors.text.primary,
     fontSize: 15,
-    borderWidth: 1.5,
-    borderColor: colors.border + '40',
-    minHeight: 52,
-    textAlignVertical: 'center',
     marginBottom: spacing.md,
   },
   textArea: {
-    minHeight: 110,
+    minHeight: 100,
+    maxHeight: 140,
     textAlignVertical: 'top',
-    paddingTop: spacing.md + 2,
+    paddingTop: spacing.lg,
   },
   imagesHeader: {
     flexDirection: 'row',
@@ -1667,5 +1654,24 @@ const styles = StyleSheet.create({
   },
   addonInput: {
     minHeight: 44,
+  },
+  imagePlaceholder: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderStyle: 'dashed',
+  },
+  imagePlaceholderText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    fontSize: 13,
   },
 });

@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../../store';
-import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
+import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR, components } from '../../constants/theme';
 import { uploadImage } from '../../utils/imageUpload';
 import ReviewModal from '../../components/ReviewModal';
 import { initSocket, getSocket, disconnectSocket } from '../../lib/socket';
@@ -1490,6 +1490,7 @@ export default function ConversationScreen() {
               placeholder="Describe what needs to be changed..."
               placeholderTextColor={colors.text.disabled}
               multiline
+              textAlignVertical="top"
               maxLength={500}
             />
           </View>
@@ -1511,7 +1512,7 @@ export default function ConversationScreen() {
           ]}
         >
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
           </TouchableOpacity>
@@ -1662,7 +1663,7 @@ export default function ConversationScreen() {
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.attachButton} onPress={handleImagePick}>
-            <Ionicons name="add-circle" size={28} color={colors.primary} />
+            <Ionicons name="add" size={28} color={colors.text.primary} />
           </TouchableOpacity>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -1672,6 +1673,7 @@ export default function ConversationScreen() {
               placeholder="Message..."
               placeholderTextColor={colors.text.disabled}
               multiline
+              textAlignVertical="top"
               maxLength={1000}
             />
           </View>
@@ -1843,9 +1845,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingTop: STATUS_BAR_HEIGHT + (IS_SMALL_SCREEN ? spacing.xs : spacing.sm),
-    paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.background,
   },
   backButton: {
@@ -1894,14 +1895,15 @@ const styles = StyleSheet.create({
     padding: spacing.xs,
   },
   messagesList: {
-    paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingVertical: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.lg,
-    gap: spacing.md,
+    marginVertical: spacing.xl,
+    gap: spacing.lg,
   },
   dayHeaderLine: {
     flex: 1,
@@ -1915,7 +1917,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   messageWrapper: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
     maxWidth: '80%',
     alignSelf: 'flex-start',
   },
@@ -1992,26 +1994,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     marginVertical: spacing.xs,
     marginHorizontal: spacing.md,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     maxWidth: '85%',
     alignSelf: 'flex-start',
-    gap: spacing.sm,
-    ...shadows.small,
+    gap: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   compactCommissionCardReceived: {
-    borderColor: colors.primary + '40',
-    backgroundColor: colors.primary + '08',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.surface,
   },
   compactCommissionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary + '15',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2021,14 +2027,16 @@ const styles = StyleSheet.create({
   compactCommissionTitle: {
     ...typography.bodyBold,
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: -0.2,
   },
   compactCommissionSubtitle: {
     ...typography.caption,
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '500',
   },
   commissionTime: {
     ...typography.small,
@@ -2249,34 +2257,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingVertical: spacing.sm,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.md,
     backgroundColor: colors.background,
     gap: spacing.sm,
   },
   attachButton: {
-    width: IS_SMALL_SCREEN ? 36 : 40,
-    height: IS_SMALL_SCREEN ? 36 : 40,
+    padding: spacing.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: borderRadius.full,
-    backgroundColor: 'transparent',
   },
   inputWrapper: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    minHeight: 40,
-    maxHeight: 100,
-    justifyContent: 'center',
   },
   input: {
+    ...components.input,
     ...typography.body,
     color: colors.text.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     fontSize: 15,
     lineHeight: 20,
+    minHeight: 40,
+    maxHeight: 100,
+    height: 'auto',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    textAlignVertical: 'center',
   },
   sendButton: {
     width: 40,
@@ -2496,13 +2500,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   revisionNotesInput: {
+    ...components.input,
     ...typography.body,
     color: colors.text.primary,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    minHeight: 100,
+    fontSize: 15,
+    lineHeight: 20,
+    minHeight: 120,
     maxHeight: 150,
+    height: 'auto',
     textAlignVertical: 'top',
   },
   // Image Viewer Styles
