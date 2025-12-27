@@ -938,6 +938,20 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={styles.quickActionItem}
+                onPress={() => router.push('/queue-dashboard')}
+              >
+                <View style={styles.quickActionIcon}>
+                  <Ionicons name="list" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={styles.quickActionTitle}>Queue Dashboard</Text>
+                  <Text style={styles.quickActionSubtitle}>Manage active commissions & waitlist</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionItem}
                 onPress={() => router.push('/metrics')}
               >
                 <View style={styles.quickActionIcon}>
@@ -1023,6 +1037,20 @@ export default function ProfileScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Quick Actions</Text>
               <View style={styles.quickActionsList}>
+                <TouchableOpacity
+                  style={styles.quickActionItem}
+                  onPress={() => router.push('/my-commissions')}
+                >
+                  <View style={styles.quickActionIcon}>
+                    <Ionicons name="briefcase" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.quickActionText}>
+                    <Text style={styles.quickActionTitle}>My Commissions</Text>
+                    <Text style={styles.quickActionSubtitle}>Track your commissioned artwork</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.quickActionItem}
                   onPress={() => router.push('/(tabs)/home')}

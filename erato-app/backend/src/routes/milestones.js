@@ -524,7 +524,8 @@ router.post('/:milestoneId/complete', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error completing milestone:', error);
-    res.status(500).json({ error: 'Failed to complete milestone' });
+    console.error('Error details:', error.message, error.stack);
+    res.status(500).json({ error: error.message || 'Failed to complete milestone' });
   }
 });
 

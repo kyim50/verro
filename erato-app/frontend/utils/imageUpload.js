@@ -202,7 +202,7 @@ export async function uploadImage(uri, bucket = 'artworks', folder = '', token =
       responseData: respData,
       request: error.request ? 'Request made but no response' : null,
       apiUrl: API_URL,
-      endpoint,
+      bucket,
     });
     
     // Prefer backend-provided message first
@@ -409,11 +409,17 @@ export function getThumbnailUrl(url, width = 400, height = 400) {
 
 /**
  * Validate image file before upload
- * @param {string} uri - Local file URI
- * @returns {Promise<boolean>} True if valid
+ * @param {string} uri - Local file URI (string, not object)
+ * @returns {Promise<boolean>} True if valid, throws error if invalid
  */
 export async function validateImage(uri) {
   try {
+    // Ensure uri is a string
+    if (typeof uri !== 'string') {
+      console.error('validateImage received non-string:', uri);
+      throw new Error('Invalid file URI - expected string');
+    }
+
     // Get file info
     const fileInfo = await FileSystem.getInfoAsync(uri);
 
