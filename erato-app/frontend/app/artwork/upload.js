@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../store';
@@ -23,6 +24,7 @@ import { colors, spacing, typography, borderRadius } from '../../constants/theme
 
 export default function UploadArtworkScreen() {
   const { token, user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [imageUri, setImageUri] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -175,7 +177,7 @@ export default function UploadArtworkScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
@@ -192,7 +194,10 @@ export default function UploadArtworkScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Upload Artwork</Text>
         <TouchableOpacity
-          style={styles.uploadButton}
+          style={[
+            styles.uploadButton,
+            (!imageUri || !title.trim() || !tags.trim()) && styles.uploadButtonDisabled
+          ]}
           onPress={handleUpload}
           disabled={loading || !imageUri || !title.trim() || !tags.trim()}
         >
@@ -387,7 +392,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 0,
     backgroundColor: colors.background,
@@ -412,14 +416,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
     minWidth: 80,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  uploadButtonDisabled: {
+    backgroundColor: colors.surface,
+    opacity: 0.5,
   },
   uploadText: {
     ...typography.button,
@@ -462,11 +465,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.full,
     gap: spacing.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
   },
   changeImageText: {
     ...typography.caption,

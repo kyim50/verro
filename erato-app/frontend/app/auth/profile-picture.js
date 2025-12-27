@@ -314,11 +314,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     padding: spacing.md + 4,
     alignItems: 'center',
-    shadowColor: '#E60023',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
   },
   continueButtonText: {
     ...typography.button,

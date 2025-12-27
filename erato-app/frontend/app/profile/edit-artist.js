@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore, useProfileStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
@@ -23,6 +24,7 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 export default function EditArtistProfileScreen() {
   const { user, token } = useAuthStore();
   const { profile, fetchProfile } = useProfileStore();
+  const insets = useSafeAreaInsets();
 
   const [commissionStatus, setCommissionStatus] = useState('open');
   const [minPrice, setMinPrice] = useState('');
@@ -30,22 +32,7 @@ export default function EditArtistProfileScreen() {
   const [turnaroundDays, setTurnaroundDays] = useState('');
   const [specialties, setSpecialties] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [maxSlots, setMaxSlots] = useState('5');
-  const [allowWaitlist, setAllowWaitlist] = useState(false);
   const isInitialMount = useRef(true);
-
-  const fetchSlotsSettings = async () => {
-    try {
-      if (!user?.id) return;
-      const { data } = await axios.get(`${API_URL}/commission-packages/settings/${user.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (data?.max_queue_slots) setMaxSlots(String(data.max_queue_slots));
-      setAllowWaitlist(!!data?.allow_waitlist);
-    } catch (error) {
-      console.error('Error loading slots settings:', error);
-    }
-  };
 
   useEffect(() => {
     // Only set initial values on first mount, not when profile updates after save
@@ -55,7 +42,6 @@ export default function EditArtistProfileScreen() {
       setMaxPrice(profile.artist.max_price?.toString() || '');
       setTurnaroundDays(profile.artist.turnaround_days?.toString() || '');
       setSpecialties(profile.artist.specialties?.join(', ') || '');
-      fetchSlotsSettings();
       isInitialMount.current = false;
     }
   }, [profile]);
@@ -126,18 +112,6 @@ export default function EditArtistProfileScreen() {
         }
       );
 
-      // Update slots/waitlist
-      const slotsPayload = {
-        max_queue_slots: maxSlots ? parseInt(maxSlots, 10) : 5,
-        allow_waitlist: allowWaitlist,
-        is_open: commissionStatus === 'open',
-      };
-      await axios.post(
-        `${API_URL}/commission-packages/settings`,
-        slotsPayload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
       console.log('Commission update response:', response.data);
 
       // Build updated artist data from response (server is source of truth)
@@ -196,7 +170,7 @@ export default function EditArtistProfileScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -208,22 +182,6 @@ export default function EditArtistProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Quick link to manage packages */}
-        <TouchableOpacity
-          style={styles.quickLinkCard}
-          onPress={() => router.push('/commission-packages')}
-          activeOpacity={0.9}
-        >
-          <View style={styles.quickLinkIcon}>
-            <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.quickLinkText}>
-            <Text style={styles.quickLinkTitle}>Manage Packages</Text>
-            <Text style={styles.quickLinkSubtitle}>Create, edit, and hide client-facing packages.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
-        </TouchableOpacity>
-
         {/* Commission Status */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Commission Status</Text>
@@ -258,38 +216,6 @@ export default function EditArtistProfileScreen() {
                 </TouchableOpacity>
               );
             })}
-          </View>
-        </View>
-
-        {/* Slots & Waitlist */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Slots & Queue</Text>
-          <Text style={styles.helperText}>Set how many commissions you can take at once</Text>
-
-          <Text style={styles.inputLabel}>Max active slots</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="5"
-            placeholderTextColor={colors.text.disabled}
-            value={maxSlots}
-            onChangeText={setMaxSlots}
-            keyboardType="number-pad"
-          />
-
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1, marginRight: spacing.md, minWidth: 0 }}>
-              <Text style={styles.switchLabel}>Allow waitlist</Text>
-              <Text style={styles.switchDescription} numberOfLines={2}>Let clients join when full</Text>
-            </View>
-            <View style={{ flexShrink: 0 }}>
-              <Switch
-                value={allowWaitlist}
-                onValueChange={setAllowWaitlist}
-                trackColor={{ false: colors.border + '40', true: colors.primary + '40' }}
-                thumbColor={allowWaitlist ? colors.primary : colors.background}
-                ios_backgroundColor={colors.border + '40'}
-              />
-            </View>
           </View>
         </View>
 
@@ -381,10 +307,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border + '40',
+    borderBottomColor: colors.border + '15',
     backgroundColor: colors.background,
   },
   backButton: {
@@ -505,15 +430,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: colors.surface,
     borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
   },
   statusButtonActive: {
     backgroundColor: colors.primary + '15',
-    shadowOpacity: 0.08,
   },
   statusButtonText: {
     ...typography.bodyBold,
@@ -540,21 +459,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
     padding: spacing.md + 2,
     paddingTop: spacing.md + 2,
     color: colors.text.primary,
     ...typography.body,
-    borderWidth: 0,
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
     minHeight: 52,
     fontSize: 15,
     textAlignVertical: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
   },
   textArea: {
     minHeight: 100,
@@ -569,11 +484,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.xl,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
   },
   saveButtonDisabled: {
     opacity: 0.5,

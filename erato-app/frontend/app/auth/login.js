@@ -9,12 +9,14 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../constants/theme';
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,10 +50,10 @@ export default function LoginScreen() {
       style={styles.container}
     >
       {/* Back Button */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/auth/welcome')}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
@@ -157,7 +159,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl,
     paddingBottom: spacing.sm,
   },
   backButton: {
@@ -231,7 +232,8 @@ const styles = StyleSheet.create({
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg + 8,
   },
   forgotPasswordText: {
     fontSize: 14,

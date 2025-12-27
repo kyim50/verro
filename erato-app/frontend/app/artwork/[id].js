@@ -377,7 +377,7 @@ export default function ArtworkDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.text.secondary} />
         </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerButton} onPress={() => setShowMenu(true)}>
@@ -472,7 +472,7 @@ export default function ArtworkDetailScreen() {
               </Text>
             </View>
             {!isOwnArtwork && (
-              <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
+              <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
             )}
           </TouchableOpacity>
         </View>
@@ -640,7 +640,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingTop: STATUS_BAR_HEIGHT + spacing.xs,
+    paddingTop: STATUS_BAR_HEIGHT + spacing.xs + spacing.md,
     paddingBottom: spacing.xs,
     zIndex: 10,
     backgroundColor: 'transparent',

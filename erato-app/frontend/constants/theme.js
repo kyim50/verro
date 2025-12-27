@@ -5,18 +5,19 @@ export const colors = {
   surface: '#1a1a1a',
   surfaceLight: '#2a2a2a',
   surfaceElevated: '#3a3a3a',
-  
-  primary: '#e60023', // Pinterest red
+
+  // Red as primary but used more sparingly
+  primary: '#e60023',
   primaryDark: '#ad081b',
   primaryLight: '#ff1744',
-  
+
   text: {
     primary: '#ffffff',
     secondary: '#b3b3b3',
     disabled: '#666666',
     inverse: '#000000',
   },
-  
+
   border: '#3a3a3a',
   borderLight: '#4a4a4a',
   
@@ -26,7 +27,7 @@ export const colors = {
     error: '#e60023',
     info: '#0099ff',
   },
-  
+
   // Shorthand aliases for common status colors
   success: '#00a400',
   error: '#e60023',

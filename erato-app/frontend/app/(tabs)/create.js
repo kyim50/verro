@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.md,
+    paddingTop: spacing.xxl + spacing.md + spacing.md,
     paddingBottom: spacing.md,
   },
   headerSpacer: {
@@ -1247,11 +1247,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, // Softer Pinterest-style shadow
-    shadowRadius: 8,
-    elevation: 2,
   },
   undoButton: {
     width: 56,
@@ -1510,7 +1505,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.small,
     minWidth: 120,
     maxWidth: 200,
   },

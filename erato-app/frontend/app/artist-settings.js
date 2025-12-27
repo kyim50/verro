@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import axios from 'axios';
 import { useAuthStore } from '../store';
@@ -23,6 +24,7 @@ const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.
 
 export default function ArtistSettings() {
   const { token, user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -125,7 +127,7 @@ export default function ArtistSettings() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -150,7 +152,7 @@ export default function ArtistSettings() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       {/* Custom Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -440,7 +442,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: Constants.statusBarHeight + spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border + '15',
@@ -453,11 +454,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
   },
   headerTitle: {
     ...typography.h2,
@@ -613,11 +609,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.full,
     marginTop: spacing.lg,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -636,13 +627,13 @@ const styles = StyleSheet.create({
     width: 50,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FF6B6B',
+    backgroundColor: colors.border + '60',
     justifyContent: 'center',
     padding: 2,
     flexShrink: 0,
   },
   switchActive: {
-    backgroundColor: '#E60023',
+    backgroundColor: colors.primary,
   },
   switchDisabled: {
     opacity: 0.5,

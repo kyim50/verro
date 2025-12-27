@@ -1184,10 +1184,7 @@ export default function CommissionRequestsScreen() {
             >
               {/* SORT SECTION */}
               <View style={styles.filterSection}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="swap-vertical" size={20} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>Sort By</Text>
-                </View>
+                <Text style={styles.sectionTitle}>Sort By</Text>
                 <View style={styles.sortOptions}>
                   {[
                     { value: 'recent', label: 'Most Recent', icon: 'time-outline' },
@@ -1229,10 +1226,7 @@ export default function CommissionRequestsScreen() {
 
               {/* BUDGET SECTION */}
               <View style={styles.filterSection}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="cash-outline" size={20} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>Budget Range</Text>
-                </View>
+                <Text style={styles.sectionTitle}>Budget Range</Text>
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
                     <TextInput
@@ -1260,10 +1254,7 @@ export default function CommissionRequestsScreen() {
 
               {/* STYLES SECTION */}
               <View style={styles.filterSection}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="brush-outline" size={20} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>Art Styles</Text>
-                </View>
+                <Text style={styles.sectionTitle}>Art Styles</Text>
                 <View style={styles.stylesList}>
                   {artStyles.map((style) => {
                     const isSelected = filters.styles?.includes(style.id);
@@ -1298,7 +1289,7 @@ export default function CommissionRequestsScreen() {
             </ScrollView>
 
             {/* Footer with Actions */}
-            <View style={styles.pinterestFooter}>
+            <View style={[styles.pinterestFooter, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
               <View style={styles.pinterestFooterActions}>
                 <TouchableOpacity
                   style={styles.pinterestSecondaryButton}
@@ -1966,11 +1957,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg + spacing.md,
     borderRadius: borderRadius.full,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
   },
   emptyActionText: {
     ...typography.button,
@@ -2067,11 +2053,6 @@ const styles = StyleSheet.create({
     right: -8,
     backgroundColor: colors.background,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
   addImageButton: {
     backgroundColor: colors.background,
@@ -2097,14 +2078,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   input: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
     padding: spacing.lg,
     paddingVertical: spacing.md + 2,
     color: colors.text.primary,
     ...typography.body,
     fontSize: 16,
-    borderWidth: 0,
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -2141,8 +2123,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h3,
     color: colors.text.primary,
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '700',
+    letterSpacing: -0.3,
+    marginBottom: spacing.md,
   },
   sortOptions: {
     gap: spacing.sm,
@@ -2152,25 +2136,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.lg,
-    backgroundColor: colors.background,
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
     marginBottom: spacing.sm,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
   },
   sortOptionActive: {
-    backgroundColor: colors.primary + '08',
-    borderWidth: 2,
+    backgroundColor: colors.primary + '10',
+    borderWidth: 1.5,
     borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
   },
   sortOptionLeft: {
     flexDirection: 'row',
@@ -2218,32 +2193,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md + 4,
     paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
     shadowRadius: 4,
     elevation: 1,
   },
   styleOptionSelected: {
     backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
+    borderColor: colors.primary,
   },
   styleOptionText: {
     ...typography.caption,
-    color: colors.text.primary,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: -0.1,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   styleOptionTextSelected: {
-    color: colors.text.primary,
-    fontWeight: '700',
+    color: colors.background,
+    fontWeight: '600',
   },
   requestPreview: {
     backgroundColor: colors.surface,
@@ -2439,11 +2407,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: borderRadius.full,
     gap: spacing.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
   },
   pinterestAcceptBidButtonText: {
     ...typography.button,
@@ -2676,12 +2639,13 @@ const styles = StyleSheet.create({
   pinterestModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)', // Softer dimming like Pinterest
+    justifyContent: 'flex-end', // Align modal to bottom
   },
   pinterestModalContent: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 24, // Pinterest-style soft rounding
     borderTopRightRadius: 24,
-    height: '92%',
+    height: '95%', // Fixed height to ensure content shows
     paddingTop: spacing.sm,
   },
   pinterestModalHeader: {
@@ -2732,11 +2696,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full, // Full pill shape
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, // Soft shadow
-    shadowRadius: 12,
-    elevation: 4,
   },
   pinterestSubmitButtonDisabled: {
     backgroundColor: colors.text.disabled,
@@ -2761,11 +2720,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   pinterestSecondaryButtonText: {
     ...typography.bodyBold,
@@ -2780,11 +2734,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 5,
   },
   pinterestPrimaryButtonText: {
     ...typography.button,

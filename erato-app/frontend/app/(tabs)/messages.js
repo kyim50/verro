@@ -435,7 +435,7 @@ export default function MessagesScreen() {
               )}
               {hasCommission && (
                 <View style={styles.commissionBadge}>
-                  <Ionicons name="document-text" size={12} color={colors.primary} />
+                  <Ionicons name="pricetag" size={12} color={colors.primary} />
                 </View>
               )}
             </View>
@@ -448,7 +448,7 @@ export default function MessagesScreen() {
                   {getConversationTitle(item)}
                 </Text>
                 {hasCommission && (
-                  <Ionicons name="document-text" size={14} color={colors.primary} style={{ marginLeft: spacing.xs }} />
+                  <Ionicons name="pricetag" size={14} color={colors.primary} style={{ marginLeft: spacing.xs }} />
                 )}
               </View>
               {item.latest_message && (
@@ -488,12 +488,6 @@ export default function MessagesScreen() {
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push('/(tabs)/explore')}
-          >
-            <Ionicons name="document-text" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity 
             style={styles.headerButton}
             onPress={() => setShowArtistSearch(true)}
           >
@@ -751,7 +745,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
-    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.md : Constants.statusBarHeight + spacing.md + 4,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.md + spacing.md : Constants.statusBarHeight + spacing.md + 4 + spacing.md,
     paddingBottom: IS_SMALL_SCREEN ? spacing.md : spacing.md + 4,
     backgroundColor: colors.background,
   },
@@ -774,6 +768,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingVertical: spacing.sm,
     paddingTop: spacing.md,
+    paddingBottom: spacing.md, // Add more bottom padding
   },
   tabsScrollContent: {
     paddingHorizontal: spacing.lg,
@@ -784,7 +779,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginRight: spacing.lg,
-    paddingVertical: spacing.xs - 2,
+    paddingVertical: spacing.sm, // Increased from spacing.xs - 2 for better spacing
+    paddingBottom: spacing.sm + 4, // Extra bottom padding for underline spacing
     position: 'relative',
   },
   tabText: {
