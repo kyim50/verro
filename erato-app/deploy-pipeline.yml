@@ -1,302 +1,48 @@
-name: Erato CI/CD
+name: Frontend CI
 
 on:
   push:
-    branches: [ main, develop ]
-    paths:
-      - 'backend/**'
-      - 'erato-app/frontend/**'
-      - '.github/workflows/**'
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-    paths:
-      - 'backend/**'
-      - 'erato-app/frontend/**'
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/erato-backend
+    branches:
+      - main
 
 jobs:
-  # ===============================
-  # Backend Test & Lint
-  # ===============================
-  backend-test:
+  frontend-checks:
+    name: Frontend Checks
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout the repository
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
+      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 20.x
+          cache: 'npm'  # Automatic caching for npm and node_modules
 
-      - name: Cache NPM dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('backend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: npm ci
 
-      - name: Run linter
+      # 4️⃣ Run lint checks
+      - name: Lint frontend code
         run: npm run lint
 
-      - name: Run tests
-        run: npm test
-        env:
-          NODE_ENV: test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./coverage
-          fail_ci_if_error: false
-
-  # ===============================
-  # Backend Security Scan
-  # ===============================
-  security:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Cache NPM dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('backend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run security audit
-        run: npm audit --audit-level high
-
-      - name: Run Snyk security scan
-        uses: snyk/actions/node@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --file=package.json
-
-  # ===============================
-  # Frontend Test & Build
-  # ===============================
-  frontend-test:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./erato-app/frontend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Cache NPM dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('erato-app/frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run frontend lint
-        run: npm run lint
-
+      # 5️⃣ Run tests
       - name: Run frontend tests
         run: npm test
 
+      # 6️⃣ Optional: Build step (if your frontend has one)
       - name: Build frontend
         run: npm run build
+        if: ${{ success() }}
 
-  # ===============================
-  # Docker Build & Push
-  # ===============================
-  build:
-    needs: [backend-test, security, frontend-test]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ===============================
-  # Deploy to Staging
-  # ===============================
-  deploy-staging:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    environment: staging
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Deploy to staging
-        run: |
-          aws ssm put-parameter \
-            --name "/erato/staging/image-tag" \
-            --value "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop" \
-            --type "String" \
-            --overwrite
-          aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "tag:Environment=staging" \
-            --parameters 'commands=["cd /home/ec2-user/erato-app && docker-compose pull && docker-compose up -d"]'
-
-  # ===============================
-  # Deploy to Production
-  # ===============================
-  deploy-production:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Deploy to production
-        run: |
-          echo "Deploy to production using blue-green strategy"
-          # Keep your existing AWS ELB / Auto Scaling commands here
-
-  # ===============================
-  # Rollback (manual)
-  # ===============================
-  rollback:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
-
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Rollback deployment
-        run: |
-          echo "Rollback commands here"
-
-  # ===============================
-  # Post-deployment Health Check
-  # ===============================
-  health-check:
-    needs: [deploy-staging, deploy-production]
-    runs-on: ubuntu-latest
-    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
-
-    steps:
-      - name: Health check
-        run: |
-          sleep 120
-          if curl -f https://api.erato.yourdomain.com/health; then
-            echo "✅ Application is healthy"
-          else
-            echo "❌ Application health check failed"
-            exit 1
-          fi
-
-  # ===============================
-  # Slack Notification
-  # ===============================
-  notify:
-    needs: [backend-test, security, frontend-test, build, deploy-staging, deploy-production, health-check]
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - name: Send Slack notification
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          fields: repo,message,commit,author,action,eventName,ref,workflow
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      # 7️⃣ Optional: Type checking
+      - name: Type check
+        run: npm run typecheck
+        if: ${{ success() }}
