@@ -689,6 +689,7 @@ router.post('/stripe/create-payment-intent', authenticate, async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(calculatedAmount * 100), // Stripe uses cents
       currency: 'usd',
+      payment_method_types: ['card'], // Explicitly specify card payments
       description: milestone
         ? `Milestone Payment - ${milestone.title}`
         : `Commission Payment - ${paymentType}`,
@@ -700,9 +701,6 @@ router.post('/stripe/create-payment-intent', authenticate, async (req, res) => {
         milestoneId: milestoneId || '',
         platformFee: platformFee.toFixed(2),
         artistPayout: artistPayout.toFixed(2)
-      },
-      automatic_payment_methods: {
-        enabled: true,
       },
     });
 
