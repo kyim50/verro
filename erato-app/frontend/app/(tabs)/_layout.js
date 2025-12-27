@@ -124,10 +124,10 @@ export default function TabsLayout() {
   const isArtist = user?.user_type === 'artist' || 
                    (user?.artists && (Array.isArray(user.artists) ? user.artists.length > 0 : !!user.artists));
 
-  // Calculate tab bar height with safe area insets - more compact
+  // Calculate tab bar height with safe area insets - more compact and higher up
   const tabBarHeight = Platform.OS === 'ios'
-    ? 60 + Math.max(0, insets.bottom - 20) // iOS more compact
-    : 50 + Math.max(0, insets.bottom - 6); // Android more compact
+    ? 45 + insets.bottom // iOS more compact - reduced from 60
+    : 40 + insets.bottom; // Android more compact - reduced from 50
 
   return (
     <Tabs

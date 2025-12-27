@@ -19,7 +19,9 @@ export default function PaymentOptions({
   onProceed,
   milestones = [], // Accept milestones as a prop
 }) {
-  // Build payment types dynamically based on whether milestones exist
+  console.log('🎯 PaymentOptions rendered - visible:', visible, 'commission:', commission?.id);
+
+  // Payment types - Full or Deposit only
   const PAYMENT_TYPES = [
     {
       id: 'full',
@@ -32,15 +34,6 @@ export default function PaymentOptions({
       name: 'Deposit + Final',
       description: 'Pay 50% now, 50% on completion',
       icon: 'wallet-outline',
-    },
-    {
-      id: 'milestone',
-      name: 'Milestone Payments',
-      description: milestones.length > 0
-        ? `Pay in ${milestones.length} stages as work progresses`
-        : 'Artist has not created milestones yet',
-      icon: 'layers-outline',
-      disabled: milestones.length === 0, // Only enable if milestones exist
     },
   ];
   const [selectedType, setSelectedType] = useState(null);
@@ -72,18 +65,25 @@ export default function PaymentOptions({
     if (!commission || !selectedType) return null;
 
     const total = commission.final_price || commission.price || commission.budget || 0;
+    const platformFeePercentage = 0.10; // 10% platform fee
 
     if (selectedType === 'full') {
-      return { total, deposit: 0, final: 0 };
+      const platformFee = total * platformFeePercentage;
+      const artistPayout = total - platformFee;
+      return { total, deposit: 0, final: 0, platformFee, artistPayout };
     }
 
     if (selectedType === 'deposit') {
       const deposit = total * (depositPercentage / 100);
       const final = total - deposit;
-      return { total, deposit, final };
+      const depositPlatformFee = deposit * platformFeePercentage;
+      const finalPlatformFee = final * platformFeePercentage;
+      const totalPlatformFee = total * platformFeePercentage;
+      const artistPayout = total - totalPlatformFee;
+      return { total, deposit, final, platformFee: totalPlatformFee, artistPayout, depositPlatformFee, finalPlatformFee };
     }
 
-    return { total, deposit: 0, final: 0 };
+    return { total, deposit: 0, final: 0, platformFee: 0, artistPayout: total };
   };
 
   const amounts = calculateAmounts();
@@ -199,10 +199,20 @@ export default function PaymentOptions({
               <View style={styles.amountBreakdown}>
                 <Text style={styles.breakdownTitle}>Payment Breakdown</Text>
                 {selectedType === 'full' && (
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Total Amount</Text>
-                    <Text style={styles.breakdownValue}>${amounts.total.toFixed(2)}</Text>
-                  </View>
+                  <>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Commission Total</Text>
+                      <Text style={styles.breakdownValue}>${amounts.total.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Platform Fee (10%)</Text>
+                      <Text style={styles.breakdownValue}>${amounts.platformFee.toFixed(2)}</Text>
+                    </View>
+                    <View style={[styles.breakdownRow, styles.breakdownTotal]}>
+                      <Text style={styles.breakdownTotalLabel}>Artist Receives</Text>
+                      <Text style={styles.breakdownTotalValue}>${amounts.artistPayout.toFixed(2)}</Text>
+                    </View>
+                  </>
                 )}
                 {selectedType === 'deposit' && (
                   <>
@@ -214,16 +224,19 @@ export default function PaymentOptions({
                       <Text style={styles.breakdownLabel}>Final Payment</Text>
                       <Text style={styles.breakdownValue}>${amounts.final.toFixed(2)}</Text>
                     </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Platform Fee (10%)</Text>
+                      <Text style={styles.breakdownValue}>${amounts.platformFee.toFixed(2)}</Text>
+                    </View>
                     <View style={[styles.breakdownRow, styles.breakdownTotal]}>
                       <Text style={styles.breakdownTotalLabel}>Total</Text>
                       <Text style={styles.breakdownTotalValue}>${amounts.total.toFixed(2)}</Text>
                     </View>
+                    <View style={[styles.breakdownRow, styles.breakdownArtist]}>
+                      <Text style={styles.breakdownArtistLabel}>Artist Receives</Text>
+                      <Text style={styles.breakdownArtistValue}>${amounts.artistPayout.toFixed(2)}</Text>
+                    </View>
                   </>
-                )}
-                {selectedType === 'milestone' && (
-                  <Text style={styles.milestoneNote}>
-                    Artist will set milestone amounts
-                  </Text>
                 )}
               </View>
             )}
@@ -417,6 +430,23 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.primary,
     fontSize: 18,
+  },
+  breakdownArtist: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    borderTopStyle: 'dashed',
+  },
+  breakdownArtistLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  breakdownArtistValue: {
+    ...typography.bodyBold,
+    color: colors.status.success,
+    fontSize: 14,
   },
   milestoneNote: {
     ...typography.caption,

@@ -1838,7 +1838,7 @@ export default function HomeScreen() {
       {/* Sort & Filter Modal */}
       <Modal
         visible={showSortFilterModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowSortFilterModal(false)}
       >

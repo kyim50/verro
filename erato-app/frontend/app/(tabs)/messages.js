@@ -618,7 +618,7 @@ export default function MessagesScreen() {
       {/* Artist Search Modal */}
       <Modal
         visible={showArtistSearch}
-        animationType="slide"
+        animationType="fade"
         transparent={false}
         onRequestClose={() => setShowArtistSearch(false)}
       >

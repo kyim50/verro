@@ -773,7 +773,7 @@ const loadBoards = useCallback(async (skipCache = true) => {
       {/* Commission Detail Modal */}
       <Modal
         visible={showCommissionModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowCommissionModal(false)}
       >

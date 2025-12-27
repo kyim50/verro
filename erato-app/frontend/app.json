@@ -52,6 +52,12 @@
         {
           "photosPermission": "The app accesses your photos to let you share artwork."
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": false
+        }
       ]
     ],
     "scheme": "erato",
@@ -63,7 +69,8 @@
         "projectId": "c28d6897-a427-4bbb-8f35-74abae16eef0"
       },
       "EXPO_PUBLIC_API_URL": "https://api.verrocio.com/api",
-      "EXPO_PUBLIC_SOCKET_URL": "https://api.verrocio.com"
+      "EXPO_PUBLIC_SOCKET_URL": "https://api.verrocio.com",
+      "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SiVLYRxHT8ws7mzT4SDJq9luDms1qe8RC2mNpQtYfTVv5gzrGTOGGFsGuiLMlJmJSYthp73Ar7lrnOUMVKLCgCf00gp5sEqpa"
     },
     "owner": "kyim50"
   }

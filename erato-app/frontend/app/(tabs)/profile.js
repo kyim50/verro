@@ -1354,6 +1354,7 @@ const styles = StyleSheet.create({
   },
   bannerSection: {
     position: 'relative',
+    marginTop: spacing.lg,
     marginBottom: IS_SMALL_SCREEN ? 45 : 50, // Space for half of the overlapping avatar
   },
   bannerContainer: {

@@ -243,6 +243,22 @@ router.post('/create-order', authenticate, async (req, res) => {
       });
     }
 
+    // Prevent duplicate payments based on payment type
+    if (paymentType === 'deposit' && commission.payment_status === 'deposit_paid') {
+      return res.status(400).json({
+        success: false,
+        error: 'Deposit has already been paid for this commission'
+      });
+    }
+
+    if ((paymentType === 'full' || paymentType === 'final') &&
+        (commission.payment_status === 'fully_paid' || commission.payment_status === 'paid')) {
+      return res.status(400).json({
+        success: false,
+        error: 'This commission has already been fully paid'
+      });
+    }
+
     // Calculate amount based on payment type
     let calculatedAmount = amount;
     let milestone = null;
@@ -503,6 +519,7 @@ router.post('/capture-order', authenticate, async (req, res) => {
 
     if (commissionError) {
       console.error('Error updating commission:', commissionError);
+      throw new Error('Failed to update commission payment status');
     }
 
     // If milestone payment, update milestone status
@@ -624,6 +641,22 @@ router.post('/stripe/create-payment-intent', authenticate, async (req, res) => {
       return res.status(403).json({
         success: false,
         error: 'Only the client can make payments'
+      });
+    }
+
+    // Prevent duplicate payments based on payment type
+    if (paymentType === 'deposit' && commission.payment_status === 'deposit_paid') {
+      return res.status(400).json({
+        success: false,
+        error: 'Deposit has already been paid for this commission'
+      });
+    }
+
+    if ((paymentType === 'full' || paymentType === 'final') &&
+        (commission.payment_status === 'fully_paid' || commission.payment_status === 'paid')) {
+      return res.status(400).json({
+        success: false,
+        error: 'This commission has already been fully paid'
       });
     }
 
@@ -848,6 +881,7 @@ router.post('/stripe/confirm-payment', authenticate, async (req, res) => {
 
     if (commissionError) {
       console.error('Error updating commission:', commissionError);
+      throw new Error('Failed to update commission payment status');
     }
 
     // If milestone payment, update milestone status
