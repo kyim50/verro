@@ -98,6 +98,17 @@ export default function CommissionDetails() {
   };
 
   const pickImage = async (isAdditional = false) => {
+    // Request permission first
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Toast.show({
+        type: 'error',
+        text1: 'Permission Denied',
+        text2: 'We need media library access to upload images',
+      });
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: !isAdditional,
@@ -191,6 +202,11 @@ export default function CommissionDetails() {
     const isLocked = milestone.is_locked;
     const isCurrent = commission?.current_milestone_id === milestone.id;
     const hasCheckpoint = milestone.progress_update;
+    const isFirstMilestone = milestone.milestone_number === 1;
+    const paymentRequired = milestone.payment_required_before_work;
+
+    // Can complete if: not locked, OR (first milestone AND either paid OR payment not required)
+    const canComplete = !hasCheckpoint && (!isLocked || (isFirstMilestone && (!paymentRequired || isPaid)));
 
     return (
       <View key={milestone.id} style={styles.milestoneCard}>
@@ -235,7 +251,7 @@ export default function CommissionDetails() {
         </View>
 
         {/* Artist Actions */}
-        {isArtist && !isLocked && !hasCheckpoint && (
+        {isArtist && canComplete && (
           <TouchableOpacity
             style={styles.completeButton}
             onPress={() => {

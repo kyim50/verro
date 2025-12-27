@@ -305,12 +305,15 @@ router.post('/commission/:commissionId/confirm', authenticate, async (req, res) 
       .single();
 
     if (artist) {
-      await NotificationService.createNotification(
+      await NotificationService.publish(
         artist.id,
-        'milestone_plan_confirmed',
-        `Client confirmed the milestone payment plan for commission`,
-        `/commissions/${commissionId}`,
-        { commission_id: commissionId }
+        {
+          type: 'milestone_plan_confirmed',
+          title: 'Milestone Plan Confirmed',
+          message: `Client confirmed the milestone payment plan for commission`,
+          link: `/commissions/${commissionId}`,
+          data: { commission_id: commissionId }
+        }
       );
 
       await sendPushToUser(artist.id, {
@@ -495,15 +498,18 @@ router.post('/:milestoneId/complete', authenticate, async (req, res) => {
       .single();
 
     if (client) {
-      await NotificationService.createNotification(
+      await NotificationService.publish(
         client.id,
-        'milestone_approval_needed',
-        `Artist completed ${milestone.title} - approval needed`,
-        `/commissions/${milestone.commission_id}`,
         {
-          commission_id: milestone.commission_id,
-          milestone_id: milestoneId,
-          progress_update_id: progressUpdate.id
+          type: 'milestone_approval_needed',
+          title: 'Milestone Ready for Approval',
+          message: `Artist completed ${milestone.title} - approval needed`,
+          link: `/commissions/${milestone.commission_id}`,
+          data: {
+            commission_id: milestone.commission_id,
+            milestone_id: milestoneId,
+            progress_update_id: progressUpdate.id
+          }
         }
       );
 

@@ -6,17 +6,54 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
-  ScrollView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CardField, useStripe } from '@stripe/stripe-react-native';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
 import { useAuthStore } from '../store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Conditional Stripe import with fallback for Expo Go
+let CardField, useStripe;
+let isStripeMocked = false;
+try {
+  const stripeModule = require('@stripe/stripe-react-native');
+  CardField = stripeModule.CardField;
+  useStripe = stripeModule.useStripe;
+} catch (error) {
+  console.warn('⚠️ Stripe native module not available (Expo Go). Using mock components for development.');
+  isStripeMocked = true;
+  // Mock CardField component
+  CardField = ({ onCardChange }) => {
+    useEffect(() => {
+      // Simulate card completion for testing
+      const timer = setTimeout(() => onCardChange?.({ complete: true }), 1000);
+      return () => clearTimeout(timer);
+    }, [onCardChange]);
+    return (
+      <View style={{ backgroundColor: colors.surface, height: 50, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 16 }}>
+        <Text style={{ color: colors.text.disabled }}>
+          Stripe unavailable in Expo Go - Test mode active
+        </Text>
+      </View>
+    );
+  };
+  // Mock useStripe hook
+  useStripe = () => ({
+    confirmPayment: async () => {
+      console.log('🧪 Mock Stripe: confirmPayment called');
+      // Simulate successful payment
+      return {
+        paymentIntent: {
+          id: 'mock_pi_' + Date.now().toString(36),
+          status: 'Succeeded'
+        }
+      };
+    }
+  });
+}
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 

@@ -1190,14 +1190,28 @@ router.get('/:id/progress', authenticate, async (req, res) => {
 
     const { data: progressUpdates, error } = await supabaseAdmin
       .from('commission_progress_updates')
-      .select(`
-        *,
-        created_by_user:users!commission_progress_updates_created_by_fkey(id, username, full_name, avatar_url)
-      `)
+      .select('*')
       .eq('commission_id', req.params.id)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
+
+    // Fetch user data separately to avoid foreign key issues
+    if (progressUpdates && progressUpdates.length > 0) {
+      const userIds = [...new Set(progressUpdates.map(u => u.created_by).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: users } = await supabaseAdmin
+          .from('users')
+          .select('id, username, full_name, avatar_url')
+          .in('id', userIds);
+
+        const userMap = {};
+        users?.forEach(user => { userMap[user.id] = user; });
+        progressUpdates.forEach(update => {
+          update.created_by_user = userMap[update.created_by];
+        });
+      }
+    }
 
     // Format progress updates to include images array
     const formattedUpdates = (progressUpdates || []).map(update => {
@@ -1208,7 +1222,7 @@ router.get('/:id/progress', authenticate, async (req, res) => {
       } else if (update.image_url) {
         images = [update.image_url];
       }
-      
+
       return {
         ...update,
         images: images,
@@ -1492,6 +1506,7 @@ router.get('/queue/artist/:artistId', authenticate, async (req, res) => {
 router.get('/history/client/:clientId', authenticate, async (req, res) => {
   try {
     const { clientId } = req.params;
+    console.log('📋 GET /history/client/:clientId - UPDATED CODE v2.0');
 
     // Verify requester is the client
     if (req.user.id !== clientId) {
@@ -1514,18 +1529,27 @@ router.get('/history/client/:clientId', authenticate, async (req, res) => {
         cancelled_by,
         cancellation_type,
         cancellation_reason,
-        final_price,
-        artist:users!commissions_artist_id_fkey(
-          id,
-          username,
-          full_name,
-          avatar_url
-        )
+        final_price
       `)
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+
+    // Fetch artist data separately to avoid foreign key issues
+    if (commissions && commissions.length > 0) {
+      const artistIds = [...new Set(commissions.map(c => c.artist_id))];
+      const { data: artists } = await supabaseAdmin
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', artistIds);
+
+      const artistMap = {};
+      artists?.forEach(artist => { artistMap[artist.id] = artist; });
+      commissions.forEach(commission => {
+        commission.artist = artistMap[commission.artist_id];
+      });
+    }
 
     // Group by status
     const grouped = {
