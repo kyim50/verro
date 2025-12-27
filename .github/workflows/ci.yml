@@ -1,33 +1,34 @@
 name: CI Checks
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-  push:
+  pull_request:
     branches:
       - main
 
 jobs:
-  backend-lint:
-    name: Backend Lint & Security Check
+  backend-checks:
+    name: Backend Lint & Security
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (backend)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'  # automatic caching
+          cache: 'npm'
+          cache-dependency-path: erato-app/backend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         working-directory: ./erato-app/backend
         run: npm ci
 
-      - name: Run linter
+      - name: Run backend linter
         working-directory: ./erato-app/backend
         run: |
           if [ -f "package.json" ] && grep -q '"lint"' package.json; then
@@ -39,46 +40,42 @@ jobs:
 
       - name: Check for security vulnerabilities
         working-directory: ./erato-app/backend
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high || true
         continue-on-error: true
 
-      - name: Check package.json syntax
+      - name: Validate package.json
         working-directory: ./erato-app/backend
-        run: |
-          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
-          echo "✅ package.json is valid"
+        run: node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')) && echo '✅ package.json is valid'"
 
-  frontend-check:
-    name: Frontend Checks
+  frontend-checks:
+    name: Frontend Lint & Security
     runs-on: ubuntu-latest
-    
+    needs: backend-checks
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (frontend)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'  # automatic caching
+          cache: 'npm'
+          cache-dependency-path: erato-app/frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         working-directory: ./erato-app/frontend
         run: npm ci
 
       - name: Check for security vulnerabilities
         working-directory: ./erato-app/frontend
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high || true
         continue-on-error: true
 
-      - name: Check package.json syntax
+      - name: Validate package.json
         working-directory: ./erato-app/frontend
-        run: |
-          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
-          echo "✅ package.json is valid"
+        run: node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')) && echo '✅ package.json is valid'"
 
       - name: Validate app.json
         working-directory: ./erato-app/frontend
-        run: |
-          node -e "JSON.parse(require('fs').readFileSync('app.json','utf8'))"
-          echo "✅ app.json is valid"
+        run: node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')) && echo '✅ app.json is valid'"
