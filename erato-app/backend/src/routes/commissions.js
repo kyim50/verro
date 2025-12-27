@@ -511,7 +511,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Update commission status (artist only)
 router.patch('/:id/status', authenticate, async (req, res) => {
   try {
-    const { status, artist_response } = req.body;
+    const { status, artist_response, cancellation_reason, work_proof_urls } = req.body;
 
     if (!['accepted', 'declined', 'rejected', 'in_progress', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
@@ -520,7 +520,7 @@ router.patch('/:id/status', authenticate, async (req, res) => {
     // Get commission to verify artist
     const { data: commission } = await supabaseAdmin
       .from('commissions')
-      .select('artist_id, client_id')
+      .select('artist_id, client_id, status, final_price')
       .eq('id', req.params.id)
       .single();
 
@@ -537,7 +537,61 @@ router.patch('/:id/status', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Artists can accept/reject/complete, clients can cancel
+    // Enhanced cancellation policy
+    if (isClient && status === 'cancelled') {
+      // Auto-cancel if still pending (artist hasn't accepted)
+      if (commission.status === 'pending') {
+        // Allowed - automatic cancellation
+        console.log('Client cancelling pending commission - auto-approved');
+      }
+      // If in progress, check milestone completion percentage
+      else if (commission.status === 'in_progress') {
+        // Get milestone completion stats
+        const { data: milestones, error: milestonesError } = await supabaseAdmin
+          .from('commission_milestones')
+          .select('id, payment_status, milestone_number')
+          .eq('commission_id', req.params.id)
+          .order('milestone_number', { ascending: true });
+
+        if (milestonesError) {
+          console.error('Error fetching milestones:', milestonesError);
+          return res.status(500).json({ error: 'Error checking milestone status' });
+        }
+
+        if (milestones && milestones.length > 0) {
+          const totalMilestones = milestones.length;
+          const paidMilestones = milestones.filter(m => m.payment_status === 'paid').length;
+          const completionPercentage = (paidMilestones / totalMilestones) * 100;
+
+          console.log(`Commission ${req.params.id}: ${paidMilestones}/${totalMilestones} milestones paid (${completionPercentage.toFixed(1)}%)`);
+
+          if (completionPercentage > 50) {
+            return res.status(403).json({
+              error: 'Cannot cancel commission after 50% milestone completion',
+              details: {
+                completionPercentage: completionPercentage.toFixed(1),
+                paidMilestones,
+                totalMilestones,
+                message: 'Please contact the artist directly to discuss cancellation options.'
+              }
+            });
+          }
+
+          // Allowed - under 50% completion
+          console.log('Client cancelling in-progress commission - under 50% completion');
+        } else {
+          // No milestones yet - allow cancellation
+          console.log('Client cancelling in-progress commission - no milestones defined');
+        }
+      } else {
+        // Commission is already completed, declined, or cancelled
+        return res.status(400).json({
+          error: `Cannot cancel commission with status: ${commission.status}`
+        });
+      }
+    }
+
+    // Artists can accept/reject/complete, clients can only cancel under specific conditions
     if (isClient && status !== 'cancelled') {
       return res.status(403).json({ error: 'Clients can only cancel commissions' });
     }
@@ -595,6 +649,26 @@ router.patch('/:id/status', authenticate, async (req, res) => {
         updates.artist_response = artist_response;
       }
       updates.responded_at = new Date().toISOString();
+    }
+
+    // Add cancellation tracking data
+    if (finalStatus === 'cancelled') {
+      updates.cancelled_by = req.user.id;
+      updates.cancellation_reason = cancellation_reason || null;
+
+      // Determine cancellation type
+      if (commission.status === 'pending') {
+        updates.cancellation_type = 'auto_pending';
+      } else if (isClient && commission.status === 'in_progress') {
+        updates.cancellation_type = 'milestone_refund';
+      } else if (isArtist) {
+        updates.cancellation_type = 'artist_initiated';
+      }
+
+      // Store work proof URLs if provided (artist cancelling in-progress)
+      if (work_proof_urls && Array.isArray(work_proof_urls)) {
+        updates.work_proof_urls = JSON.stringify(work_proof_urls);
+      }
     }
 
     // Update status
@@ -1303,6 +1377,231 @@ router.get('/:id/files', authenticate, async (req, res) => {
     res.json({ files: files || [] });
   } catch (error) {
     console.error('Error fetching commission files:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get artist's commission queue
+router.get('/queue/artist/:artistId', authenticate, async (req, res) => {
+  try {
+    const { artistId } = req.params;
+
+    // Verify requester is the artist or has permission
+    if (req.user.id !== artistId) {
+      // Allow public view of queue positions, but limited info
+      const { data: activeCommissions, error } = await supabaseAdmin
+        .from('commissions')
+        .select('id, queue_position, queue_status, status, accepted_at')
+        .eq('artist_id', artistId)
+        .in('status', ['in_progress', 'accepted'])
+        .order('queue_position', { ascending: true });
+
+      if (error) throw error;
+
+      return res.json({
+        queue: activeCommissions || [],
+        total_active: activeCommissions?.length || 0
+      });
+    }
+
+    // Full queue data for the artist themselves
+    const { data: commissions, error } = await supabaseAdmin
+      .from('commissions')
+      .select(`
+        id,
+        client_id,
+        status,
+        queue_position,
+        queue_status,
+        accepted_at,
+        created_at,
+        updated_at,
+        final_price,
+        current_milestone_id,
+        client:users!commissions_client_id_fkey(
+          id,
+          username,
+          full_name,
+          avatar_url
+        ),
+        current_milestone:commission_milestones!commissions_current_milestone_id_fkey(
+          id,
+          milestone_number,
+          title,
+          stage,
+          payment_status
+        )
+      `)
+      .eq('artist_id', artistId)
+      .in('status', ['pending', 'in_progress', 'accepted'])
+      .order('queue_position', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    // Separate active queue from pending/waitlist
+    const activeQueue = commissions?.filter(c =>
+      c.status === 'in_progress' && c.queue_position !== null
+    ) || [];
+
+    const pendingRequests = commissions?.filter(c =>
+      c.status === 'pending' && (c.queue_status === 'active' || c.queue_status === null)
+    ) || [];
+
+    const waitlist = commissions?.filter(c =>
+      c.status === 'pending' && c.queue_status === 'waitlist'
+    ) || [];
+
+    // Get artist settings
+    const { data: settings } = await supabaseAdmin
+      .from('artist_commission_settings')
+      .select('max_queue_slots, allow_waitlist, auto_promote_waitlist, is_open')
+      .eq('artist_id', artistId)
+      .single();
+
+    res.json({
+      active_queue: activeQueue,
+      pending_requests: pendingRequests,
+      waitlist: waitlist,
+      settings: {
+        max_slots: settings?.max_queue_slots || 5,
+        allow_waitlist: settings?.allow_waitlist || false,
+        auto_promote: settings?.auto_promote_waitlist || false,
+        is_open: settings?.is_open ?? true
+      },
+      stats: {
+        total_active: activeQueue.length,
+        total_pending: pendingRequests.length,
+        total_waitlist: waitlist.length,
+        available_slots: Math.max(0, (settings?.max_queue_slots || 5) - activeQueue.length)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching commission queue:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get client's commission history with state tracking
+router.get('/history/client/:clientId', authenticate, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Verify requester is the client
+    if (req.user.id !== clientId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { data: commissions, error } = await supabaseAdmin
+      .from('commissions')
+      .select(`
+        id,
+        artist_id,
+        status,
+        queue_position,
+        queue_status,
+        state_history,
+        created_at,
+        accepted_at,
+        completed_at,
+        cancelled_at,
+        cancelled_by,
+        cancellation_type,
+        cancellation_reason,
+        final_price,
+        artist:users!commissions_artist_id_fkey(
+          id,
+          username,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Group by status
+    const grouped = {
+      active: commissions?.filter(c => c.status === 'in_progress') || [],
+      pending: commissions?.filter(c => c.status === 'pending') || [],
+      completed: commissions?.filter(c => c.status === 'completed') || [],
+      cancelled: commissions?.filter(c => c.status === 'cancelled') || [],
+      declined: commissions?.filter(c => c.status === 'declined') || []
+    };
+
+    res.json({
+      commissions: commissions || [],
+      grouped,
+      stats: {
+        total: commissions?.length || 0,
+        active: grouped.active.length,
+        pending: grouped.pending.length,
+        completed: grouped.completed.length,
+        cancelled: grouped.cancelled.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching client commission history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update artist queue settings
+router.patch('/queue/settings', authenticate, async (req, res) => {
+  try {
+    const { auto_promote_waitlist } = req.body;
+
+    // Verify user is an artist
+    const { data: artist } = await supabaseAdmin
+      .from('artists')
+      .select('id')
+      .eq('id', req.user.id)
+      .single();
+
+    if (!artist) {
+      return res.status(403).json({ error: 'Only artists can update queue settings' });
+    }
+
+    // Update or insert settings
+    const { data: existingSettings } = await supabaseAdmin
+      .from('artist_commission_settings')
+      .select('id')
+      .eq('artist_id', req.user.id)
+      .maybeSingle();
+
+    let result;
+    if (existingSettings) {
+      // Update existing
+      result = await supabaseAdmin
+        .from('artist_commission_settings')
+        .update({
+          auto_promote_waitlist: auto_promote_waitlist ?? false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('artist_id', req.user.id)
+        .select()
+        .single();
+    } else {
+      // Insert new
+      result = await supabaseAdmin
+        .from('artist_commission_settings')
+        .insert({
+          artist_id: req.user.id,
+          auto_promote_waitlist: auto_promote_waitlist ?? false
+        })
+        .select()
+        .single();
+    }
+
+    if (result.error) throw result.error;
+
+    res.json({
+      message: 'Queue settings updated successfully',
+      settings: result.data
+    });
+  } catch (error) {
+    console.error('Error updating queue settings:', error);
     res.status(500).json({ error: error.message });
   }
 });

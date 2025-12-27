@@ -361,6 +361,44 @@ router.post('/:milestoneId/start', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'This milestone is locked. Complete previous milestones first.' });
     }
 
+    // Check if previous milestone has been approved (if this is not the first milestone)
+    if (milestone.milestone_number > 1) {
+      const { data: previousMilestone, error: prevError } = await supabaseAdmin
+        .from('commission_milestones')
+        .select(`
+          id,
+          milestone_number,
+          title,
+          progress_update_id,
+          progress_update:commission_progress_updates(
+            id,
+            approval_status,
+            requires_approval
+          )
+        `)
+        .eq('commission_id', milestone.commission_id)
+        .eq('milestone_number', milestone.milestone_number - 1)
+        .single();
+
+      if (prevError) {
+        console.error('Error fetching previous milestone:', prevError);
+      } else if (previousMilestone && previousMilestone.progress_update) {
+        // If previous milestone requires approval, it must be approved
+        if (previousMilestone.progress_update.requires_approval &&
+            previousMilestone.progress_update.approval_status !== 'approved') {
+          return res.status(400).json({
+            error: 'Previous milestone must be approved before starting this milestone',
+            requires_approval: true,
+            previous_milestone: {
+              id: previousMilestone.id,
+              title: previousMilestone.title,
+              approval_status: previousMilestone.progress_update.approval_status
+            }
+          });
+        }
+      }
+    }
+
     // Check if payment is required before work
     if (milestone.payment_required_before_work && milestone.payment_status !== 'paid') {
       return res.status(400).json({
