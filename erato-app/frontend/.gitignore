@@ -34,3 +34,8 @@ build/
 .deploy.config
 deploy.config
 
+# iOS
+ios/Pods/
+ios/build/
+
+
