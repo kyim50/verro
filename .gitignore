@@ -1,2 +1,70 @@
 erato-app/API_ENDPOINTS_QUEUE.md
 erato-app/COMMISSION_QUEUE_IMPLEMENTATION.md
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.ipa
+*.apk
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Misc
+.cache/
+tmp/
+temp/
+
+# EC2/Deployment artifacts
+*ubuntu@*
+*@3.18.213.189*
+*.pem
+*.ppk
+
+# Deployment configuration (contains sensitive info)
+deploy.config
+
+.verro.pem
+
