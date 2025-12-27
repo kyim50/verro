@@ -10,8 +10,10 @@ erato-app/COMMISSION_QUEUE_IMPLEMENTATION.md
 node_modules/
 .pnp
 .pnp.js
-yarn.lock
-package-lock.json
+
+# Keep lock files for deterministic installs / CI
+# yarn.lock
+# package-lock.json
 
 # =====================================================
 # Environment variables
