@@ -2,7 +2,6 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StripeProvider } from '@stripe/stripe-react-native';
 import Toast from 'react-native-toast-message';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../store';
@@ -10,6 +9,17 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import toastConfig from '../components/StyledToast';
 import StyledAlert, { showAlert } from '../components/StyledAlert';
 import { colors } from '../constants/theme';
+
+// Conditional Stripe import with fallback for Expo Go
+let StripeProvider;
+try {
+  const stripeModule = require('@stripe/stripe-react-native');
+  StripeProvider = stripeModule.StripeProvider;
+} catch (error) {
+  console.warn('⚠️ Stripe native module not available (Expo Go). Using mock provider for development.');
+  // Mock StripeProvider for Expo Go
+  StripeProvider = ({ children }) => children;
+}
 
 // Patch Toast.show globally to use the styled alert (smaller, consistent)
 let toastPatched = false;
