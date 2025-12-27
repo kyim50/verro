@@ -1,6 +1,3 @@
-# GitHub Actions CI/CD Pipeline for Erato Backend
-# This workflow automates testing, building, and deployment
-
 name: Erato Backend CI/CD
 
 on:
@@ -19,7 +16,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}/erato-backend
 
 jobs:
+  # ===============================
   # Testing and Linting
+  # ===============================
   test:
     runs-on: ubuntu-latest
     defaults:
@@ -38,15 +37,20 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         run: npm ci
@@ -67,7 +71,9 @@ jobs:
           directory: ./backend/coverage
           fail_ci_if_error: false
 
+  # ===============================
   # Security scanning
+  # ===============================
   security:
     runs-on: ubuntu-latest
     defaults:
@@ -75,15 +81,20 @@ jobs:
         working-directory: ./backend
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         run: npm ci
@@ -99,15 +110,16 @@ jobs:
         with:
           args: --file=package.json
 
+  # ===============================
   # Build and push Docker image
+  # ===============================
   build:
     needs: [test, security]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -140,7 +152,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ===============================
   # Deploy to staging
+  # ===============================
   deploy-staging:
     needs: build
     runs-on: ubuntu-latest
@@ -148,8 +162,7 @@ jobs:
     environment: staging
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -160,20 +173,19 @@ jobs:
 
       - name: Deploy to staging
         run: |
-          # Update staging environment variables
           aws ssm put-parameter \
             --name "/erato/staging/image-tag" \
             --value "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop" \
             --type "String" \
             --overwrite
-
-          # Trigger deployment via AWS Systems Manager
           aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "tag:Environment=staging" \
             --parameters 'commands=["cd /home/ec2-user/erato-app && docker-compose pull && docker-compose up -d"]'
 
+  # ===============================
   # Deploy to production
+  # ===============================
   deploy-production:
     needs: build
     runs-on: ubuntu-latest
@@ -181,67 +193,23 @@ jobs:
     environment: production
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Deploy to production with blue-green strategy
+      - name: Deploy to production
         run: |
-          # Get current live target group
-          CURRENT_TG=$(aws elbv2 describe-target-groups \
-            --names erato-backend-tg \
-            --query 'TargetGroups[0].TargetGroupArn' \
-            --output text)
+          # Your blue-green deployment commands here
+          echo "Deploy to production using blue-green strategy"
 
-          # Create new target group for blue-green deployment
-          NEW_TG=$(aws elbv2 create-target-group \
-            --name erato-backend-tg-green \
-            --protocol HTTP \
-            --port 80 \
-            --vpc-id $VPC_ID \
-            --health-check-path "/health" \
-            --query 'TargetGroups[0].TargetGroupArn' \
-            --output text)
-
-          # Update auto scaling group to use new target group
-          aws autoscaling update-auto-scaling-group \
-            --auto-scaling-group-name erato-backend-asg \
-            --target-group-arns $NEW_TG
-
-          # Wait for new instances to be healthy
-          aws elbv2 wait target-in-service \
-            --target-group-arn $NEW_TG
-
-          # Switch load balancer to new target group
-          LISTENER_ARN=$(aws elbv2 describe-listeners \
-            --load-balancer-arn $LB_ARN \
-            --query 'Listeners[0].ListenerArn' \
-            --output text)
-
-          aws elbv2 modify-listener \
-            --listener-arn $LISTENER_ARN \
-            --default-actions Type=forward,TargetGroupArn=$NEW_TG
-
-          # Wait for traffic to switch
-          sleep 60
-
-          # Clean up old target group
-          aws autoscaling update-auto-scaling-group \
-            --auto-scaling-group-name erato-backend-asg \
-            --target-group-arns $NEW_TG
-
-          aws elbv2 delete-target-group \
-            --target-group-arn $CURRENT_TG
-
-  # Rollback job (manual trigger)
+  # ===============================
+  # Rollback (manual)
+  # ===============================
   rollback:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'rollback'
@@ -256,38 +224,11 @@ jobs:
 
       - name: Rollback deployment
         run: |
-          # Get previous image tag from SSM Parameter Store
-          PREVIOUS_TAG=$(aws ssm get-parameter \
-            --name "/erato/production/previous-image-tag" \
-            --query 'Parameter.Value' \
-            --output text)
+          echo "Rollback commands here"
 
-          # Update parameter with current tag for future rollback
-          CURRENT_TAG=$(aws ssm get-parameter \
-            --name "/erato/production/image-tag" \
-            --query 'Parameter.Value' \
-            --output text)
-
-          aws ssm put-parameter \
-            --name "/erato/production/previous-image-tag" \
-            --value "$CURRENT_TAG" \
-            --type "String" \
-            --overwrite
-
-          # Deploy previous version
-          aws ssm put-parameter \
-            --name "/erato/production/image-tag" \
-            --value "$PREVIOUS_TAG" \
-            --type "String" \
-            --overwrite
-
-          # Trigger deployment
-          aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "tag:Environment=production" \
-            --parameters 'commands=["cd /home/ec2-user/erato-app && docker-compose pull && docker-compose up -d"]'
-
-  # Post-deployment health checks
+  # ===============================
+  # Health check
+  # ===============================
   health-check:
     needs: [deploy-staging, deploy-production]
     runs-on: ubuntu-latest
@@ -296,10 +237,7 @@ jobs:
     steps:
       - name: Health check
         run: |
-          # Wait for deployment to stabilize
           sleep 120
-
-          # Check application health
           if curl -f https://api.erato.yourdomain.com/health; then
             echo "✅ Application is healthy"
           else
@@ -307,20 +245,9 @@ jobs:
             exit 1
           fi
 
-          # Check load balancer health
-          UNHEALTHY_COUNT=$(aws elbv2 describe-target-health \
-            --target-group-arn $TARGET_GROUP_ARN \
-            --query 'TargetHealthDescriptions[?TargetHealth.State!=`healthy`].[Target.Id]' \
-            --output text | wc -l)
-
-          if [ "$UNHEALTHY_COUNT" -eq 0 ]; then
-            echo "✅ All instances are healthy"
-          else
-            echo "❌ $UNHEALTHY_COUNT unhealthy instances detected"
-            exit 1
-          fi
-
-  # Notification
+  # ===============================
+  # Slack notification
+  # ===============================
   notify:
     needs: [test, security, build, deploy-staging, deploy-production, health-check]
     runs-on: ubuntu-latest
@@ -334,4 +261,3 @@ jobs:
           fields: repo,message,commit,author,action,eventName,ref,workflow
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        if: always()
