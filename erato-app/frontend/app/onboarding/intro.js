@@ -242,11 +242,6 @@ const styles = StyleSheet.create({
     minWidth: width * 0.8, // 80% of screen width for better visibility
     maxWidth: 300, // Cap maximum width
     alignSelf: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   nextButtonText: {
     ...typography.button,

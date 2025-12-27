@@ -31,7 +31,9 @@ import ReviewModal from '../../components/ReviewModal';
 import { initSocket, getSocket, disconnectSocket } from '../../lib/socket';
 import { showAlert } from '../../components/StyledAlert';
 import PaymentOptions from '../../components/PaymentOptions';
+import PaymentMethodSelector from '../../components/PaymentMethodSelector';
 import PayPalCheckout from '../../components/PayPalCheckout';
+import StripeCheckout from '../../components/StripeCheckout';
 import EscrowStatus from '../../components/EscrowStatus';
 import MilestoneTracker from '../../components/MilestoneTracker';
 import TipJar from '../../components/TipJar';
@@ -68,7 +70,9 @@ export default function ConversationScreen() {
   const [markupPaths, setMarkupPaths] = useState([]);
   const [showReferences, setShowReferences] = useState(false);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [showPaymentMethodSelector, setShowPaymentMethodSelector] = useState(false);
   const [showPayPalCheckout, setShowPayPalCheckout] = useState(false);
+  const [showStripeCheckout, setShowStripeCheckout] = useState(false);
   const [showTipJar, setShowTipJar] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [selectedImageForViewer, setSelectedImageForViewer] = useState(null);
@@ -1565,7 +1569,7 @@ export default function ConversationScreen() {
               style={styles.referencesButton}
               onPress={() => setShowReferences(true)}
             >
-              <Ionicons name="briefcase" size={22} color={colors.primary} />
+              <Ionicons name="albums-outline" size={22} color={colors.primary} />
             </TouchableOpacity>
           )}
         </View>
@@ -1713,9 +1717,29 @@ export default function ConversationScreen() {
             amount,
           });
           setShowPaymentOptions(false);
-          setShowPayPalCheckout(true);
+          setShowPaymentMethodSelector(true);
         }}
       />
+
+      {/* Payment Method Selector Modal */}
+      {paymentData && (
+        <PaymentMethodSelector
+          visible={showPaymentMethodSelector}
+          onClose={() => {
+            setShowPaymentMethodSelector(false);
+            setPaymentData(null);
+          }}
+          amount={paymentData.amount}
+          onSelectPayPal={() => {
+            setShowPaymentMethodSelector(false);
+            setShowPayPalCheckout(true);
+          }}
+          onSelectCard={() => {
+            setShowPaymentMethodSelector(false);
+            setShowStripeCheckout(true);
+          }}
+        />
+      )}
 
       {/* PayPal Checkout Modal */}
       {paymentData && (
@@ -1731,6 +1755,30 @@ export default function ConversationScreen() {
           milestoneId={paymentData.milestoneId}
           onSuccess={(data) => {
             setShowPayPalCheckout(false);
+            setPaymentData(null);
+            fetchConversationDetails();
+            fetchMessages();
+          }}
+          onError={(error) => {
+            console.error('Payment error:', error);
+          }}
+        />
+      )}
+
+      {/* Stripe Checkout Modal */}
+      {paymentData && (
+        <StripeCheckout
+          visible={showStripeCheckout}
+          onClose={() => {
+            setShowStripeCheckout(false);
+            setPaymentData(null);
+          }}
+          commissionId={paymentData.commissionId}
+          amount={paymentData.amount}
+          paymentType={paymentData.paymentType}
+          milestoneId={paymentData.milestoneId}
+          onSuccess={(data) => {
+            setShowStripeCheckout(false);
             setPaymentData(null);
             fetchConversationDetails();
             fetchMessages();

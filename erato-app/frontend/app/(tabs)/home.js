@@ -99,7 +99,7 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'foryou'
   const [artStyles, setArtStyles] = useState([]);
   const [curatedStyles, setCuratedStyles] = useState([]); // Styles from quiz preferences
-  const [selectedStyleFilter, setSelectedStyleFilter] = useState(null);
+  const [selectedStyleFilter, setSelectedStyleFilter] = useState([]); // Changed to array for multiple selection
   const [loadingStyles, setLoadingStyles] = useState(false);
   const [styleSections, setStyleSections] = useState([]); // Organized sections
   const [suggestedArtists, setSuggestedArtists] = useState([]);
@@ -346,20 +346,31 @@ export default function HomeScreen() {
     return () => clearTimeout(timer);
   }, [token, isArtist, artworks.length]);
 
-  // Handle style filter selection
+  // Handle style filter selection - now supports multiple
   const handleStyleFilterSelect = useCallback((styleId) => {
-    if (selectedStyleFilter === styleId) {
-      // Deselect - go back to "All"
-      setSelectedStyleFilter(null);
+    const currentStyles = selectedStyleFilter || [];
+    let newStyles;
+
+    if (currentStyles.includes(styleId)) {
+      // Deselect - remove from array
+      newStyles = currentStyles.filter(id => id !== styleId);
+    } else {
+      // Select - add to array
+      newStyles = [...currentStyles, styleId];
+    }
+
+    setSelectedStyleFilter(newStyles);
+
+    if (newStyles.length === 0) {
+      // No styles selected - clear filters
       setArtistFilters({});
       setShowDiscoverArtists(false);
       setDiscoverArtists([]);
     } else {
-      // Select - replace any existing style filter
-      setSelectedStyleFilter(styleId);
+      // Multiple styles selected
       const newFilters = {
         ...artistFilters,
-        styles: [styleId] // Only one style at a time
+        styles: newStyles
       };
       setArtistFilters(newFilters);
       loadFilteredArtists(newFilters);
@@ -1494,7 +1505,7 @@ export default function HomeScreen() {
               if (activeTab !== 'foryou') {
                 // Clear filters when switching to For You tab
                 setArtistFilters({});
-                setSelectedStyleFilter(null);
+                setSelectedStyleFilter([]);
                 setShowDiscoverArtists(false);
                 setDiscoverArtists([]);
 
@@ -1536,8 +1547,8 @@ export default function HomeScreen() {
             style={styles.iconButton}
             onPress={() => setShowSortFilterModal(true)}
           >
-            <Ionicons name="funnel-outline" size={20} color={colors.text.primary} />
-            {(sortOption !== 'personalized' || Object.keys(artistFilters).length > 0) && (
+            <Ionicons name="funnel-outline" size={22} color={colors.text.primary} />
+            {(sortOption !== 'personalized' || selectedStyleFilter.length > 0) && (
               <View style={styles.filterBadge} />
             )}
           </TouchableOpacity>
@@ -1545,7 +1556,7 @@ export default function HomeScreen() {
             style={styles.iconButton}
             onPress={() => setShowSearchModal(true)}
           >
-            <Ionicons name="search-outline" size={20} color={colors.text.primary} />
+            <Ionicons name="search-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.profileButton}
@@ -1567,7 +1578,7 @@ export default function HomeScreen() {
                 key={`${userProfile?.avatar_url || currentUser?.avatar_url}-${avatarKey}`}
               />
             ) : (
-              <Ionicons name="person-circle" size={22} color={colors.text.primary} />
+              <Ionicons name="person-circle" size={36} color={colors.text.primary} />
             )}
           </TouchableOpacity>
         </View>
@@ -1584,7 +1595,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.pinterestFilterItem}
               onPress={() => {
-                setSelectedStyleFilter(null);
+                setSelectedStyleFilter([]);
                 setArtistFilters({});
                 setShowDiscoverArtists(false);
                 setDiscoverArtists([]);
@@ -1593,15 +1604,15 @@ export default function HomeScreen() {
             >
               <Text style={[
                 styles.pinterestFilterText,
-                !selectedStyleFilter && Object.keys(artistFilters).length === 0 && styles.pinterestFilterTextActive
+                selectedStyleFilter.length === 0 && Object.keys(artistFilters).length === 0 && styles.pinterestFilterTextActive
               ]}>
                 All
               </Text>
-              {!selectedStyleFilter && Object.keys(artistFilters).length === 0 && <View style={styles.pinterestFilterUnderline} />}
+              {selectedStyleFilter.length === 0 && Object.keys(artistFilters).length === 0 && <View style={styles.pinterestFilterUnderline} />}
             </TouchableOpacity>
             {/* Show curated styles first, then others */}
             {[...curatedStyles, ...artStyles.filter(s => !curatedStyles.some(cs => cs.id === s.id))].map((style) => {
-              const isSelected = selectedStyleFilter === style.id;
+              const isSelected = selectedStyleFilter.includes(style.id);
               const isCurated = curatedStyles.some(cs => cs.id === style.id);
               return (
                 <TouchableOpacity
@@ -1757,13 +1768,13 @@ export default function HomeScreen() {
               renderItem={({ item, index }) => renderTikTokArtwork(item, index)}
               keyExtractor={(item) => String(item.id)}
               pagingEnabled
-              snapToInterval={height - 180}
+              snapToInterval={height - 165}
               snapToAlignment="start"
               decelerationRate="fast"
               showsVerticalScrollIndicator={false}
               getItemLayout={(data, index) => ({
-                length: height - 180,
-                offset: (height - 180) * index,
+                length: height - 165,
+                offset: (height - 165) * index,
                 index,
               })}
               onEndReached={() => {
@@ -1900,17 +1911,18 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       style={[
                         styles.styleFilterChip,
-                        !selectedStyleFilter && styles.styleFilterChipActive
+                        selectedStyleFilter.length === 0 && styles.styleFilterChipActive
                       ]}
                       onPress={() => {
-                        setSelectedStyleFilter(null);
-                        setShowSortFilterModal(false);
-                        fetchArtworks(true, sortOption);
+                        setSelectedStyleFilter([]);
+                        setArtistFilters({});
+                        setShowDiscoverArtists(false);
+                        setDiscoverArtists([]);
                       }}
                     >
                       <Text style={[
                         styles.styleFilterChipText,
-                        !selectedStyleFilter && styles.styleFilterChipTextActive
+                        selectedStyleFilter.length === 0 && styles.styleFilterChipTextActive
                       ]}>
                         All Styles
                       </Text>
@@ -1933,7 +1945,7 @@ export default function HomeScreen() {
                       {/* Section Styles */}
                       <View style={styles.styleFilterGrid}>
                         {section.styles.map((style) => {
-                          const isSelected = selectedStyleFilter === style.id;
+                          const isSelected = selectedStyleFilter.includes(style.id);
                           const isCurated = curatedStyles.some(cs => cs.id === style.id);
                           return (
                             <TouchableOpacity
@@ -1943,11 +1955,7 @@ export default function HomeScreen() {
                                 isSelected && styles.styleFilterChipActive,
                                 isCurated && !isSelected && styles.styleFilterChipCurated
                               ]}
-                              onPress={() => {
-                                setSelectedStyleFilter(isSelected ? null : style.id);
-                                setShowSortFilterModal(false);
-                                fetchArtworks(true, sortOption);
-                              }}
+                              onPress={() => handleStyleFilterSelect(style.id)}
                             >
                               <Text style={[
                                 styles.styleFilterChipText,
@@ -2111,14 +2119,14 @@ const styles = StyleSheet.create({
   // TikTok-style styles
   tikTokCard: {
     width: width,
-    height: height - 180,
+    height: height - 165,
     position: 'relative',
     backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
   tikTokImageWrapper: {
     position: 'absolute',
-    top: 0,
+    top: 20,
     left: 6,
     right: 6,
     bottom: 125,
@@ -2412,11 +2420,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.lg : spacing.xl,
     paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.full,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, // Soft shadow
-    shadowRadius: 8,
-    elevation: 3,
   },
   exploreButtonText: {
     ...typography.button,
@@ -2455,26 +2458,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.sm,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
   },
   sortOptionActive: {
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '08',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: colors.primary + '10',
   },
   sortOptionContent: {
     flexDirection: 'row',
@@ -2535,26 +2529,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md + 2,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.background,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.border + '40',
   },
   styleFilterChipActive: {
     backgroundColor: colors.primary,
-    borderColor: 'transparent',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
+    borderColor: colors.primary,
   },
   styleFilterChipCurated: {
     backgroundColor: colors.primary + '15',
-    borderWidth: 0,
+    borderColor: colors.primary + '30',
   },
   styleFilterChipText: {
     ...typography.caption,
@@ -2605,11 +2590,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderWidth: 0, // Remove border for cleaner look
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   cancelButtonText: {
     ...typography.button,
@@ -2623,11 +2603,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full, // Pill shape
     backgroundColor: colors.primary,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
   },
   createButtonText: {
     ...typography.button,
@@ -2887,19 +2862,21 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'center', // This ensures vertical centering
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl + spacing.sm, // Moderately compact
     paddingBottom: spacing.sm,
     backgroundColor: colors.background,
+    minHeight: 56, // Ensure consistent height for alignment
   },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: 'transparent', // Clean Pinterest style - no background
     borderRadius: 0,
     padding: 0,
-    alignItems: 'center',
+    alignItems: 'center', // Vertically center tabs
+    flex: 1,
     gap: spacing.xl, // Space between tabs
   },
   tab: {
@@ -2935,21 +2912,24 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
+    alignItems: 'center', // Vertically center all items
   },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'transparent', // No background
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     overflow: 'hidden',
+    justifyContent: 'center', // Center content vertically
+    alignItems: 'center', // Center content horizontally
   },
   profileAvatar: {
     width: '100%',
@@ -3092,11 +3072,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full, // Pill shape
     alignItems: 'center',
     borderWidth: 0, // Remove border
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   cancelButtonText: {
     ...typography.bodyBold,
@@ -3109,11 +3084,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: borderRadius.full, // Pill shape
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
   },
   createButtonText: {
     ...typography.button,
@@ -3196,11 +3166,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
   },
   pinterestSecondaryButtonText: {
     ...typography.bodyBold,

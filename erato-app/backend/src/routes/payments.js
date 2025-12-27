@@ -4,11 +4,15 @@ import { supabaseAdmin } from '../config/supabase.js';
 import * as paypal from '@paypal/checkout-server-sdk';
 import { OrdersCreateRequest } from '@paypal/checkout-server-sdk/lib/orders/ordersCreateRequest.js';
 import { OrdersCaptureRequest } from '@paypal/checkout-server-sdk/lib/orders/ordersCaptureRequest.js';
+import Stripe from 'stripe';
 
 const router = express.Router();
 
 // Platform fee percentage (e.g., 10% = 0.10)
 const PLATFORM_FEE_PERCENTAGE = 0.10;
+
+// Stripe configuration
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 // PayPal environment setup
 function environment() {
@@ -559,6 +563,332 @@ router.post('/capture-order', authenticate, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to capture payment' 
+    });
+  }
+});
+
+/**
+ * @route   POST /api/payments/stripe/create-payment-intent
+ * @desc    Create a Stripe PaymentIntent for a commission payment
+ * @access  Private (Client)
+ */
+router.post('/stripe/create-payment-intent', authenticate, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({
+        success: false,
+        error: 'Stripe is not configured. Please set STRIPE_SECRET_KEY in environment variables.'
+      });
+    }
+
+    const { commissionId, paymentType, amount, milestoneId } = req.body;
+    const userId = req.user.id;
+
+    // Validate payment type
+    const validTypes = ['deposit', 'milestone', 'final', 'full'];
+    if (!validTypes.includes(paymentType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payment type'
+      });
+    }
+
+    // If milestone payment, validate milestone ID
+    if (paymentType === 'milestone' && !milestoneId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Milestone ID is required for milestone payments'
+      });
+    }
+
+    // Get commission details
+    const { data: commission, error: commissionError } = await supabaseAdmin
+      .from('commissions')
+      .select(`
+        id,
+        client_id,
+        artist_id,
+        final_price,
+        payment_type,
+        payment_status,
+        deposit_percentage,
+        total_paid
+      `)
+      .eq('id', commissionId)
+      .single();
+
+    if (commissionError) throw commissionError;
+
+    // Verify user is the client
+    if (commission.client_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the client can make payments'
+      });
+    }
+
+    // Calculate amount based on payment type
+    let calculatedAmount = amount;
+    let milestone = null;
+
+    if (!amount) {
+      if (paymentType === 'deposit') {
+        calculatedAmount = commission.final_price * (commission.deposit_percentage / 100);
+      } else if (paymentType === 'full') {
+        calculatedAmount = commission.final_price;
+      } else if (paymentType === 'final') {
+        calculatedAmount = commission.final_price - commission.total_paid;
+      } else if (paymentType === 'milestone' && milestoneId) {
+        // Get milestone amount
+        const { data: milestoneData, error: milestoneError } = await supabaseAdmin
+          .from('commission_milestones')
+          .select('*')
+          .eq('id', milestoneId)
+          .eq('commission_id', commissionId)
+          .single();
+
+        if (milestoneError || !milestoneData) {
+          return res.status(404).json({
+            success: false,
+            error: 'Milestone not found'
+          });
+        }
+
+        if (milestoneData.payment_status === 'paid') {
+          return res.status(400).json({
+            success: false,
+            error: 'This milestone has already been paid'
+          });
+        }
+
+        if (milestoneData.is_locked) {
+          return res.status(400).json({
+            success: false,
+            error: 'This milestone is locked. Previous milestones must be completed first.'
+          });
+        }
+
+        milestone = milestoneData;
+        calculatedAmount = parseFloat(milestoneData.amount);
+      }
+    }
+
+    // Validate amount
+    if (calculatedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payment amount'
+      });
+    }
+
+    // Calculate platform fee and artist payout
+    const platformFee = calculatedAmount * PLATFORM_FEE_PERCENTAGE;
+    const artistPayout = calculatedAmount - platformFee;
+
+    // Create Stripe PaymentIntent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(calculatedAmount * 100), // Stripe uses cents
+      currency: 'usd',
+      description: milestone
+        ? `Milestone Payment - ${milestone.title}`
+        : `Commission Payment - ${paymentType}`,
+      metadata: {
+        commissionId,
+        clientId: userId,
+        artistId: commission.artist_id,
+        paymentType,
+        milestoneId: milestoneId || '',
+        platformFee: platformFee.toFixed(2),
+        artistPayout: artistPayout.toFixed(2)
+      },
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    // Create transaction record
+    const transactionMetadata = {
+      commissionId,
+      clientId: userId,
+      artistId: commission.artist_id,
+      paymentType,
+      milestoneId: milestoneId || null
+    };
+
+    const { data: transaction, error: transactionError } = await supabaseAdmin
+      .from('payment_transactions')
+      .insert({
+        commission_id: commissionId,
+        transaction_type: paymentType,
+        amount: calculatedAmount,
+        stripe_payment_intent_id: paymentIntent.id,
+        status: 'pending',
+        payer_id: userId,
+        recipient_id: commission.artist_id,
+        platform_fee: platformFee,
+        artist_payout: artistPayout,
+        custom_id: JSON.stringify(transactionMetadata),
+        description: milestone
+          ? `Milestone ${milestone.milestone_number} payment - ${milestone.title}`
+          : `${paymentType.charAt(0).toUpperCase() + paymentType.slice(1)} payment for commission`
+      })
+      .select()
+      .single();
+
+    if (transactionError) throw transactionError;
+
+    res.json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount: calculatedAmount,
+        transactionId: transaction.id
+      }
+    });
+  } catch (error) {
+    console.error('Error creating Stripe PaymentIntent:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create payment intent'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/payments/stripe/confirm-payment
+ * @desc    Confirm a Stripe payment after client confirmation
+ * @access  Private (Client)
+ */
+router.post('/stripe/confirm-payment', authenticate, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({
+        success: false,
+        error: 'Stripe is not configured'
+      });
+    }
+
+    const { paymentIntentId } = req.body;
+    const userId = req.user.id;
+
+    if (!paymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment Intent ID is required'
+      });
+    }
+
+    // Get transaction by payment intent ID
+    const { data: transaction, error: transactionError } = await supabaseAdmin
+      .from('payment_transactions')
+      .select('*, commissions(*)')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .eq('payer_id', userId)
+      .single();
+
+    if (transactionError || !transaction) {
+      return res.status(404).json({
+        success: false,
+        error: 'Transaction not found'
+      });
+    }
+
+    // Retrieve the PaymentIntent to check its status
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment has not been completed',
+        status: paymentIntent.status
+      });
+    }
+
+    // Update transaction status
+    const { error: updateError } = await supabaseAdmin
+      .from('payment_transactions')
+      .update({
+        status: 'succeeded',
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', transaction.id);
+
+    if (updateError) throw updateError;
+
+    // Update commission payment status
+    let paymentType = null;
+    try {
+      if (transaction.custom_id) {
+        const customData = JSON.parse(transaction.custom_id);
+        paymentType = customData.paymentType || customData.payment_type;
+      }
+    } catch (e) {
+      console.warn('Error parsing custom_id:', e);
+    }
+
+    if (!paymentType && transaction.transaction_type) {
+      paymentType = transaction.transaction_type;
+    }
+
+    let newPaymentStatus = 'paid';
+    if (paymentType === 'deposit') {
+      newPaymentStatus = 'deposit_paid';
+    } else if (paymentType === 'full' || paymentType === 'final') {
+      newPaymentStatus = 'fully_paid';
+    } else if (paymentType === 'milestone') {
+      newPaymentStatus = 'deposit_paid';
+    }
+
+    const { error: commissionError } = await supabaseAdmin
+      .from('commissions')
+      .update({
+        payment_status: newPaymentStatus,
+        escrow_status: 'held'
+      })
+      .eq('id', transaction.commission_id);
+
+    if (commissionError) {
+      console.error('Error updating commission:', commissionError);
+    }
+
+    // If milestone payment, update milestone status
+    if (paymentType === 'milestone') {
+      let milestoneId = null;
+
+      try {
+        if (transaction.custom_id) {
+          const customData = JSON.parse(transaction.custom_id);
+          milestoneId = customData.milestoneId;
+        }
+      } catch (e) {
+        console.warn('Error parsing custom_id for milestone:', e);
+      }
+
+      if (milestoneId) {
+        await supabaseAdmin
+          .from('commission_milestones')
+          .update({
+            payment_status: 'paid',
+            paid_at: new Date().toISOString(),
+            payment_transaction_id: transaction.id
+          })
+          .eq('id', milestoneId);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status
+      }
+    });
+  } catch (error) {
+    console.error('Error confirming Stripe payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to confirm payment'
     });
   }
 });

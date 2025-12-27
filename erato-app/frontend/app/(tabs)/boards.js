@@ -1010,7 +1010,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: spacing.md + spacing.md,
     paddingBottom: spacing.sm,
   },
   headerLeft: {
@@ -1087,11 +1087,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     backgroundColor: colors.background,
     borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
   },
   sortButtonText: {
     ...typography.caption,
@@ -1533,11 +1528,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
   },
   saveButtonDisabled: {
     backgroundColor: colors.surface,
@@ -1606,7 +1596,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.small,
   },
   createBoardButtonDisabled: {
     backgroundColor: colors.text.disabled,

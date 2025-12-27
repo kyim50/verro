@@ -200,11 +200,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    shadowColor: '#E60023',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
   },
   buttonText: {
     ...typography.button,

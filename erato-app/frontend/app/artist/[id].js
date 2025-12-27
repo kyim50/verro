@@ -2111,11 +2111,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full, // Pill shape
     gap: spacing.sm,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
   messageButton: {
     backgroundColor: colors.background,
@@ -2173,8 +2168,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   similarModalTitle: {
     ...typography.h3,

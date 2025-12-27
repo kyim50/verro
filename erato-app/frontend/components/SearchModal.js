@@ -536,29 +536,31 @@ export default function SearchModal({ visible, onClose }) {
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'artworks' && styles.activeTab]}
-            onPress={() => {
-              setActiveTab('artworks');
-            }}
-          >
-            <Text style={[styles.tabText, activeTab === 'artworks' && styles.activeTabText]}>
-              Artworks {artworks.length > 0 && `(${artworks.length})`}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'artists' && styles.activeTab]}
-            onPress={() => {
-              setActiveTab('artists');
-            }}
-          >
-            <Text style={[styles.tabText, activeTab === 'artists' && styles.activeTabText]}>
-              Artists {artists.length > 0 && `(${artists.length})`}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Tabs - Hide when actively searching */}
+        {!localQuery.trim() && (
+          <View style={styles.tabs}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'artworks' && styles.activeTab]}
+              onPress={() => {
+                setActiveTab('artworks');
+              }}
+            >
+              <Text style={[styles.tabText, activeTab === 'artworks' && styles.activeTabText]}>
+                Artworks {artworks.length > 0 && `(${artworks.length})`}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'artists' && styles.activeTab]}
+              onPress={() => {
+                setActiveTab('artists');
+              }}
+            >
+              <Text style={[styles.tabText, activeTab === 'artists' && styles.activeTabText]}>
+                Artists {artists.length > 0 && `(${artists.length})`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Filter and Sort Bar - Show when there are results */}
         {((activeTab === 'artworks' && rankedArtworks.length > 0) || (activeTab === 'artists' && artists.length > 0)) && (
@@ -627,14 +629,75 @@ export default function SearchModal({ visible, onClose }) {
               </View>
             </ScrollView>
           ) : activeTab === 'artists' && artists.length > 0 ? (
-            <FlatList
-              key="artists-list"
-              data={artists}
-              renderItem={renderArtist}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
+            <ScrollView
               showsVerticalScrollIndicator={false}
-            />
+              contentContainerStyle={styles.searchResultsContainer}
+            >
+              <View style={styles.masonryContainer}>
+                {/* Left Column */}
+                <View style={styles.masonryColumn}>
+                  {artists.filter((_, index) => index % 2 === 0).map((artist, index) => {
+                    const heights = [180, 200, 160];
+                    return (
+                      <TouchableOpacity
+                        key={artist.id}
+                        style={[styles.categoryTile, { height: heights[index % heights.length] }]}
+                        onPress={() => {
+                          router.push(`/artist/${artist.id}`);
+                          handleClose();
+                        }}
+                        activeOpacity={0.95}
+                      >
+                        <Image
+                          source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/200' }}
+                          style={styles.categoryTileImage}
+                          contentFit="cover"
+                        />
+                        <LinearGradient
+                          colors={['transparent', 'rgba(0,0,0,0.8)']}
+                          style={styles.categoryTileOverlay}
+                        >
+                          <Text style={styles.categoryTileText} numberOfLines={2}>
+                            {artist.users?.full_name || artist.users?.username}
+                          </Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {/* Right Column */}
+                <View style={styles.masonryColumn}>
+                  {artists.filter((_, index) => index % 2 === 1).map((artist, index) => {
+                    const heights = [200, 170, 190];
+                    return (
+                      <TouchableOpacity
+                        key={artist.id}
+                        style={[styles.categoryTile, { height: heights[index % heights.length] }]}
+                        onPress={() => {
+                          router.push(`/artist/${artist.id}`);
+                          handleClose();
+                        }}
+                        activeOpacity={0.95}
+                      >
+                        <Image
+                          source={{ uri: artist.users?.avatar_url || 'https://via.placeholder.com/200' }}
+                          style={styles.categoryTileImage}
+                          contentFit="cover"
+                        />
+                        <LinearGradient
+                          colors={['transparent', 'rgba(0,0,0,0.8)']}
+                          style={styles.categoryTileOverlay}
+                        >
+                          <Text style={styles.categoryTileText} numberOfLines={2}>
+                            {artist.users?.full_name || artist.users?.username}
+                          </Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
           ) : (
             renderEmpty()
           )}
@@ -698,12 +761,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing.md + 2,
-    height: 50,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.lg,
+    height: 48,
     gap: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 1,
@@ -717,18 +778,19 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-    marginBottom: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    borderBottomWidth: 0,
   },
   tab: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.xs,
     alignItems: 'center',
-    borderBottomWidth: 3,
+    borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: colors.error,
+    borderBottomColor: colors.text.primary,
   },
   tabText: {
     ...typography.button,
@@ -1033,45 +1095,46 @@ const styles = StyleSheet.create({
   // Filter and Sort Bar
   filterSortBar: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomWidth: 0,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.border + '60',
     position: 'relative',
   },
   filterButtonText: {
     ...typography.button,
     color: colors.text.primary,
     fontSize: 14,
+    fontWeight: '500',
   },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.border + '60',
     flex: 1,
   },
   sortButtonText: {
     ...typography.button,
     color: colors.text.primary,
     fontSize: 14,
+    fontWeight: '500',
   },
   // Ideas for you section
   ideasSection: {

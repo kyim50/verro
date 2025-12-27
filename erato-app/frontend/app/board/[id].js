@@ -13,6 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
@@ -28,6 +29,7 @@ const ITEM_WIDTH = (width - (NUM_COLUMNS + 1) * SPACING - spacing.md * 2) / NUM_
 export default function CanvasDetailScreen() {
   const { id } = useLocalSearchParams();
   const { token, user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [board, setBoard] = useState(null);
   const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -308,7 +310,7 @@ export default function CanvasDetailScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
@@ -322,7 +324,7 @@ export default function CanvasDetailScreen() {
           <Ionicons name={editMode ? "close" : "arrow-back"} size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
             {editMode ? `${selectedArtworks.size} Selected` : board?.name || 'Canvas'}
           </Text>
           {!editMode && (
@@ -543,8 +545,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.md,
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
@@ -564,7 +566,6 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 18, // Slightly smaller to fit better
     textAlign: 'center',
-    numberOfLines: 1,
   },
   headerSubtitle: {
     ...typography.caption,
@@ -696,11 +697,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
   actionButtonText: {
     ...typography.button,

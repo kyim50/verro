@@ -793,21 +793,6 @@ export default function ProfileScreen() {
               )}
             </View>
 
-            {/* Rating Section */}
-            <View style={styles.section}>
-              <View style={styles.ratingCard}>
-                <View style={styles.ratingIconContainer}>
-                  <Ionicons name="star" size={32} color={colors.primary} />
-                </View>
-                <Text style={styles.ratingValue}>
-                  {profile.artist.average_rating?.toFixed(1) || '0.0'}
-                </Text>
-                <Text style={styles.ratingLabel}>
-                  {reviewsReceived.length} {reviewsReceived.length === 1 ? 'Review' : 'Reviews'}
-                </Text>
-              </View>
-            </View>
-
             {/* Reviews */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1106,27 +1091,6 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Rating Card */}
-            {reviewsReceived.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.ratingCard}>
-                  <View style={styles.ratingIconContainer}>
-                    <Ionicons name="star" size={32} color={colors.primary} />
-                  </View>
-                  <Text style={styles.ratingValue}>
-                    {(() => {
-                      const totalRating = reviewsReceived.reduce((sum, r) => sum + (r.rating || 0), 0);
-                      const avgRating = totalRating / reviewsReceived.length;
-                      return avgRating.toFixed(1);
-                    })()}
-                  </Text>
-                  <Text style={styles.ratingLabel}>
-                    {reviewsReceived.length} {reviewsReceived.length === 1 ? 'Review' : 'Reviews'}
-                  </Text>
-                </View>
-              </View>
-            )}
-
             {/* Reviews for Clients */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1380,7 +1344,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm : Constants.statusBarHeight + spacing.md,
+    paddingTop: IS_SMALL_SCREEN ? Constants.statusBarHeight + spacing.sm + spacing.md : Constants.statusBarHeight + spacing.md + spacing.md,
     paddingBottom: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
   },
   headerTitle: {
@@ -1546,15 +1510,12 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   commissionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
     padding: spacing.lg,
     gap: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: colors.border + '30',
   },
   statusBadgeContainer: {
     flexDirection: 'row',
@@ -1609,12 +1570,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
     paddingHorizontal: IS_SMALL_SCREEN ? spacing.sm : spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border + '30',
     elevation: 2,
   },
   infoIconContainer: {
@@ -1671,15 +1630,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   specialtiesContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     gap: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: colors.border + '30',
   },
   tagContainer: {
     flexDirection: 'row',
@@ -1904,7 +1860,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border + '80',
-    ...shadows.small,
   },
   statIconContainer: {
     width: IS_SMALL_SCREEN ? 40 : 48,
