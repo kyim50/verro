@@ -1100,22 +1100,6 @@ export default function ProfileScreen() {
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
                 </TouchableOpacity>
-
-                {clientCommissions.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.quickActionItem}
-                    onPress={() => router.push('/(tabs)/explore')}
-                  >
-                    <View style={styles.quickActionIcon}>
-                      <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
-                    </View>
-                    <View style={styles.quickActionText}>
-                      <Text style={styles.quickActionTitle}>My Commissions</Text>
-                      <Text style={styles.quickActionSubtitle}>View all your commissions</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={colors.text.disabled} />
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
 

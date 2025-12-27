@@ -10,6 +10,7 @@ import {
   Image,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
@@ -243,6 +244,15 @@ export default function MyCommissions() {
           )}
         </View>
 
+        {commission.current_milestone && (
+          <View style={styles.milestoneInfo}>
+            <View style={styles.milestoneIndicator} />
+            <Text style={styles.milestoneText}>
+              {commission.current_milestone.title} ({commission.current_milestone.payment_status})
+            </Text>
+          </View>
+        )}
+
         <View style={styles.statusRow}>
           <View style={[
             styles.statusBadge,
@@ -305,15 +315,15 @@ export default function MyCommissions() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
         <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!commissionsData) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
@@ -324,7 +334,7 @@ export default function MyCommissions() {
           <Ionicons name="briefcase-outline" size={64} color={colors.text.tertiary} />
           <Text style={styles.emptyText}>No commissions yet</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -332,7 +342,7 @@ export default function MyCommissions() {
   const currentCommissions = grouped[activeTab] || [];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
@@ -408,7 +418,7 @@ export default function MyCommissions() {
           currentCommissions.map(renderCommissionCard)
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -427,7 +437,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: colors.background.primary,
     borderBottomWidth: 1,
@@ -546,6 +556,28 @@ const styles = StyleSheet.create({
   price: {
     ...typography.h3,
     color: colors.success,
+  },
+  milestoneInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.sm,
+  },
+  milestoneIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginRight: spacing.sm,
+  },
+  milestoneText: {
+    ...typography.caption,
+    color: colors.text.primary,
+    flex: 1,
+    fontWeight: '600',
   },
   statusRow: {
     flexDirection: 'row',
