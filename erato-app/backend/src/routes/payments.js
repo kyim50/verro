@@ -456,6 +456,19 @@ router.post('/capture-order', authenticate, async (req, res) => {
       });
     }
 
+    // Check if order has already been captured (idempotency)
+    if (transaction.status === 'succeeded' && transaction.paypal_capture_id) {
+      return res.json({
+        success: true,
+        data: {
+          orderId: transaction.paypal_order_id,
+          captureId: transaction.paypal_capture_id,
+          status: 'COMPLETED',
+          alreadyCaptured: true
+        }
+      });
+    }
+
     // Capture the PayPal order
     const request = new OrdersCaptureRequest(orderId);
     request.requestBody({});
@@ -511,9 +524,7 @@ router.post('/capture-order', authenticate, async (req, res) => {
     const { error: commissionError } = await supabaseAdmin
       .from('commissions')
       .update({
-        payment_status: newPaymentStatus,
-        paypal_order_id: orderId,
-        escrow_status: 'held' // Funds held in escrow until work is approved
+        payment_status: newPaymentStatus
       })
       .eq('id', transaction.commission_id);
 
@@ -577,9 +588,32 @@ router.post('/capture-order', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error capturing PayPal order:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to capture payment' 
+
+    // Handle ORDER_ALREADY_CAPTURED error gracefully
+    if (error.message && error.message.includes('ORDER_ALREADY_CAPTURED')) {
+      // Order was already captured, fetch the transaction to return success
+      const { data: transaction } = await supabaseAdmin
+        .from('payment_transactions')
+        .select('*')
+        .eq('paypal_order_id', req.body.orderId)
+        .single();
+
+      if (transaction && transaction.status === 'succeeded') {
+        return res.json({
+          success: true,
+          data: {
+            orderId: transaction.paypal_order_id,
+            captureId: transaction.paypal_capture_id,
+            status: 'COMPLETED',
+            alreadyCaptured: true
+          }
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to capture payment'
     });
   }
 });
@@ -874,8 +908,7 @@ router.post('/stripe/confirm-payment', authenticate, async (req, res) => {
     const { error: commissionError } = await supabaseAdmin
       .from('commissions')
       .update({
-        payment_status: newPaymentStatus,
-        escrow_status: 'held'
+        payment_status: newPaymentStatus
       })
       .eq('id', transaction.commission_id);
 

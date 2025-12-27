@@ -1492,7 +1492,7 @@ export default function CommissionDashboard() {
             // Reload commissions first
             await loadCommissions();
 
-            // Log the updated commission status
+            // Fetch the updated commission to update the modal
             const updatedCommissions = await axios.get(`${API_URL}/commissions?type=${isArtist ? 'received' : 'sent'}`, {
               headers: { Authorization: `Bearer ${token}` }
             });
@@ -1503,6 +1503,11 @@ export default function CommissionDashboard() {
               status: updatedCommission?.status
             });
 
+            // Update the selected commission to reflect the new payment status
+            if (updatedCommission) {
+              setSelectedCommission(updatedCommission);
+            }
+
             // Show success message
             Toast.show({
               type: 'success',
@@ -1510,10 +1515,6 @@ export default function CommissionDashboard() {
               text2: 'Commission updated successfully',
               visibilityTime: 3000,
             });
-
-            // Close modal and clear selection
-            setShowCommissionModal(false);
-            setSelectedCommission(null);
           }}
           onError={(error) => {
             console.error('💳 Payment error:', error);
@@ -1535,11 +1536,28 @@ export default function CommissionDashboard() {
           milestoneId={paymentData.milestoneId}
           onSuccess={async (data) => {
             console.log('💳 Stripe payment success:', data);
+            const commissionId = paymentData.commissionId;
             setShowStripeCheckout(false);
             setPaymentData(null);
 
             // Reload commissions first
             await loadCommissions();
+
+            // Fetch the updated commission to update the modal
+            const updatedCommissions = await axios.get(`${API_URL}/commissions?type=${isArtist ? 'received' : 'sent'}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const updatedCommission = updatedCommissions.data.commissions?.find(c => c.id === commissionId);
+            console.log('📊 Updated commission after Stripe payment:', {
+              id: updatedCommission?.id,
+              payment_status: updatedCommission?.payment_status,
+              status: updatedCommission?.status
+            });
+
+            // Update the selected commission to reflect the new payment status
+            if (updatedCommission) {
+              setSelectedCommission(updatedCommission);
+            }
 
             // Show success message
             Toast.show({
@@ -1548,10 +1566,6 @@ export default function CommissionDashboard() {
               text2: 'Commission updated successfully',
               visibilityTime: 3000,
             });
-
-            // Close modal and clear selection
-            setShowCommissionModal(false);
-            setSelectedCommission(null);
           }}
           onError={(error) => {
             console.error('💳 Stripe payment error:', error);
@@ -1932,12 +1946,17 @@ export default function CommissionDashboard() {
                   {(() => {
                     const statusCheck = selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress';
                     // payment_status can be: null, undefined, 'unpaid', or 'pending' - all mean payment hasn't been made
-                    const paymentCheck = !selectedCommission.payment_status || 
-                                       selectedCommission.payment_status === 'unpaid' || 
+                    const paymentCheck = !selectedCommission.payment_status ||
+                                       selectedCommission.payment_status === 'unpaid' ||
                                        selectedCommission.payment_status === 'pending';
                     const finalPaymentCheck = selectedCommission.status === 'completed' && selectedCommission.payment_status === 'deposit_paid';
-                    const shouldShow = !isArtist && ((statusCheck && paymentCheck) || finalPaymentCheck);
-                    
+
+                    // Don't show button if already fully paid (paid or fully_paid means everything is paid)
+                    const isFullyPaid = selectedCommission.payment_status === 'paid' ||
+                                       selectedCommission.payment_status === 'fully_paid';
+
+                    const shouldShow = !isArtist && ((statusCheck && paymentCheck && !isFullyPaid) || finalPaymentCheck);
+
                     return shouldShow;
                   })() && (
                     <View style={[styles.detailSection, styles.paymentButtonSection]}>
