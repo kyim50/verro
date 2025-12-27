@@ -195,15 +195,15 @@ export default function PayPalCheckout({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Secure Payment</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close-circle" size={28} color={colors.text.disabled} />
+            <Text style={styles.modalTitle}>PayPal Payment</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={26} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
 
@@ -317,26 +317,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    paddingBottom: spacing.xl,
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
     borderBottomWidth: 0,
+  },
+  closeButton: {
+    padding: spacing.xs,
+    marginRight: -spacing.xs,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
     fontWeight: '700',
-    fontSize: 24,
+    fontSize: 22,
+    flex: 1,
   },
   modalBody: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -392,18 +397,18 @@ const styles = StyleSheet.create({
   },
   amountContainer: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
     alignItems: 'center',
   },
   amountLabel: {
     ...typography.caption,
     color: colors.text.disabled,
-    marginBottom: spacing.sm,
-    fontSize: 13,
-    fontWeight: '500',
+    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -411,7 +416,7 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontWeight: '700',
-    fontSize: 42,
+    fontSize: 32,
   },
   infoBox: {
     flexDirection: 'row',
@@ -461,16 +466,19 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
     borderTopWidth: 0,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md + 4,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cancelButtonText: {
     ...typography.bodyBold,
@@ -484,7 +492,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md + 4,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
   },
@@ -494,7 +502,7 @@ const styles = StyleSheet.create({
   payButtonText: {
     ...typography.bodyBold,
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
   },
 });

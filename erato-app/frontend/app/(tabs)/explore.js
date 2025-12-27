@@ -681,11 +681,10 @@ export default function CommissionDashboard() {
       return;
     }
 
-    showAlert({
-      title: `${action} ${selectedCommissions.size} commissions?`,
-      message: 'This action will be applied to all selected commissions.',
-      type: 'warning',
-      buttons: [
+    Alert.alert(
+      `${action} ${selectedCommissions.size} commissions?`,
+      'This action will be applied to all selected commissions.',
+      [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm',
@@ -721,7 +720,7 @@ export default function CommissionDashboard() {
           }
         }
       ]
-    });
+    );
   };
 
   const toggleCommissionSelection = (id) => {
@@ -2032,7 +2031,15 @@ export default function CommissionDashboard() {
                   )}
 
                   {/* Milestone Management/Tracking */}
-                  {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
+                  {(() => {
+                    const statusCheck = selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted';
+                    // Don't show milestones if user has already made a deposit or full payment
+                    const hasDepositOrFullPayment = selectedCommission.payment_status === 'deposit_paid' ||
+                                                   selectedCommission.payment_status === 'paid' ||
+                                                   selectedCommission.payment_status === 'fully_paid';
+
+                    return statusCheck && !hasDepositOrFullPayment;
+                  })() && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
                       {!isArtist && (
@@ -2255,21 +2262,28 @@ export default function CommissionDashboard() {
                       if (updatingStatus.has(selectedCommission.id)) return;
                       const commissionId = selectedCommission.id;
 
-                      showAlert({
-                        title: 'Complete Commission',
-                        message: 'Mark this commission as completed?',
-                        type: 'success',
-                        showCancel: true,
-                        onConfirm: () => {
-                          // Close modal immediately
-                          setShowCommissionModal(false);
-                          setSelectedCommission(null);
-                          // Handle async operation after UI updates
-                          setTimeout(() => {
-                            handleUpdateStatus(commissionId, 'completed', false);
-                          }, 50);
-                        },
-                      });
+                      Alert.alert(
+                        'Complete Commission',
+                        'Mark this commission as completed?',
+                        [
+                          {
+                            text: 'Cancel',
+                            style: 'cancel',
+                          },
+                          {
+                            text: 'Complete',
+                            onPress: () => {
+                              // Close modal immediately
+                              setShowCommissionModal(false);
+                              setSelectedCommission(null);
+                              // Handle async operation after UI updates
+                              setTimeout(() => {
+                                handleUpdateStatus(commissionId, 'completed', false);
+                              }, 50);
+                            },
+                          },
+                        ]
+                      );
                     }}
                     disabled={updatingStatus.has(selectedCommission.id)}
                   >
