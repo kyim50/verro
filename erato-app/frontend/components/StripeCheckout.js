@@ -7,6 +7,7 @@ import {
   Modal,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CardField, useStripe } from '@stripe/stripe-react-native';
@@ -15,6 +16,7 @@ import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
 import { useAuthStore } from '../store';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_URL;
 
@@ -34,6 +36,7 @@ export default function StripeCheckout({
 }) {
   const { token } = useAuthStore();
   const { confirmPayment } = useStripe();
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
   const [clientSecret, setClientSecret] = useState(null);
@@ -163,22 +166,22 @@ export default function StripeCheckout({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Secure Payment</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close-circle" size={28} color={colors.text.disabled} />
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={26} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <View style={styles.modalBody}>
             <View style={styles.amountContainer}>
-              <Text style={styles.amountLabel}>Total Amount</Text>
-              <Text style={styles.amountValue}>${amount.toFixed(2)}</Text>
+              <Text style={styles.amountLabel}>Amount to Pay</Text>
+              <Text style={styles.amountValue}>${amount?.toFixed(2) || '0.00'}</Text>
             </View>
 
             {loading && !clientSecret ? (
@@ -204,7 +207,7 @@ export default function StripeCheckout({
                 </View>
 
                 <View style={styles.securityNote}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color={colors.status.success} />
+                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.status.success} />
                   <Text style={styles.securityText}>
                     Secured by Stripe encryption
                   </Text>
@@ -213,14 +216,14 @@ export default function StripeCheckout({
                 <View style={styles.infoBox}>
                   <Ionicons name="information-circle" size={20} color={colors.primary} />
                   <Text style={styles.infoText}>
-                    Your payment information is encrypted and secure. Verro does not store your card details.
+                    Your payment is encrypted and secure. We don't store your card details.
                   </Text>
                 </View>
               </>
             )}
-          </ScrollView>
+          </View>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -258,26 +261,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    paddingBottom: spacing.xl,
+    maxHeight: '75%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
     borderBottomWidth: 0,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
     fontWeight: '700',
-    fontSize: 24,
+    fontSize: 22,
+    flex: 1,
+  },
+  closeButton: {
+    padding: spacing.xs,
+    marginRight: -spacing.xs,
   },
   modalBody: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -292,18 +300,18 @@ const styles = StyleSheet.create({
   },
   amountContainer: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
     alignItems: 'center',
   },
   amountLabel: {
     ...typography.caption,
     color: colors.text.disabled,
-    marginBottom: spacing.sm,
-    fontSize: 13,
-    fontWeight: '500',
+    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -311,7 +319,7 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.text.primary,
     fontWeight: '700',
-    fontSize: 42,
+    fontSize: 32,
   },
   cardFieldContainer: {
     marginBottom: spacing.lg,
@@ -325,57 +333,61 @@ const styles = StyleSheet.create({
   },
   cardField: {
     height: 50,
-    marginVertical: spacing.sm,
+    marginVertical: spacing.xs,
   },
   cardFieldStyle: {
     backgroundColor: colors.surface,
     textColor: colors.text.primary,
     placeholderColor: colors.text.disabled,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
+    fontSize: 15,
   },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: spacing.sm,
     backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginTop: 4,
   },
   infoText: {
     ...typography.body,
     color: colors.text.secondary,
     flex: 1,
-    lineHeight: 20,
-    fontSize: 14,
+    lineHeight: 18,
+    fontSize: 12,
   },
   securityNote: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
   securityText: {
     ...typography.caption,
-    color: colors.text.disabled,
+    color: colors.status.success,
     fontSize: 13,
+    fontWeight: '500',
   },
   modalFooter: {
     flexDirection: 'row',
     gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     borderTopWidth: 0,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md + 4,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.full,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cancelButtonText: {
     ...typography.bodyBold,
@@ -389,7 +401,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md + 4,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
   },
@@ -399,7 +411,7 @@ const styles = StyleSheet.create({
   payButtonText: {
     ...typography.bodyBold,
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
   },
 });

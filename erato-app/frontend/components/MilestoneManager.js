@@ -57,7 +57,7 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
       Toast.show({
         type: 'success',
         text1: 'Milestones Generated',
-        text2: 'Default milestones created. You can edit them before client confirmation.',
+        text2: 'Default milestones created. Each update is auto-saved for client to view.',
       });
 
       setMilestones(response.data.milestones || []);
@@ -111,7 +111,7 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
       Toast.show({
         type: 'success',
         text1: 'Milestone Updated',
-        text2: 'Changes saved successfully',
+        text2: 'Auto-saved and visible to client',
       });
 
       setShowEditModal(false);
@@ -128,38 +128,6 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
     }
   };
 
-  const handleRequestConfirmation = async () => {
-    try {
-      // Verify milestones total 100%
-      const totalPercentage = milestones.reduce((sum, m) => sum + parseFloat(m.percentage), 0);
-      if (Math.abs(totalPercentage - 100) > 0.01) {
-        Toast.show({
-          type: 'error',
-          text1: 'Invalid Total',
-          text2: `Milestones must total 100%. Current: ${totalPercentage.toFixed(1)}%`,
-        });
-        return;
-      }
-
-      // In a real implementation, this would send a notification to the client
-      // For now, we'll just show a message
-      Toast.show({
-        type: 'info',
-        text1: 'Ready for Client Confirmation',
-        text2: 'Client can now review and confirm the milestone plan',
-        visibilityTime: 3000,
-      });
-
-      if (onUpdate) onUpdate();
-    } catch (error) {
-      console.error('Error requesting confirmation:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to send confirmation request',
-      });
-    }
-  };
 
   if (loading) {
     return (
@@ -291,22 +259,18 @@ export default function MilestoneManager({ commissionId, commission, onUpdate })
         })}
       </ScrollView>
 
-      {/* Actions */}
+      {/* Auto-save notice */}
       {!isLocked && (
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, (!isValidTotal || hasAnyPaidMilestone) && styles.actionButtonDisabled]}
-            onPress={handleRequestConfirmation}
-            disabled={!isValidTotal || hasAnyPaidMilestone}
-          >
-            <Ionicons name="checkmark-done-outline" size={20} color={colors.text.primary} />
-            <Text style={styles.actionButtonText}>Ready for Client Confirmation</Text>
-          </TouchableOpacity>
+        <View style={styles.autoSaveNotice}>
+          <Ionicons name="checkmark-circle" size={16} color={colors.status.success} />
+          <Text style={styles.autoSaveText}>
+            Milestones are auto-saved and visible to client
+          </Text>
         </View>
       )}
 
       {/* Show locked message if any milestone is paid */}
-      {hasAnyPaidMilestone && !isPlanConfirmed && (
+      {hasAnyPaidMilestone && (
         <View style={styles.lockedNotice}>
           <Ionicons name="lock-closed" size={16} color={colors.text.disabled} />
           <Text style={styles.lockedText}>
@@ -576,25 +540,22 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.status.success,
   },
-  actionsContainer: {
-    paddingTop: spacing.lg,
-    borderTopWidth: 0,
-  },
-  actionButton: {
+  autoSaveNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+    backgroundColor: colors.status.success + '15',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
   },
-  actionButtonDisabled: {
-    opacity: 0.5,
-  },
-  actionButtonText: {
-    ...typography.bodyBold,
-    color: colors.text.primary,
+  autoSaveText: {
+    ...typography.caption,
+    color: colors.status.success,
+    fontSize: 13,
+    fontWeight: '500',
   },
   lockedNotice: {
     flexDirection: 'row',

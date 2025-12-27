@@ -27,8 +27,11 @@ import { useAuthStore } from '../../store';
 import ReviewModal from '../../components/ReviewModal';
 import ProgressTracker from '../../components/ProgressTracker';
 import MilestoneTracker from '../../components/MilestoneTracker';
+import MilestoneManager from '../../components/MilestoneManager';
 import EscrowStatus from '../../components/EscrowStatus';
+import PaymentMethodSelector from '../../components/PaymentMethodSelector';
 import PayPalCheckout from '../../components/PayPalCheckout';
+import StripeCheckout from '../../components/StripeCheckout';
 import PaymentOptions from '../../components/PaymentOptions';
 import TransactionHistory from '../../components/TransactionHistory';
 import { colors, spacing, typography, borderRadius, shadows, DEFAULT_AVATAR } from '../../constants/theme';
@@ -230,9 +233,13 @@ export default function CommissionDashboard() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [detailTab, setDetailTab] = useState('details'); // details, progress, files
   const [updatingStatus, setUpdatingStatus] = useState(new Set()); // Track which commissions are being updated
+  const [showPaymentMethodSelector, setShowPaymentMethodSelector] = useState(false);
   const [showPayPalCheckout, setShowPayPalCheckout] = useState(false);
+  const [showStripeCheckout, setShowStripeCheckout] = useState(false);
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
+  const [showFinalPriceModal, setShowFinalPriceModal] = useState(false);
+  const [finalPriceInput, setFinalPriceInput] = useState('');
   const [commissionFiles, setCommissionFiles] = useState([]); // Store reference images for Details tab
   const [selectedImageIndex, setSelectedImageIndex] = useState(null); // For image viewer
   const [showImageViewer, setShowImageViewer] = useState(false);
@@ -603,6 +610,62 @@ export default function CommissionDashboard() {
         const next = new Set(prev);
         next.delete(commissionId);
         return next;
+      });
+    }
+  };
+
+  const handleSetFinalPrice = async () => {
+    if (!token || !selectedCommission) return;
+
+    const finalPrice = parseFloat(finalPriceInput);
+    if (!finalPrice || finalPrice <= 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Price',
+        text2: 'Please enter a valid price amount',
+        visibilityTime: 2000,
+      });
+      return;
+    }
+
+    // Check if final price exceeds budget
+    const budget = selectedCommission.budget || 0;
+    if (finalPrice > budget) {
+      Toast.show({
+        type: 'error',
+        text1: 'Price Exceeds Budget',
+        text2: `Final price cannot exceed the client's budget of $${budget.toFixed(2)}`,
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    try {
+      await axios.patch(
+        `${API_URL}/commissions/${selectedCommission.id}`,
+        { final_price: finalPrice },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      Toast.show({
+        type: 'success',
+        text1: 'Price Set',
+        text2: `Final price set to $${finalPrice.toFixed(2)}`,
+        visibilityTime: 2000,
+      });
+
+      // Reload commissions to get updated price
+      await loadCommissions();
+
+      setShowFinalPriceModal(false);
+      setFinalPriceInput('');
+    } catch (error) {
+      console.error('Error setting final price:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.response?.data?.error || 'Failed to set final price',
+        visibilityTime: 2000,
       });
     }
   };
@@ -1124,7 +1187,7 @@ export default function CommissionDashboard() {
       {/* Templates Modal */}
       <Modal
         visible={showTemplatesModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowTemplatesModal(false)}
       >
@@ -1172,7 +1235,7 @@ export default function CommissionDashboard() {
       {/* Transaction History Modal */}
       <Modal
         visible={showTransactionHistoryModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowTransactionHistoryModal(false)}
       >
@@ -1360,24 +1423,50 @@ export default function CommissionDashboard() {
           onClose={() => {
             console.log('🔴 PaymentOptions closed');
             setShowPaymentOptions(false);
+            // Reopen commission modal when payment options is cancelled
+            setTimeout(() => {
+              setShowCommissionModal(true);
+            }, 300);
           }}
           commission={selectedCommission}
           onProceed={(paymentData) => {
             console.log('✅ Payment proceed:', paymentData);
-            const amount = paymentData.paymentType === 'deposit' 
+            const amount = paymentData.paymentType === 'deposit'
               ? (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget) * (paymentData.depositPercentage / 100)
               : (selectedCommission.final_price || selectedCommission.price || selectedCommission.budget);
-            
+
             setPaymentData({
               ...paymentData,
               commissionId: selectedCommission.id,
               amount,
             });
             setShowPaymentOptions(false);
-            setShowCommissionModal(false);
+            // Don't close the commission modal - keep it open in background
             setTimeout(() => {
-              setShowPayPalCheckout(true);
-            }, 200);
+              setShowPaymentMethodSelector(true);
+            }, 300);
+          }}
+        />
+      )}
+
+      {/* Payment Method Selector Modal */}
+      {paymentData && (
+        <PaymentMethodSelector
+          visible={showPaymentMethodSelector}
+          onClose={() => {
+            setShowPaymentMethodSelector(false);
+            setPaymentData(null);
+            // Close commission modal when payment flow is cancelled
+            setShowCommissionModal(false);
+          }}
+          amount={paymentData.amount}
+          onSelectPayPal={() => {
+            setShowPaymentMethodSelector(false);
+            setShowPayPalCheckout(true);
+          }}
+          onSelectCard={() => {
+            setShowPaymentMethodSelector(false);
+            setShowStripeCheckout(true);
           }}
         />
       )}
@@ -1393,24 +1482,79 @@ export default function CommissionDashboard() {
           commissionId={paymentData.commissionId}
           amount={paymentData.amount}
           paymentType={paymentData.paymentType}
+          milestoneId={paymentData.milestoneId}
           onSuccess={async (data) => {
+            console.log('💰 PayPal payment success:', data);
+            const commissionId = paymentData.commissionId;
             setShowPayPalCheckout(false);
             setPaymentData(null);
+
+            // Reload commissions first
             await loadCommissions();
-            // Refresh selected commission if modal is still open
-            if (selectedCommission) {
-              try {
-                const response = await axios.get(`${API_URL}/commissions/${selectedCommission.id}`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                setSelectedCommission(response.data);
-              } catch (err) {
-                console.error('Error refreshing commission:', err);
-              }
-            }
+
+            // Log the updated commission status
+            const updatedCommissions = await axios.get(`${API_URL}/commissions?type=${isArtist ? 'received' : 'sent'}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const updatedCommission = updatedCommissions.data.commissions?.find(c => c.id === commissionId);
+            console.log('📊 Updated commission after payment:', {
+              id: updatedCommission?.id,
+              payment_status: updatedCommission?.payment_status,
+              status: updatedCommission?.status
+            });
+
+            // Show success message
+            Toast.show({
+              type: 'success',
+              text1: 'Payment Complete',
+              text2: 'Commission updated successfully',
+              visibilityTime: 3000,
+            });
+
+            // Close modal and clear selection
+            setShowCommissionModal(false);
+            setSelectedCommission(null);
           }}
           onError={(error) => {
-            console.error('Payment error:', error);
+            console.error('💳 Payment error:', error);
+          }}
+        />
+      )}
+
+      {/* Stripe Checkout Modal */}
+      {paymentData && (
+        <StripeCheckout
+          visible={showStripeCheckout}
+          onClose={() => {
+            setShowStripeCheckout(false);
+            setPaymentData(null);
+          }}
+          commissionId={paymentData.commissionId}
+          amount={paymentData.amount}
+          paymentType={paymentData.paymentType}
+          milestoneId={paymentData.milestoneId}
+          onSuccess={async (data) => {
+            console.log('💳 Stripe payment success:', data);
+            setShowStripeCheckout(false);
+            setPaymentData(null);
+
+            // Reload commissions first
+            await loadCommissions();
+
+            // Show success message
+            Toast.show({
+              type: 'success',
+              text1: 'Payment Complete',
+              text2: 'Commission updated successfully',
+              visibilityTime: 3000,
+            });
+
+            // Close modal and clear selection
+            setShowCommissionModal(false);
+            setSelectedCommission(null);
+          }}
+          onError={(error) => {
+            console.error('💳 Stripe payment error:', error);
           }}
         />
       )}
@@ -1418,7 +1562,7 @@ export default function CommissionDashboard() {
       {/* Notes Modal */}
       <Modal
         visible={showNotesModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowNotesModal(false)}
       >
@@ -1467,7 +1611,7 @@ export default function CommissionDashboard() {
       {selectedCommission && (
         <Modal
           visible={showCommissionModal}
-          animationType="slide"
+          animationType="fade"
           transparent={true}
           onRequestClose={() => setShowCommissionModal(false)}
         >
@@ -1739,18 +1883,18 @@ export default function CommissionDashboard() {
                       // Show payment status card
                       return (
                         <View style={styles.paymentStatusCard}>
-                          <Ionicons 
+                          <Ionicons
                             name={
                               isUnpaid ? 'close-circle-outline' :
                               paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? 'checkmark-circle' :
-                              paymentStatus === 'deposit_paid' ? 'wallet' :
+                              paymentStatus === 'partially_paid' || paymentStatus === 'deposit_paid' ? 'wallet' :
                               'card-outline'
                             } 
-                            size={20} 
+                            size={20}
                             color={
                               isUnpaid ? colors.status.error :
                               paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? colors.status.success :
-                              paymentStatus === 'deposit_paid' ? colors.status.warning :
+                              paymentStatus === 'partially_paid' || paymentStatus === 'deposit_paid' ? colors.status.warning :
                               colors.text.secondary
                             } 
                           />
@@ -1758,17 +1902,19 @@ export default function CommissionDashboard() {
                             <Text style={styles.paymentStatusLabel}>Payment Status</Text>
                             <Text style={[
                               styles.paymentStatusValue,
-                              { 
+                              {
                                 color: isUnpaid ? colors.status.error :
-                                       (paymentStatus === 'fully_paid' || paymentStatus === 'paid') ? colors.status.success : 
-                                       colors.text.primary 
+                                       (paymentStatus === 'fully_paid' || paymentStatus === 'paid') ? colors.status.success :
+                                       (paymentStatus === 'partially_paid' || paymentStatus === 'deposit_paid') ? colors.status.warning :
+                                       colors.text.primary
                               }
                             ]}>
                               {isUnpaid ? 'Not Paid' :
-                               paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? 'Paid' :
-                               paymentStatus === 'deposit_paid' 
-                                 ? (selectedCommission.status === 'completed' 
-                                     ? 'Deposit Paid - Final Payment Due' 
+                               paymentStatus === 'fully_paid' || paymentStatus === 'paid' ? 'Fully Paid' :
+                               paymentStatus === 'partially_paid' ? 'Partially Paid' :
+                               paymentStatus === 'deposit_paid'
+                                 ? (selectedCommission.status === 'completed'
+                                     ? 'Deposit Paid - Final Payment Due'
                                      : 'Deposit Paid')
                                  : 'Unknown Status'}
                             </Text>
@@ -1795,13 +1941,44 @@ export default function CommissionDashboard() {
                     return shouldShow;
                   })() && (
                     <View style={[styles.detailSection, styles.paymentButtonSection]}>
+                      {/* Disclaimer when final price is not set */}
+                      {!selectedCommission.final_price && !selectedCommission.price && (
+                        <View style={styles.priceNotSetDisclaimer}>
+                          <Ionicons name="time-outline" size={18} color={colors.text.disabled} />
+                          <Text style={styles.priceNotSetText}>
+                            Waiting for artist to set final price
+                          </Text>
+                        </View>
+                      )}
+
                       <TouchableOpacity
-                        style={styles.paymentButton}
+                        style={[
+                          styles.paymentButton,
+                          (!selectedCommission.final_price && !selectedCommission.price) && styles.paymentButtonDisabled
+                        ]}
                         onPress={() => {
                           console.log('💳 Payment button pressed');
-                          // Don't close commission modal, just open payment options
-                          setShowPaymentOptions(true);
+                          console.log('📊 Current showPaymentOptions:', showPaymentOptions);
+                          console.log('📋 Selected commission:', selectedCommission?.id);
+
+                          // Check if final_price is set before proceeding to payment (clients only)
+                          if (!selectedCommission.final_price && !selectedCommission.price) {
+                            Alert.alert(
+                              'Price Not Set',
+                              'The artist needs to set a final price before you can make a payment. Please wait for the artist to confirm the price.',
+                              [{ text: 'OK' }]
+                            );
+                            return;
+                          }
+
+                          // Hide commission modal and show payment options
+                          setShowCommissionModal(false);
+                          setTimeout(() => {
+                            setShowPaymentOptions(true);
+                          }, 300);
+                          console.log('✅ setShowPaymentOptions(true) called');
                         }}
+                        disabled={!selectedCommission.final_price && !selectedCommission.price}
                       >
                         <Ionicons name="card-outline" size={20} color={colors.text.primary} />
                         <Text style={styles.paymentButtonText}>
@@ -1811,24 +1988,67 @@ export default function CommissionDashboard() {
                     </View>
                   )}
 
-                  {/* Milestone Tracker */}
+                  {/* Set Final Price Button for Artists */}
+                  {isArtist &&
+                   (selectedCommission.status === 'accepted' || selectedCommission.status === 'in_progress') &&
+                   !selectedCommission.final_price &&
+                   !selectedCommission.price && (
+                    <View style={[styles.detailSection, styles.paymentButtonSection]}>
+                      <TouchableOpacity
+                        style={[styles.paymentButton, { backgroundColor: colors.primary }]}
+                        onPress={() => {
+                          setFinalPriceInput(selectedCommission.budget?.toString() || '');
+                          setShowCommissionModal(false);
+                          setTimeout(() => {
+                            setShowFinalPriceModal(true);
+                          }, 100);
+                        }}
+                      >
+                        <Ionicons name="pricetag-outline" size={20} color={colors.text.primary} />
+                        <Text style={[styles.paymentButtonText, { color: colors.text.primary }]}>
+                          Set Final Price
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Milestone Management/Tracking */}
                   {(selectedCommission.status === 'in_progress' || selectedCommission.status === 'accepted') && (
                     <View style={styles.detailSection}>
                       <Text style={styles.detailSectionTitle}>Payment Milestones</Text>
-                      <MilestoneTracker
-                        commissionId={selectedCommission.id}
-                        isClient={!isArtist}
-                        onPayMilestone={async (milestone) => {
-                          setPaymentData({
-                            commissionId: selectedCommission.id,
-                            amount: milestone.amount,
-                            paymentType: 'milestone',
-                            milestoneId: milestone.id,
-                          });
-                          setShowCommissionModal(false);
-                          setShowPayPalCheckout(true);
-                        }}
-                      />
+                      {!isArtist && (
+                        <View style={styles.milestoneInfoNote}>
+                          <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                          <Text style={styles.milestoneInfoText}>
+                            Milestones are an alternative way to pay for this commission in stages
+                          </Text>
+                        </View>
+                      )}
+                      {isArtist ? (
+                        <MilestoneManager
+                          commissionId={selectedCommission.id}
+                          commission={selectedCommission}
+                          onUpdate={() => {
+                            // Refresh commission data when milestones are updated
+                            loadCommissions();
+                          }}
+                        />
+                      ) : (
+                        <MilestoneTracker
+                          commissionId={selectedCommission.id}
+                          isClient={!isArtist}
+                          onPayMilestone={async (milestone) => {
+                            setPaymentData({
+                              commissionId: selectedCommission.id,
+                              amount: milestone.amount,
+                              paymentType: 'milestone',
+                              milestoneId: milestone.id,
+                            });
+                            setShowCommissionModal(false);
+                            setShowPaymentMethodSelector(true);
+                          }}
+                        />
+                      )}
                     </View>
                   )}
 
@@ -2098,6 +2318,88 @@ export default function CommissionDashboard() {
             />
           )}
         </View>
+      </Modal>
+
+      {/* Final Price Modal */}
+      <Modal
+        visible={showFinalPriceModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFinalPriceModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.finalPriceModalOverlay}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowFinalPriceModal(false)}
+            style={styles.finalPriceModalOverlay}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.finalPriceModalContent}>
+                <View style={styles.finalPriceModalHeader}>
+                  <Text style={styles.finalPriceModalTitle}>Set Final Price</Text>
+                  <TouchableOpacity onPress={() => setShowFinalPriceModal(false)}>
+                    <Ionicons name="close" size={26} color={colors.text.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.finalPriceModalBody}>
+                  <Text style={styles.finalPriceDescription}>
+                    Set the final price for this commission. The client will see this price and can proceed with payment.
+                  </Text>
+
+                  {selectedCommission?.budget && (
+                    <View style={styles.budgetInfo}>
+                      <Text style={styles.budgetLabel}>Client's Budget:</Text>
+                      <Text style={styles.budgetValue}>${selectedCommission.budget.toFixed(2)}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.finalPriceInputContainer}>
+                    <Text style={styles.finalPriceLabel}>Final Price</Text>
+                    <View style={styles.priceInputWrapper}>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        style={styles.finalPriceInput}
+                        value={finalPriceInput}
+                        onChangeText={setFinalPriceInput}
+                        keyboardType="decimal-pad"
+                        placeholder="0.00"
+                        placeholderTextColor={colors.text.disabled}
+                        autoFocus
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.finalPriceInfo}>
+                    <Ionicons name="information-circle" size={20} color={colors.primary} />
+                    <Text style={styles.finalPriceInfoText}>
+                      A 10% platform fee will be deducted from this amount. Final price cannot exceed the client's budget.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.finalPriceModalFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+                  <TouchableOpacity
+                    style={styles.finalPriceCancelButton}
+                    onPress={() => setShowFinalPriceModal(false)}
+                  >
+                    <Text style={styles.finalPriceCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.finalPriceConfirmButton}
+                    onPress={handleSetFinalPrice}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} />
+                    <Text style={styles.finalPriceConfirmText}>Confirm Price</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       <ReviewModal
@@ -3770,11 +4072,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   paymentButtonSection: {
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
   },
   paymentStatusSection: {
-    marginBottom: spacing.xs,
+    marginBottom: spacing.md,
   },
   paymentButton: {
     flexDirection: 'row',
@@ -3786,10 +4088,47 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginTop: 0,
   },
+  paymentButtonDisabled: {
+    backgroundColor: colors.surface,
+    opacity: 0.5,
+  },
   paymentButtonText: {
     ...typography.bodyBold,
     color: colors.text.primary,
     fontSize: 15,
+  },
+  priceNotSetDisclaimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  priceNotSetText: {
+    ...typography.body,
+    color: colors.text.disabled,
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  milestoneInfoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  milestoneInfoText: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
   },
   transactionCommissionCard: {
     backgroundColor: colors.surface,
@@ -4073,6 +4412,153 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: '700',
     fontSize: 15,
+  },
+
+  // Final Price Modal Styles
+  finalPriceModalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlayDark,
+    justifyContent: 'flex-end',
+  },
+  finalPriceModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '65%',
+  },
+  finalPriceModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  finalPriceModalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontWeight: '700',
+    fontSize: 22,
+    flex: 1,
+  },
+  finalPriceModalBody: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  finalPriceModalFooter: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  finalPriceDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginBottom: spacing.lg,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  budgetInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  budgetLabel: {
+    ...typography.body,
+    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  budgetValue: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  finalPriceInputContainer: {
+    marginBottom: spacing.lg,
+  },
+  finalPriceLabel: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+  },
+  currencySymbol: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '600',
+    marginRight: spacing.xs,
+  },
+  finalPriceInput: {
+    flex: 1,
+    ...typography.h2,
+    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '600',
+    paddingVertical: spacing.md,
+  },
+  finalPriceInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+  },
+  finalPriceInfoText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    flex: 1,
+    lineHeight: 18,
+    fontSize: 13,
+  },
+  finalPriceCancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md + 4,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  finalPriceCancelText: {
+    ...typography.bodyBold,
+    color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  finalPriceConfirmButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md + 4,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+  },
+  finalPriceConfirmText: {
+    ...typography.bodyBold,
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
   },
 
   // Pinterest-Style Stats Cards

@@ -761,7 +761,7 @@ function PortfolioModal({ visible, onClose, artist, portfolioImages }) {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
     >
@@ -863,7 +863,7 @@ function InstructionsModal({ visible, onClose }) {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       onRequestClose={onClose}
     >

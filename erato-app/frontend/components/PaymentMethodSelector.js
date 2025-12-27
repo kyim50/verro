@@ -7,6 +7,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
 
 /**
@@ -20,6 +21,7 @@ export default function PaymentMethodSelector({
   onSelectCard,
   amount,
 }) {
+  const insets = useSafeAreaInsets();
   const [selectedMethod, setSelectedMethod] = useState(null);
 
   const paymentMethods = [
@@ -65,15 +67,15 @@ export default function PaymentMethodSelector({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={handleClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Choose Payment Method</Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color={colors.text.primary} />
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Ionicons name="close" size={26} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
 
@@ -141,7 +143,7 @@ export default function PaymentMethodSelector({
             </View>
           </View>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -172,25 +174,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: '80%',
+    maxHeight: '70%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
     borderBottomWidth: 0,
   },
   modalTitle: {
     ...typography.h2,
     color: colors.text.primary,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    flex: 1,
+  },
+  closeButton: {
+    padding: spacing.xs,
+    marginRight: -spacing.xs,
   },
   modalBody: {
     padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.md,
   },
   amountContainer: {
     backgroundColor: colors.surface,
